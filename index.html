@@ -598,6 +598,10 @@ tr:hover td{background:var(--gray-50);}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Add Creator
     </button>
+    <button class="btn btn-ghost btn-sm" id="syncBtn" onclick="forceSyncAll()" title="Force sync all data" style="font-size:11px;display:flex;align-items:center;gap:4px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Sync
+    </button>
   </header>
 
   <div class="content">
@@ -1193,117 +1197,120 @@ tr:hover td{background:var(--gray-50);}
              media kit analytics, profile pictures, mobile support
    ═══════════════════════════════════════════════════════════════ */
 
-/* ─── SUPABASE CONFIG ─────────────────────────────────────────
-   Shared database — all staff see the same data in real time.
+/* ─── SUPABASE CONFIG ──────────────────────────────────────────
+   Single source of truth for all shared CRM data.
+   All staff on all devices see the same data.
    ─────────────────────────────────────────────────────────── */
 const SUPABASE_URL = 'https://vvtzgqcnquygnmljdptt.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_OeYUA2VVPH4uAowVvSWtxA_-jC9OznJ';
 
-// Lightweight Supabase REST helper (no SDK needed)
+// ── DB: core Supabase REST wrapper ─────────────────────────────
 const DB = {
-  async _req(method, table, body = null, query = '') {
-    const url = `${SUPABASE_URL}/rest/v1/${table}${query}`;
-    const opts = {
-      method,
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': method === 'POST' ? 'return=representation' : 'return=representation'
-      }
+  _headers() {
+    return {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
     };
-    if (body) opts.body = JSON.stringify(body);
+  },
+
+  async _req(method, table, body, query = '') {
+    const url = `${SUPABASE_URL}/rest/v1/${table}${query}`;
+    const opts = { method, headers: this._headers() };
+    if (body !== null && body !== undefined) opts.body = JSON.stringify(body);
     try {
       const r = await fetch(url, opts);
-      if (!r.ok) { const e = await r.text(); console.warn('DB error:', e); return null; }
       const text = await r.text();
+      if (!r.ok) {
+        console.error(`DB ${method} ${table} failed (${r.status}):`, text);
+        showToast(`⚠️ Save failed: ${r.status}. Check console.`);
+        return null;
+      }
       return text ? JSON.parse(text) : [];
-    } catch(e) { console.warn('DB fetch failed:', e); return null; }
+    } catch(e) {
+      console.error(`DB ${method} ${table} network error:`, e);
+      showToast('⚠️ Network error — check your connection.');
+      return null;
+    }
   },
-  select: (table, query='') => DB._req('GET', table, null, query),
-  upsert: (table, data) => DB._req('POST', table, data,
-    '?on_conflict=id'),
-  update: (table, id, data) => DB._req('PATCH', table, data, `?id=eq.${id}`),
-  remove: (table, id) => DB._req('DELETE', table, null, `?id=eq.${id}`),
-  removeWhere: (table, field, val) => DB._req('DELETE', table, null, `?${field}=eq.${val}`),
+
+  // Fetch all rows from a table, ordered by id
+  async select(table, query = '') {
+    return this._req('GET', table, null, query || '?order=id');
+  },
+
+  // Insert or update a single row (upsert by id)
+  async upsertOne(table, row) {
+    console.log(`DB upsert ${table}:`, row);
+    const result = await this._req('POST', table, [row], '?on_conflict=id');
+    console.log(`DB upsert ${table} result:`, result);
+    return result;
+  },
+
+  // Insert or update many rows
+  async upsertMany(table, rows) {
+    if (!rows || !rows.length) return [];
+    const results = [];
+    for (let i = 0; i < rows.length; i += 50) {
+      const r = await this._req('POST', table, rows.slice(i, i+50), '?on_conflict=id');
+      if (r) results.push(...r);
+    }
+    return results;
+  },
+
+  // Delete a single row by its integer id
+  async delete(table, id) {
+    const numId = parseInt(id, 10);
+    console.log(`DB delete ${table} id=${numId} (type: ${typeof numId})`);
+    if (isNaN(numId)) { console.error('delete: id is NaN', id); return null; }
+    const result = await this._req('DELETE', table, null, `?id=eq.${numId}`);
+    console.log(`DB delete ${table} result:`, result);
+    return result;
+  },
+
+  // Delete rows matching a field=value filter
+  async deleteWhere(table, field, value) {
+    const numVal = parseInt(value, 10);
+    console.log(`DB deleteWhere ${table} ${field}=${numVal}`);
+    return this._req('DELETE', table, null, `?${field}=eq.${numVal}`);
+  },
+
+  // Upsert a key-value pair in app_data
+  async setAppData(key, value) {
+    return this._req('POST', 'app_data', [{key, value: JSON.stringify(value)}], '?on_conflict=key');
+  },
+
+  async getAppData(key) {
+    const rows = await this._req('GET', 'app_data', null, `?key=eq.${encodeURIComponent(key)}`);
+    if (rows && rows.length) {
+      try { return JSON.parse(rows[0].value); } catch(e) { return null; }
+    }
+    return null;
+  }
 };
 
-/* ─── STORAGE LAYER ───────────────────────────────────────────
-   localStorage = fast local cache
-   Supabase     = shared truth across all staff
+/* ─── STORAGE: localStorage cache + Supabase write-through ────
+   Rule: Always write to Supabase first. Only update UI on success.
    ─────────────────────────────────────────────────────────── */
 const Storage = {
   _prefix: 'blustu_',
-
-  // Local cache helpers
   get(key, fallback = null) {
-    try {
-      const raw = localStorage.getItem(this._prefix + key);
-      return raw !== null ? JSON.parse(raw) : fallback;
-    } catch(e) { return fallback; }
+    try { const r = localStorage.getItem(this._prefix+key); return r!==null?JSON.parse(r):fallback; } catch(e){return fallback;}
   },
   set(key, value) {
-    try { localStorage.setItem(this._prefix + key, JSON.stringify(value)); } catch(e) {}
+    try { localStorage.setItem(this._prefix+key, JSON.stringify(value)); } catch(e){}
     return value;
   },
-  delete(key) {
-    try { localStorage.removeItem(this._prefix + key); } catch(e) {}
-  },
-
-  // Supabase sync helpers
-  async syncFrom(table, localKey, fallback = []) {
-    const rows = await DB.select(table, '?order=id');
-    if (rows && rows.length > 0) {
-      this.set(localKey, rows);
-      return rows;
-    }
-    // If table empty, seed with defaults and push to Supabase
-    const local = this.get(localKey, fallback);
-    if (local && local.length > 0) {
-      await this.pushAll(table, local);
-    }
-    return local;
-  },
-
-  async pushAll(table, rows) {
-    if (!rows || !rows.length) return;
-    // Upsert in chunks of 50
-    for (let i = 0; i < rows.length; i += 50) {
-      await DB._req('POST', table, rows.slice(i, i + 50), '?on_conflict=id');
-    }
-  },
-
-  async saveRow(table, row) {
-    await DB._req('POST', table, [row], '?on_conflict=id');
-  },
-
-  async deleteRow(table, id) {
-    await DB.remove(table, id);
-  },
-
-  async saveAppData(key, value) {
-    // Store misc data (nextId, analytics, etc.) as key-value in app_data table
-    await DB._req('POST', 'app_data', [{key, value: JSON.stringify(value)}], '?on_conflict=key');
-    this.set(key, value);
-  },
-
-  async loadAppData(key, fallback) {
-    const rows = await DB.select('app_data', `?key=eq.${key}`);
-    if (rows && rows.length) {
-      try { return JSON.parse(rows[0].value); } catch(e) {}
-    }
-    return this.get(key, fallback);
-  },
-
-  updateEntity(collectionKey, id, updates, idField = 'id') {
+  updateEntity(collectionKey, id, updates, idField='id') {
     const arr = this.get(collectionKey, []);
-    const idx = arr.findIndex(x => x[idField] === id);
-    if (idx > -1) { arr[idx] = {...arr[idx], ...updates}; this.set(collectionKey, arr); }
+    const idx = arr.findIndex(x=>x[idField]===id);
+    if(idx>-1){arr[idx]={...arr[idx],...updates}; this.set(collectionKey,arr);}
     return arr;
   },
-  deleteEntity(collectionKey, id, idField = 'id') {
-    const arr = this.get(collectionKey, []).filter(x => x[idField] !== id);
-    this.set(collectionKey, arr);
+  deleteEntity(collectionKey, id, idField='id') {
+    const arr = this.get(collectionKey,[]).filter(x=>x[idField]!==id);
+    this.set(collectionKey,arr);
     return arr;
   }
 };
@@ -1398,36 +1405,76 @@ let deals       = Storage.get('deals',       []);
 let mediaKits   = Storage.get('mediaKits',   []);
 let nextId      = Storage.get('nextId',      {camp:1, pitch:1, deal:1, kit:1});
 
-// ── SUPABASE BOOT — load all shared data ──────────────────────
-// Runs after login; populates arrays from DB then re-renders.
+// ── SUPABASE BOOT: load all shared data after login ───────────
 async function syncAllFromDB() {
   showSyncBanner(true);
   try {
-    const [c, ca, p, d, mk, nd, ia, pp, im] = await Promise.all([
-      Storage.syncFrom('creators',   'creators',   DEFAULT_CREATORS),
-      Storage.syncFrom('campaigns',  'campaigns',  []),
-      Storage.syncFrom('pitch_decks','pitchDecks', []),
-      Storage.syncFrom('deals',      'deals',      []),
-      Storage.syncFrom('media_kits', 'mediaKits',  []),
-      Storage.loadAppData('nextId',     {camp:1,pitch:1,deal:1,kit:1}),
-      Storage.loadAppData('kitAnalytics', {}),
-      Storage.loadAppData('profilePics',  {}),
-      Storage.syncFrom('inbox_messages','inboxMessages', DEFAULT_INBOX),
+    // Load all tables in parallel
+    const [c, ca, p, d, mk, im] = await Promise.all([
+      DB.select('creators'),
+      DB.select('campaigns'),
+      DB.select('pitch_decks'),
+      DB.select('deals'),
+      DB.select('media_kits'),
+      DB.select('inbox_messages'),
     ]);
-    if (c)  creators      = c;
-    if (ca) campaigns     = ca;
-    if (p)  pitchDecks    = p;
-    if (d)  deals         = d;
-    if (mk) mediaKits     = mk;
-    if (nd) nextId        = nd;
-    if (ia) kitAnalytics  = ia;
-    if (pp) profilePics   = pp;
-    if (im) inboxMessages = im;
+    const [nd, ia, pp, su] = await Promise.all([
+      DB.getAppData('nextId'),
+      DB.getAppData('kitAnalytics'),
+      DB.getAppData('profilePics'),
+      DB.select('staff_accounts'),
+    ]);
+
+    // Creators: if DB has data use it, else seed from defaults
+    if (c && c.length > 0) {
+      creators = c;
+      Storage.set('creators', creators);
+    } else {
+      // Seed default creators into Supabase on first run
+      await DB.upsertMany('creators', DEFAULT_CREATORS);
+      creators = DEFAULT_CREATORS;
+      Storage.set('creators', creators);
+    }
+
+    if (ca && ca.length >= 0) { campaigns  = ca;  Storage.set('campaigns',  campaigns); }
+    if (p  && p.length  >= 0) { pitchDecks = p;   Storage.set('pitchDecks', pitchDecks); }
+    if (d  && d.length  >= 0) { deals      = d;   Storage.set('deals',      deals); }
+    if (mk && mk.length >= 0) { mediaKits  = mk;  Storage.set('mediaKits',  mediaKits); }
+    if (im && im.length > 0)  { inboxMessages = im; Storage.set('inboxMessages', inboxMessages); }
+    if (nd) { nextId = nd; Storage.set('nextId', nextId); }
+    if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
+    if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
+
+    // Load staff accounts from Supabase so they work cross-device
+    if (su && su.length > 0) {
+      STAFF = su;
+      Storage.set('staff', STAFF);
+    } else {
+      // Seed default staff into Supabase
+      await DB.upsertMany('staff_accounts', DEFAULT_STAFF.map((s,i)=>({...s, id: i+1})));
+    }
+
   } catch(e) {
-    console.warn('Supabase sync failed, using local data:', e);
+    console.warn('Supabase sync failed, using cached data:', e);
   }
   showSyncBanner(false);
   renderAll();
+}
+
+// Re-fetch a single table and update local array + re-render
+async function refetch(table) {
+  const rows = await DB.select(table);
+  if (!rows) return;
+  switch(table) {
+    case 'creators':    creators    = rows; Storage.set('creators',    rows); renderCRM(creators); renderOnboarding(); break;
+    case 'campaigns':   campaigns   = rows; Storage.set('campaigns',   rows); renderCampaigns(currentCampaignFilter); break;
+    case 'pitch_decks': pitchDecks  = rows; Storage.set('pitchDecks',  rows); renderPitchDecks(); break;
+    case 'deals':       deals       = rows; Storage.set('deals',       rows); renderPipeline(); break;
+    case 'media_kits':  mediaKits   = rows; Storage.set('mediaKits',   rows); renderMediaKitList(); break;
+    case 'inbox_messages': inboxMessages = rows; Storage.set('inboxMessages', rows); renderInbox(); break;
+  }
+  updateDashStats();
+  populateSelects();
 }
 
 function showSyncBanner(show) {
@@ -1435,7 +1482,7 @@ function showSyncBanner(show) {
   if (!el) {
     el = document.createElement('div');
     el.id = 'syncBanner';
-    el.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--blue);color:white;text-align:center;font-size:12px;font-weight:600;padding:6px;z-index:9000;transition:opacity .3s';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--blue);color:white;text-align:center;font-size:12px;font-weight:600;padding:6px;z-index:9000';
     el.textContent = '⟳ Syncing with shared database…';
     document.body.appendChild(el);
   }
@@ -1663,42 +1710,66 @@ function confirmDeleteCreator(id) {
   );
 }
 
-function deleteCreator(id) {
-  // Remove creator
-  creators = creators.filter(x => x.id !== id);
-  // Clean up orphan data
-  deals = deals.filter(x => x.creatorId !== id);
-  campaigns = campaigns.filter(x => x.creatorId !== id || !x.creatorId);
-  mediaKits = mediaKits.filter(x => x.creatorId !== id);
-  delete profilePics[id];
-  delete kitAnalytics[id];
-  // Save everything
-  saveCreators(); saveDeals(); saveCampaigns(); saveMediaKits();
+async function deleteCreator(id) {
+  const numId = parseInt(id, 10);
+  console.log('Deleting influencer id:', numId, typeof numId);
+  // Delete from Supabase first
+  const result = await DB.delete('creators', numId);
+  console.log('Delete influencer result:', result);
+  // Also clean up related records
+  await Promise.all([
+    DB.deleteWhere('deals',      'creatorId', numId),
+    DB.deleteWhere('media_kits', 'creatorId', numId),
+  ]);
+  // Update local state
+  creators  = creators.filter(x => x.id !== numId);
+  deals     = deals.filter(x => x.creatorId !== numId);
+  mediaKits = mediaKits.filter(x => x.creatorId !== numId);
+  delete profilePics[numId];
+  delete kitAnalytics[numId];
+  Storage.set('creators',  creators);
+  Storage.set('deals',     deals);
+  Storage.set('mediaKits', mediaKits);
   saveProfilePics(); saveAnalyticsData();
-  // Return to CRM if on profile page
   if (document.getElementById('page-creatorprofile').classList.contains('active')) {
     showPage('crm', document.querySelector('[onclick*=crm]'));
   }
   renderCRM(creators);
+  renderPipeline();
   updateDashStats();
-  addActivity(`Creator deleted from roster`);
+  addActivity('Creator deleted from roster');
   showToast('Creator removed');
 }
 
-function addCreator(){
+async function addCreator(){
   const name=document.getElementById('nc-name').value.trim();
   if(!name){showToast('Please enter a name');return;}
-  const c={id:creators.length+1,name,email:document.getElementById('nc-email').value.trim()||name.toLowerCase().replace(/\s+/,'')+'@blustu.agency',role:document.getElementById('nc-role').value,location:document.getElementById('nc-loc').value.trim()||'—',niche:document.getElementById('nc-niche').value,status:'Active',notes:'',onboarding:null};
-  creators.push(c);
+  // Generate a unique ID that won't clash (timestamp-based)
+  const newId = Date.now() % 2147483647; // fits in int4
+  const c={
+    id: newId,
+    name,
+    email: document.getElementById('nc-email').value.trim() || name.toLowerCase().replace(/\s+/g,'')+'@blustu.agency',
+    role: document.getElementById('nc-role').value,
+    location: document.getElementById('nc-loc').value.trim()||'—',
+    niche: document.getElementById('nc-niche').value,
+    status:'Active',
+    notes:'',
+    onboarding:null,
+    profile_image_url: null
+  };
+  console.log('Adding influencer:', c);
+  const result = await DB.upsertOne('creators', c);
+  console.log('Add influencer result:', result);
+  if (!result) { showToast('❌ Failed to save creator — check console'); return; }
+  // Refetch from Supabase to ensure consistent state
+  await refetch('creators');
   closeModal('addCreatorModal');
-  renderCRM(creators);
   populateSelects();
-  renderOnboarding();
   updateDashStats();
   addActivity(`<strong>${name}</strong> added to roster`);
   showToast(`${name} added!`);
   ['nc-name','nc-email','nc-loc'].forEach(id=>document.getElementById(id).value='');
-  saveCreators();
 }
 
 function handleGlobalSearch(q){
@@ -1776,27 +1847,86 @@ function triggerProfilePicUpload() {
   document.getElementById('profilePicFile').click();
 }
 
-function handleProfilePicUpload(event) {
+async function handleProfilePicUpload(event) {
   const file = event.target.files[0];
   if (!file || !currentCreatorId) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    profilePics[currentCreatorId] = e.target.result;
-    saveProfilePics();
-    // Update profile page avatar
-    const avatarEl = document.getElementById('profile-avatar-circle');
-    if (avatarEl) {
-      avatarEl.style.background = 'transparent';
-      avatarEl.innerHTML = `<img src="${e.target.result}" class="avatar-img" alt="">`;
+  event.target.value = '';
+
+  // Show uploading state
+  const avatarEl = document.getElementById('profile-avatar-circle');
+  if (avatarEl) { avatarEl.style.opacity = '0.5'; }
+  showToast('Uploading photo…');
+
+  try {
+    // Upload to Supabase Storage bucket "profile-pictures"
+    const ext = file.name.split('.').pop();
+    const fileName = `creator_${currentCreatorId}.${ext}`;
+    const uploadUrl = `${SUPABASE_URL}/storage/v1/object/profile-pictures/${fileName}`;
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': file.type,
+        'x-upsert': 'true'
+      },
+      body: file
+    });
+
+    if (!uploadRes.ok) {
+      const err = await uploadRes.text();
+      console.error('Profile pic upload failed:', err);
+      // Fallback: store as base64 in app_data
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        profilePics[currentCreatorId] = e.target.result;
+        await saveProfilePics();
+        renderProfilePic(currentCreatorId, e.target.result);
+        renderCRM(creators);
+        renderMediaKitList();
+        showToast('Profile picture saved!');
+      };
+      reader.readAsDataURL(file);
+      return;
     }
-    // Re-render CRM to update avatar there too
+
+    // Get public URL
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/profile-pictures/${fileName}`;
+
+    // Save URL to creators table
+    const c = creators.find(x => x.id === currentCreatorId);
+    if (c) {
+      c.profile_image_url = publicUrl;
+      await DB.upsertOne('creators', c);
+      Storage.set('creators', creators);
+    }
+    // Also store in profilePics for backwards compat
+    profilePics[currentCreatorId] = publicUrl;
+    await saveProfilePics();
+
+    renderProfilePic(currentCreatorId, publicUrl);
     renderCRM(creators);
     renderMediaKitList();
     showToast('Profile picture updated!');
-  };
-  reader.readAsDataURL(file);
-  // Reset input
-  event.target.value = '';
+  } catch(e) {
+    console.error('Profile pic error:', e);
+    showToast('Failed to upload photo');
+  } finally {
+    if (avatarEl) { avatarEl.style.opacity = '1'; }
+  }
+}
+
+function renderProfilePic(id, src) {
+  const avatarEl = document.getElementById('profile-avatar-circle');
+  if (!avatarEl) return;
+  if (src) {
+    avatarEl.style.background = 'transparent';
+    avatarEl.innerHTML = `<img src="${src}" class="avatar-img" alt="">`;
+  } else {
+    const c = creators.find(x=>x.id===id);
+    if (c) { avatarEl.style.background = avatarColor(id); avatarEl.textContent = avatarLetter(c.name); }
+  }
 }
 
 function openCreatorQuickView(id){
@@ -1822,17 +1952,51 @@ function switchProfileTab(id,btn){
   if(el)el.classList.add('active');
   if(btn)btn.classList.add('active');
   else document.querySelectorAll('.profile-tab').forEach(t=>{if(t.onclick&&t.toString().includes(id))t.classList.add('active');});
+
+  // When switching to deals tab, render deals for this creator
+  if (id === 'deals' && currentCreatorId) {
+    renderCreatorDeals(currentCreatorId);
+  }
+}
+
+function renderCreatorDeals(creatorId) {
+  const el = document.getElementById('ptab-deals');
+  if (!el) return;
+  const c = creators.find(x => x.id === creatorId);
+  // Match by creatorId OR by creator name (for legacy records)
+  const creatorDeals = deals.filter(d =>
+    d.creatorId === creatorId ||
+    (c && d.creator && d.creator.toLowerCase() === c.name.toLowerCase())
+  );
+  if (!creatorDeals.length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--gray-400);padding:16px 0">No deals found for this creator.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${creatorDeals.map(d=>`
+        <div style="padding:12px;border:1px solid var(--gray-100);border-radius:10px;cursor:pointer" onclick="closeModal('dummy');showPage('pipeline',document.querySelector('[onclick*=pipeline]'));setTimeout(()=>openEditDeal(${d.id}),200)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:13px;font-weight:600">${d.brand}</div>
+            ${statusBadge(d.stage)}
+          </div>
+          <div style="font-size:12px;color:var(--gray-400);margin-top:4px">${fmtMoney(d.value)} ${d.notes?'· '+d.notes.substring(0,40)+'…':''}</div>
+        </div>`).join('')}
+    </div>`;
 }
 
 function saveProfileNote(val){
   clearTimeout(notesSaveTimer);
   document.getElementById('notes-save-indicator').textContent='Saving…';
-  notesSaveTimer=setTimeout(()=>{
+  notesSaveTimer=setTimeout(async ()=>{
     const c=creators.find(x=>x.id===currentCreatorId);
-    if(c)c.notes=val;
+    if(c){
+      c.notes=val;
+      await DB.upsertOne('creators', c);
+      Storage.set('creators', creators);
+    }
     document.getElementById('notes-save-indicator').textContent='Saved ✓';
     setTimeout(()=>document.getElementById('notes-save-indicator').textContent='',2000);
-    saveCreators();
   },800);
 }
 
@@ -1890,15 +2054,17 @@ function copyInviteLink(){
   navigator.clipboard.writeText(val).then(()=>showToast('Invite link copied!')).catch(()=>showToast('Link copied!'));
 }
 
-function sendInvite(){
+async function sendInvite(){
   const name=document.getElementById('invite-creator-select').value;
   const c=creators.find(x=>x.name===name);
-  if(c&&c.status!=='Onboarded'){c.status='Invited';}
+  if(c&&c.status!=='Onboarded'){
+    c.status='Invited';
+    await DB.upsertOne('creators', c);
+    await refetch('creators');
+  }
   closeModal('inviteCreatorModal');
-  renderCRM(creators);
-  renderOnboarding();
   addActivity(`Onboarding invite sent to <strong>${name}</strong>`);
-  showToast(`${name} marked as invited!`);
+  showToast(`Invite link ready for ${name}!`);
 }
 
 // ══ ONBOARDING PORTAL ══
@@ -1977,14 +2143,21 @@ function buildReview(){
   r.innerHTML=entries.map(([k,v])=>`<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--gray-100)"><span style="color:var(--gray-400);width:120px;flex-shrink:0">${k}</span><span style="font-weight:500">${v}</span></div>`).join('');
 }
 
-function submitOnboarding(){
+async function submitOnboarding(){
   collectPortalData();
   const c=creators.find(x=>x.id===currentPortalCreatorId);
   if(c){
     c.onboarding=portalData;
     c.status='Active';
-    if(portalData.niche)c.niche=portalData.niche;
-    saveCreators();
+    if(portalData.niche) c.niche=portalData.niche;
+    console.log('Saving onboarding for creator:', c.id, c.name);
+    const result = await DB.upsertOne('creators', c);
+    console.log('Onboarding save result:', result);
+    if (result) {
+      Storage.set('creators', creators);
+    } else {
+      showToast('⚠️ Onboarding saved locally but failed to sync — try again');
+    }
   }
   showPortalStep(5);
 }
@@ -2038,63 +2211,59 @@ function renderCampaigns(filter){
     `<div class="empty-state" style="padding:24px"><h3>No active campaigns</h3><p>Create a campaign to start tracking</p></div>`;
 }
 
-function saveCampaign(){
+async function saveCampaign(){
   const brand=document.getElementById('camp-brand').value.trim();
   const creator=document.getElementById('camp-creator').value;
   if(!brand){showToast('Please enter a brand name');return;}
+  const campId = Date.now() % 2147483647;
+  const dealId = (campId + 1) % 2147483647;
+  const cr = creators.find(x => x.name === creator);
   const c={
-    id:nextId.camp++, brand, creator,
+    id: campId, brand, creator,
+    creatorId: cr ? cr.id : null,
     value:document.getElementById('camp-value').value||0,
     deadline:document.getElementById('camp-deadline').value,
     status:document.getElementById('camp-status').value,
     deliverables:document.getElementById('camp-deliverables').value.trim(),
     progress:parseInt(document.getElementById('camp-progress').value)||0,
-    notes:document.getElementById('camp-notes').value.trim()
+    notes:document.getElementById('camp-notes').value.trim(),
+    campaignId: null
   };
-  // Store creatorId for clean deletion later
-  const cr = creators.find(x => x.name === creator);
-  if (cr) c.creatorId = cr.id;
-  campaigns.push(c);
-
-  // Auto-create linked pipeline deal
   const stageMap = {Live:'Live', Negotiating:'Negotiating', Completed:'Completed', Paused:'Negotiating'};
-  const dealStage = stageMap[c.status] || 'Prospect';
   const d = {
-    id: nextId.deal++,
-    brand: c.brand,
-    creator: c.creator,
-    creatorId: c.creatorId || null,
-    value: c.value,
-    stage: dealStage,
+    id: dealId, brand: c.brand, creator: c.creator,
+    creatorId: c.creatorId || null, value: c.value,
+    stage: stageMap[c.status] || 'Prospect',
     notes: `Linked from campaign: ${c.brand}`,
-    campaignId: c.id
+    campaignId: campId
   };
-  deals.push(d);
-
   closeModal('addCampaignModal');
-  renderCampaigns(currentCampaignFilter);
-  renderPipeline();
-  updateDashStats();
-  addActivity(`Campaign created: <strong>${brand} × ${creator}</strong>`);
-  showToast(`Campaign created!`);
   ['camp-brand','camp-value','camp-deadline','camp-deliverables','camp-notes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('camp-progress').value='0';
-  saveCampaigns(); saveDeals(); saveNextId();
+  const [r1, r2] = await Promise.all([DB.upsertOne('campaigns', c), DB.upsertOne('deals', d)]);
+  if (!r1) { showToast('❌ Campaign save failed'); return; }
+  await Promise.all([refetch('campaigns'), refetch('deals')]);
+  updateDashStats();
+  addActivity(`Campaign created: <strong>${brand} × ${creator}</strong>`);
+  showToast('Campaign created!');
 }
 
 function deleteCampaign(){
   const id=parseInt(document.getElementById('edit-camp-id').value);
   const c = campaigns.find(x=>x.id===id);
   if (!c) return;
-  showConfirm('Delete Campaign?', `Delete "${c.brand} × ${c.creator}"? Linked pipeline deals will also be removed.`, () => {
-    campaigns = campaigns.filter(x=>x.id!==id);
-    deals = deals.filter(x=>x.campaignId!==id);
+  showConfirm('Delete Campaign?', `Delete "${c.brand} × ${c.creator}"? Linked pipeline deals will also be removed.`, async () => {
+    console.log('Deleting campaign:', {table:'campaigns', id, typeofId: typeof id});
     closeModal('editCampaignModal');
-    renderCampaigns(currentCampaignFilter);
-    renderPipeline();
+    const r1 = await DB.delete('campaigns', id);
+    console.log('Delete campaign result:', r1);
+    // Delete linked deals
+    const linkedDeals = deals.filter(d => d.campaignId === id);
+    for (const d of linkedDeals) { await DB.delete('deals', d.id); }
+    // Refetch both
+    await Promise.all([refetch('campaigns'), refetch('deals')]);
     updateDashStats();
     showToast('Campaign deleted');
-    saveCampaigns(); saveDeals();
   });
 }
 
@@ -2113,7 +2282,7 @@ function openEditCampaign(id){
   openModal('editCampaignModal');
 }
 
-function updateCampaign(){
+async function updateCampaign(){
   const id=parseInt(document.getElementById('edit-camp-id').value);
   const c=campaigns.find(x=>x.id===id);
   if(!c)return;
@@ -2125,25 +2294,21 @@ function updateCampaign(){
   c.deliverables=document.getElementById('edit-camp-deliverables').value.trim();
   c.progress=parseInt(document.getElementById('edit-camp-progress').value)||0;
   c.notes=document.getElementById('edit-camp-notes').value.trim();
-
+  closeModal('editCampaignModal');
   // Sync linked pipeline deal
   const stageMap = {Live:'Live',Negotiating:'Negotiating',Completed:'Completed',Paused:'Negotiating',Cancelled:'Lost'};
   const linkedDeal = deals.find(d => d.campaignId === id);
+  const ops = [DB.upsertOne('campaigns', c)];
   if (linkedDeal) {
-    linkedDeal.brand = c.brand;
-    linkedDeal.creator = c.creator;
-    linkedDeal.value = c.value;
-    linkedDeal.stage = stageMap[c.status] || linkedDeal.stage;
-    saveDeals();
+    linkedDeal.brand = c.brand; linkedDeal.creator = c.creator;
+    linkedDeal.value = c.value; linkedDeal.stage = stageMap[c.status] || linkedDeal.stage;
+    ops.push(DB.upsertOne('deals', linkedDeal));
   }
-
-  closeModal('editCampaignModal');
-  renderCampaigns(currentCampaignFilter);
-  renderPipeline();
+  await Promise.all(ops);
+  await Promise.all([refetch('campaigns'), refetch('deals')]);
   updateDashStats();
   addActivity(`Campaign updated: <strong>${c.brand} × ${c.creator}</strong> → ${c.status}`);
   showToast('Campaign updated!');
-  saveCampaigns();
 }
 
 function filterCampaigns(filter,btn){
@@ -2184,26 +2349,44 @@ function renderPitchDecks(){
     </div>`;
 }
 
-function savePitch(status){
+async function savePitch(status){
   const brand=document.getElementById('pitch-brand').value.trim();
   const creator=document.getElementById('pitch-creator').value;
   if(!brand){showToast('Enter a brand name');return;}
   const overrideStatus=document.getElementById('pitch-status').value;
   const p={
-    id:nextId.pitch++, brand, creator,
+    id: Date.now() % 2147483647, brand, creator,
     concept:document.getElementById('pitch-concept').value.trim(),
     rate:document.getElementById('pitch-rate').value,
     email:document.getElementById('pitch-email').value.trim(),
     message:document.getElementById('pitch-message').value.trim(),
     status:status==='Sent'?'Sent':overrideStatus
   };
-  pitchDecks.push(p);
   closeModal('addPitchModal');
-  renderPitchDecks();
+  ['pitch-brand','pitch-concept','pitch-rate','pitch-email','pitch-message'].forEach(id=>document.getElementById(id).value='');
+  const result = await DB.upsertOne('pitch_decks', p);
+  if (!result) { showToast('❌ Pitch save failed'); return; }
+  await refetch('pitch_decks');
   addActivity(`Pitch deck created: <strong>${creator} × ${brand}</strong>`);
   showToast(`Pitch deck ${p.status==='Sent'?'sent':'saved as draft'}!`);
-  ['pitch-brand','pitch-concept','pitch-rate','pitch-email','pitch-message'].forEach(id=>document.getElementById(id).value='');
-  savePitchDecks(); saveNextId();
+}
+
+async function updatePitch(){
+  const id=parseInt(document.getElementById('edit-pitch-id').value);
+  const p=pitchDecks.find(x=>x.id===id);
+  if(!p)return;
+  p.brand=document.getElementById('edit-pitch-brand').value.trim();
+  p.creator=document.getElementById('edit-pitch-creator').value;
+  p.concept=document.getElementById('edit-pitch-concept').value.trim();
+  p.rate=document.getElementById('edit-pitch-rate').value;
+  p.email=document.getElementById('edit-pitch-email').value.trim();
+  p.message=document.getElementById('edit-pitch-message').value.trim();
+  p.status=document.getElementById('edit-pitch-status').value;
+  closeModal('editPitchModal');
+  await DB.upsertOne('pitch_decks', p);
+  await refetch('pitch_decks');
+  addActivity(`Pitch updated: <strong>${p.brand} × ${p.creator}</strong>`);
+  showToast('Pitch deck updated!');
 }
 
 function openEditPitch(id){
@@ -2220,34 +2403,17 @@ function openEditPitch(id){
   openModal('editPitchModal');
 }
 
-function updatePitch(){
-  const id=parseInt(document.getElementById('edit-pitch-id').value);
-  const p=pitchDecks.find(x=>x.id===id);
-  if(!p)return;
-  p.brand=document.getElementById('edit-pitch-brand').value.trim();
-  p.creator=document.getElementById('edit-pitch-creator').value;
-  p.concept=document.getElementById('edit-pitch-concept').value.trim();
-  p.rate=document.getElementById('edit-pitch-rate').value;
-  p.email=document.getElementById('edit-pitch-email').value.trim();
-  p.message=document.getElementById('edit-pitch-message').value.trim();
-  p.status=document.getElementById('edit-pitch-status').value;
-  closeModal('editPitchModal');
-  renderPitchDecks();
-  addActivity(`Pitch updated: <strong>${p.brand} × ${p.creator}</strong>`);
-  showToast('Pitch deck updated!');
-  savePitchDecks();
-}
-
 function deletePitch(){
   const id=parseInt(document.getElementById('edit-pitch-id').value);
   const p = pitchDecks.find(x=>x.id===id);
   if (!p) return;
   closeModal('editPitchModal');
-  showConfirm('Delete Pitch Deck?', `Delete pitch for "${p.brand} × ${p.creator}"?`, () => {
-    pitchDecks=pitchDecks.filter(x=>x.id!==id);
-    renderPitchDecks();
+  showConfirm('Delete Pitch Deck?', `Delete pitch for "${p.brand} × ${p.creator}"?`, async () => {
+    console.log('Deleting pitch deck:', {table:'pitch_decks', id, typeofId: typeof id});
+    const result = await DB.delete('pitch_decks', id);
+    console.log('Delete pitch result:', result);
+    await refetch('pitch_decks');
     showToast('Pitch deck deleted');
-    savePitchDecks();
   });
 }
 
@@ -2297,24 +2463,55 @@ function renderPipeline(){
   </tbody></table></div>`:'<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No deals added yet.</div>';
 }
 
-function saveDeal(){
+async function saveDeal(){
   const brand=document.getElementById('deal-brand').value.trim();
   const creator=document.getElementById('deal-creator').value;
   if(!brand){showToast('Enter a brand name');return;}
+  const cr = creators.find(x=>x.name===creator);
   const d={
-    id:nextId.deal++, brand, creator,
+    id: Date.now() % 2147483647, brand, creator,
+    creatorId: cr ? cr.id : null,
     value:document.getElementById('deal-value').value||0,
     stage:document.getElementById('deal-stage').value,
-    notes:document.getElementById('deal-notes').value.trim()
+    notes:document.getElementById('deal-notes').value.trim(),
+    campaignId: null
   };
-  deals.push(d);
   closeModal('addDealModal');
-  renderPipeline();
+  ['deal-brand','deal-value','deal-notes'].forEach(id=>document.getElementById(id).value='');
+  const result = await DB.upsertOne('deals', d);
+  if (!result) { showToast('❌ Deal save failed'); return; }
+  await refetch('deals');
   updateDashStats();
   addActivity(`Deal added: <strong>${brand} × ${creator}</strong> (${d.stage})`);
   showToast('Deal added to pipeline!');
-  ['deal-brand','deal-value','deal-notes'].forEach(id=>document.getElementById(id).value='');
-  saveDeals(); saveNextId();
+}
+
+async function updateDeal(){
+  const id=parseInt(document.getElementById('edit-deal-id').value);
+  const d=deals.find(x=>x.id===id);
+  if(!d)return;
+  d.brand=document.getElementById('edit-deal-brand').value.trim();
+  d.creator=document.getElementById('edit-deal-creator').value;
+  d.value=document.getElementById('edit-deal-value').value;
+  d.stage=document.getElementById('edit-deal-stage').value;
+  d.notes=document.getElementById('edit-deal-notes').value.trim();
+  closeModal('editDealModal');
+  const ops = [DB.upsertOne('deals', d)];
+  // Sync linked campaign if exists
+  if (d.campaignId) {
+    const camp = campaigns.find(c => c.id === d.campaignId);
+    if (camp) {
+      const statusMap = {Live:'Live',Negotiating:'Negotiating',Completed:'Completed',Lost:'Cancelled'};
+      if (statusMap[d.stage]) camp.status = statusMap[d.stage];
+      camp.value = d.value;
+      ops.push(DB.upsertOne('campaigns', camp));
+    }
+  }
+  await Promise.all(ops);
+  await Promise.all([refetch('deals'), refetch('campaigns')]);
+  updateDashStats();
+  addActivity(`Deal updated: <strong>${d.brand} × ${d.creator}</strong> → ${d.stage}`);
+  showToast('Deal updated!');
 }
 
 function openAddDealInStage(stage){
@@ -2334,47 +2531,18 @@ function openEditDeal(id){
   openModal('editDealModal');
 }
 
-function updateDeal(){
-  const id=parseInt(document.getElementById('edit-deal-id').value);
-  const d=deals.find(x=>x.id===id);
-  if(!d)return;
-  d.brand=document.getElementById('edit-deal-brand').value.trim();
-  d.creator=document.getElementById('edit-deal-creator').value;
-  d.value=document.getElementById('edit-deal-value').value;
-  d.stage=document.getElementById('edit-deal-stage').value;
-  d.notes=document.getElementById('edit-deal-notes').value.trim();
-  closeModal('editDealModal');
-
-  // Sync linked campaign if exists
-  if (d.campaignId) {
-    const camp = campaigns.find(c => c.id === d.campaignId);
-    if (camp) {
-      const statusMap = {Live:'Live',Negotiating:'Negotiating',Completed:'Completed',Lost:'Cancelled'};
-      if (statusMap[d.stage]) camp.status = statusMap[d.stage];
-      camp.value = d.value;
-      saveCampaigns();
-      renderCampaigns(currentCampaignFilter);
-    }
-  }
-
-  renderPipeline();
-  updateDashStats();
-  addActivity(`Deal updated: <strong>${d.brand} × ${d.creator}</strong> → ${d.stage}`);
-  showToast('Deal updated!');
-  saveDeals();
-}
-
 function deleteDeal(){
   const id=parseInt(document.getElementById('edit-deal-id').value);
   const d = deals.find(x=>x.id===id);
   if (!d) return;
   closeModal('editDealModal');
-  showConfirm('Delete Deal?', `Remove deal "${d.brand} × ${d.creator}" from pipeline?`, () => {
-    deals=deals.filter(x=>x.id!==id);
-    renderPipeline();
+  showConfirm('Delete Deal?', `Remove deal "${d.brand} × ${d.creator}" from pipeline?`, async () => {
+    console.log('Deleting deal:', {table:'deals', id, typeofId: typeof id});
+    const result = await DB.delete('deals', id);
+    console.log('Delete deal result:', result);
+    await refetch('deals');
     updateDashStats();
     showToast('Deal removed');
-    saveDeals();
   });
 }
 
@@ -2715,7 +2883,7 @@ function openEditUser(email) {
   openModal('editUserModal');
 }
 
-function saveStaffUser() {
+async function saveStaffUser() {
   const email = document.getElementById('eu-email').value;
   const s = STAFF.find(x => x.email === email);
   if (!s) return;
@@ -2725,7 +2893,8 @@ function saveStaffUser() {
   if (newName) s.name = newName;
   if (s.email !== 'ubayy@blustu.agency') s.systemRole = newRole;
   if (newPass && newPass.length >= 4) s.pass = newPass;
-  saveToStorage('staff', STAFF);
+  Storage.set('staff', STAFF);
+  if (s.id) await DB.upsertOne('staff_accounts', s);
   closeModal('editUserModal');
   renderUsersPage();
   showToast('User updated!');
@@ -2739,33 +2908,37 @@ function openDeleteUser(email) {
   }
 }
 
-function deleteStaffUser() {
+async function deleteStaffUser() {
   const email = document.getElementById('eu-email').value;
   const s = STAFF.find(x => x.email === email);
   if (!s || s.email === 'ubayy@blustu.agency') { showToast('Cannot delete owner account'); return; }
   if (confirm(`Remove ${s.name}?`)) {
-    deleteStaffUserByEmail(email);
+    await deleteStaffUserByEmail(email);
     closeModal('editUserModal');
   }
 }
 
-function deleteStaffUserByEmail(email) {
-  const idx = STAFF.findIndex(x => x.email === email);
-  if (idx > -1) STAFF.splice(idx, 1);
-  saveToStorage('staff', STAFF);
+async function deleteStaffUserByEmail(email) {
+  const u = STAFF.find(x => x.email === email);
+  STAFF = STAFF.filter(x => x.email !== email);
+  Storage.set('staff', STAFF);
+  if (u && u.id) await DB.delete('staff_accounts', u.id);
   renderUsersPage();
   showToast('User removed');
 }
 
-function addStaffUser() {
+async function addStaffUser() {
   const name  = document.getElementById('nu-name').value.trim();
   const email = document.getElementById('nu-email').value.trim().toLowerCase();
   const pass  = document.getElementById('nu-pass').value.trim();
   const role  = document.getElementById('nu-role').value;
   if (!name || !email || !pass) { showToast('Please fill all fields'); return; }
   if (STAFF.find(s => s.email === email)) { showToast('Email already exists'); return; }
-  STAFF.push({ email, pass, name, systemRole: role });
-  saveToStorage('staff', STAFF);
+  const newUser = { id: Date.now() % 2147483647, email, pass, name, systemRole: role };
+  STAFF.push(newUser);
+  Storage.set('staff', STAFF);
+  const result = await DB.upsertOne('staff_accounts', newUser);
+  if (!result) { showToast('⚠️ User saved locally but failed to sync — try again'); }
   closeModal('addUserModal');
   renderUsersPage();
   addActivity(`Staff account added: <strong>${name}</strong> (${ROLE_LABELS[role]})`);
@@ -2904,35 +3077,50 @@ function renderAll() {
   renderUsersPage();
 }
 
-// ── SAVE HELPERS — write local cache + push to Supabase ──────
-function saveCreators()   { Storage.set('creators',   creators);   Storage.pushAll('creators',   creators); }
-function saveCampaigns()  { Storage.set('campaigns',  campaigns);  Storage.pushAll('campaigns',  campaigns); }
-function savePitchDecks() { Storage.set('pitchDecks', pitchDecks); Storage.pushAll('pitch_decks',pitchDecks); }
-function saveDeals()      { Storage.set('deals',      deals);      Storage.pushAll('deals',      deals); }
-function saveMediaKits()  { Storage.set('mediaKits',  mediaKits);  Storage.pushAll('media_kits', mediaKits); }
-function saveNextId()     { Storage.saveAppData('nextId',      nextId); }
-function saveInbox()      { Storage.set('inboxMessages', inboxMessages); Storage.pushAll('inbox_messages', inboxMessages); }
-function saveAnalyticsData() { Storage.saveAppData('kitAnalytics', kitAnalytics); }
-function saveProfilePics()   { Storage.saveAppData('profilePics',  profilePics); }
+// ── FORCE SYNC ────────────────────────────────────────────────
+async function forceSyncAll() {
+  const btn = document.getElementById('syncBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⟳ Syncing…'; }
+  await syncAllFromDB();
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Sync';
+  }
+  showToast('✅ All data synced!');
+}
+
+// ── SAVE HELPERS: write to Supabase ──────────────────────────
+function saveInbox()         { DB.upsertMany('inbox_messages', inboxMessages); Storage.set('inboxMessages', inboxMessages); }
+function saveAnalyticsData() { DB.setAppData('kitAnalytics', kitAnalytics); Storage.set('kitAnalytics', kitAnalytics); }
+function saveProfilePics()   { DB.setAppData('profilePics',  profilePics);  Storage.set('profilePics',  profilePics); }
+
+async function saveCreators()   { Storage.set('creators',   creators);   await DB.upsertMany('creators',   creators); }
+async function saveCampaigns()  { Storage.set('campaigns',  campaigns);  await DB.upsertMany('campaigns',  campaigns); }
+async function savePitchDecks() { Storage.set('pitchDecks', pitchDecks); await DB.upsertMany('pitch_decks',pitchDecks); }
+async function saveDeals()      { Storage.set('deals',      deals);      await DB.upsertMany('deals',      deals); }
+async function saveMediaKits()  { Storage.set('mediaKits',  mediaKits);  await DB.upsertMany('media_kits', mediaKits); }
+async function saveNextId()     { Storage.set('nextId', nextId); await DB.setAppData('nextId', nextId); }
+
 // ── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
-  // Check for creator onboarding portal link
   checkPortalParam();
-
-  // Show auth screen if not onboarding
   const params = new URLSearchParams(location.search);
   if (!params.get('onboard')) {
     document.getElementById('authScreen').classList.remove('hidden');
   }
-
-  // Enter key on login fields
   ['loginEmail','loginPassword'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   });
-
-  // Analytics modal button override (make sure it uses openAnalyticsModal)
   document.getElementById('nav-dashboard').classList.add('active');
+
+  // Warn before leaving if logged in
+  window.addEventListener('beforeunload', (e) => {
+    if (currentUser) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 });
 </script>
 </body>
