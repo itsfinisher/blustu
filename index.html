@@ -1446,21 +1446,58 @@ const DB = {
     return this._req('GET', table, null, query || '?order=id');
   },
 
-  // Insert or update a single row (upsert by id)
+  // Upsert one row — uses merge-duplicates which is required for UPDATE on conflict
   async upsertOne(table, row) {
-    console.log(`DB upsert ${table}:`, row);
-    const result = await this._req('POST', table, [row], '?on_conflict=id');
-    console.log(`DB upsert ${table} result:`, result);
-    return result;
+    console.log(`[DB] upsertOne ${table} id=${row.id}`);
+    const url = `${SUPABASE_URL}/rest/v1/${table}`;
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation,resolution=merge-duplicates',
+        },
+        body: JSON.stringify([row])
+      });
+      const text = await r.text();
+      console.log(`[DB] upsertOne ${table} => ${r.status}`, text.slice(0, 200));
+      if (!r.ok) {
+        console.error(`[DB] upsertOne FAILED ${r.status}:`, text);
+        showToast('Save error ' + r.status + ' — open browser console for details');
+        return null;
+      }
+      return text ? JSON.parse(text) : [];
+    } catch(e) {
+      console.error(`[DB] upsertOne network error:`, e);
+      showToast('Network error — check connection');
+      return null;
+    }
   },
 
-  // Insert or update many rows
+  // Upsert many rows — same merge-duplicates Prefer header
   async upsertMany(table, rows) {
     if (!rows || !rows.length) return [];
     const results = [];
     for (let i = 0; i < rows.length; i += 50) {
-      const r = await this._req('POST', table, rows.slice(i, i+50), '?on_conflict=id');
-      if (r) results.push(...r);
+      const chunk = rows.slice(i, i + 50);
+      const url = `${SUPABASE_URL}/rest/v1/${table}`;
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation,resolution=merge-duplicates',
+          },
+          body: JSON.stringify(chunk)
+        });
+        const text = await r.text();
+        if (r.ok && text) { try { results.push(...JSON.parse(text)); } catch(_){} }
+        else if (!r.ok) console.error(`[DB] upsertMany ${table} ${r.status}:`, text.slice(0,200));
+      } catch(e) { console.error(`[DB] upsertMany ${table} error:`, e); }
     }
     return results;
   },
@@ -2408,13 +2445,20 @@ function buildReview(){
 async function submitOnboarding(){
   collectPortalData();
 
+  // Show saving state on button
+  const submitBtn = document.querySelector('#onboardPortal .btn-primary[onclick*="submitOnboarding"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
+
   // The portal loads BEFORE login, so creators[] may be empty.
-  // Always fetch the creator fresh from Supabase.
+  // Fetch creator directly from Supabase by ID.
   let creator = creators.find(x => x.id === currentPortalCreatorId);
   if (!creator) {
+    console.log('[Onboarding] Fetching creator id:', currentPortalCreatorId);
     const rows = await DB._req('GET', 'creators', null, `?id=eq.${currentPortalCreatorId}&limit=1`);
+    console.log('[Onboarding] Fetched creator:', rows);
     if (!rows || !rows.length) {
-      alert('Error: Creator not found. Please contact your agency.');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Onboarding ✓'; }
+      alert('Error: Creator profile not found in the system. Please ask your agency to re-send the onboarding link.');
       return;
     }
     creator = rows[0];
@@ -2425,13 +2469,46 @@ async function submitOnboarding(){
   creator.status = 'Active';
   if (portalData.niche) creator.niche = portalData.niche;
 
-  console.log('[Onboarding] Saving for creator id:', creator.id, typeof creator.id);
+  console.log('[Onboarding] Saving creator:', creator.id, creator.name);
 
-  const result = await DB.upsertOne('creators', creator);
-  console.log('[Onboarding] Save result:', result);
+  // Try upsert first, then PATCH as fallback
+  let result = await DB.upsertOne('creators', creator);
 
+  // If upsert failed (e.g. column missing), try PATCH which only updates existing row
   if (!result) {
-    alert('❌ Failed to save onboarding data. Please check your internet connection and try again.');
+    console.log('[Onboarding] Upsert failed, trying PATCH...');
+    const patchUrl = `${SUPABASE_URL}/rest/v1/creators?id=eq.${creator.id}`;
+    try {
+      const pr = await fetch(patchUrl, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify({
+          onboarding: portalData,
+          status: 'Active',
+          niche: creator.niche
+        })
+      });
+      const ptext = await pr.text();
+      console.log('[Onboarding] PATCH result:', pr.status, ptext.slice(0, 300));
+      if (pr.ok) {
+        result = ptext ? JSON.parse(ptext) : [creator];
+      } else {
+        console.error('[Onboarding] PATCH also failed:', ptext);
+      }
+    } catch(pe) {
+      console.error('[Onboarding] PATCH error:', pe);
+    }
+  }
+
+  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Onboarding ✓'; }
+
+  if (!result || !result.length) {
+    alert('❌ Failed to save onboarding data.\n\nError details logged to browser console.\n\nMost likely fix: run the SQL migration in Supabase to add the onboarding column.');
     return;
   }
 
