@@ -423,7 +423,7 @@ tr:hover td{background:var(--gray-50);}
     <div class="auth-error" id="authError">Invalid email or password. Please try again.</div>
     <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="loginEmail" type="email" placeholder="you@blustu.agency" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="loginPassword" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px" onclick="doLogin()">Sign In</button>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center;padding:12px" onclick="doLogin()">Sign In</button>
     <div style="margin-top:16px;padding:12px;background:var(--gray-50);border-radius:10px;font-size:12px;color:var(--gray-400);text-align:center">
       Use your staff credentials to sign in
     </div>
@@ -569,6 +569,14 @@ tr:hover td{background:var(--gray-50);}
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><path d="M16 11l2 2 4-4"/></svg>
       Users &amp; Access
     </button>
+    <button class="nav-item" onclick="showPage('reports',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      Campaign Reports
+    </button>
+    <button class="nav-item" onclick="showPage('invoice',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Invoice Generator
+    </button>
   </nav>
   <div class="sidebar-footer">
     <div class="sidebar-user" onclick="openModal('profileModal')">
@@ -699,6 +707,7 @@ tr:hover td{background:var(--gray-50);}
         <button class="profile-tab active" onclick="switchProfileTab('overview',this)">Overview</button>
         <button class="profile-tab" onclick="switchProfileTab('socials',this)">Socials & Rates</button>
         <button class="profile-tab" onclick="switchProfileTab('deals',this)">Deals</button>
+        <button class="profile-tab" onclick="switchProfileTab('contracts',this)">Contracts</button>
         <button class="profile-tab" onclick="switchProfileTab('notes',this)">Notes</button>
       </div>
       <div class="profile-tab-content active" id="ptab-overview">
@@ -711,7 +720,19 @@ tr:hover td{background:var(--gray-50);}
         <div class="card"><div class="card-title" style="margin-bottom:16px">Social Platforms & Rates</div><div id="profile-socials-body"></div></div>
       </div>
       <div class="profile-tab-content" id="ptab-deals">
-        <div class="card"><div class="empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><h3>No deals yet</h3><p>Deals will appear here once added</p></div></div>
+        <div class="card"><div class="card-title" style="margin-bottom:12px">Deals</div><div id="profile-deals-body"></div></div>
+      </div>
+      <div class="profile-tab-content" id="ptab-contracts">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div class="card-title">Contracts</div>
+            <button class="btn btn-primary btn-sm" onclick="openUploadContract()">+ Upload Contract</button>
+          </div>
+          <input type="file" id="contractFileInput" accept=".pdf" style="display:none" onchange="handleContractUpload(event)">
+          <div id="profile-contracts-body">
+            <div style="font-size:13px;color:var(--gray-400)">No contracts uploaded yet.</div>
+          </div>
+        </div>
       </div>
       <div class="profile-tab-content" id="ptab-notes">
         <div class="card"><div class="card-title" style="margin-bottom:12px">Internal Notes <span style="font-size:10px;color:var(--gray-400);font-weight:400">(manager only)</span></div>
@@ -899,6 +920,191 @@ tr:hover td{background:var(--gray-50);}
 
   </div>
 </main>
+
+<!-- ══ CAMPAIGN REPORTS PAGE ══ -->
+<div style="display:none" id="page-reports-wrapper">
+<div class="page" id="page-reports">
+  <div class="page-header">
+    <div><h1>Campaign Reports</h1><p>Client-facing performance dashboards</p></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" onclick="exportReportPDF()">Export PDF</button>
+      <button class="btn btn-primary" onclick="openModal('newReportModal')">+ New Report</button>
+    </div>
+  </div>
+
+  <!-- Report selector -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div class="form-group" style="min-width:200px;margin:0">
+        <select class="form-select" id="reportCampaignSelect" onchange="loadReport(this.value)">
+          <option value="">Select a campaign…</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadReport(document.getElementById('reportCampaignSelect').value)">Load Report</button>
+    </div>
+  </div>
+
+  <div id="reportContent" style="display:none">
+    <!-- Report header -->
+    <div class="card" style="margin-bottom:20px;background:linear-gradient(135deg,var(--blue) 0%,#1478c4 100%);color:white;border:none" id="reportHeader">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
+        <div>
+          <div style="font-size:11px;font-weight:600;opacity:.7;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Campaign Report</div>
+          <div style="font-size:24px;font-family:'DM Serif Display',serif" id="reportTitle">Campaign Name</div>
+          <div style="font-size:13px;opacity:.8;margin-top:4px" id="reportMeta">Brand · Creator · Date</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;opacity:.7">Total Value</div>
+          <div style="font-size:28px;font-weight:700" id="reportTotalValue">£0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Report tabs -->
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px">
+      <button class="profile-tab active" onclick="switchReportTab('overview',this)">Overview</button>
+      <button class="profile-tab" onclick="switchReportTab('creators',this)">Creators</button>
+      <button class="profile-tab" onclick="switchReportTab('content',this)">Content</button>
+      <button class="profile-tab" onclick="switchReportTab('audience',this)">Audience</button>
+    </div>
+
+    <!-- Overview tab -->
+    <div id="rtab-overview" class="profile-tab-content active">
+      <!-- KPI Cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:20px" id="reportKPIs"></div>
+      <!-- Creator table -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">Creator Performance</div>
+        <div class="table-wrap">
+          <table id="reportCreatorTable">
+            <thead><tr>
+              <th>Creator</th><th>Posts</th><th>Est. Impressions</th><th>Eng. Rate</th><th>Value</th><th>Status</th>
+            </tr></thead>
+            <tbody id="reportCreatorTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Creators tab -->
+    <div id="rtab-creators" class="profile-tab-content">
+      <div id="reportCreatorsDetail"></div>
+    </div>
+
+    <!-- Content tab -->
+    <div id="rtab-content" class="profile-tab-content">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px">Content Deliverables</div>
+        <div id="reportContentDetail"><div style="font-size:13px;color:var(--gray-400)">No content data yet — add deliverables to campaign.</div></div>
+      </div>
+    </div>
+
+    <!-- Audience tab -->
+    <div id="rtab-audience" class="profile-tab-content">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px">Audience Insights</div>
+        <div id="reportAudienceDetail"><div style="font-size:13px;color:var(--gray-400)">Audience data from creator onboarding will appear here.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="reportEmpty" class="empty-state" style="margin-top:40px">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    <h3>Select a campaign to view its report</h3>
+    <p>Campaign reports are auto-generated from your campaigns and creator data</p>
+  </div>
+</div>
+</div>
+
+<!-- ══ INVOICE GENERATOR PAGE ══ -->
+<div style="display:none" id="page-invoice-wrapper">
+<div class="page" id="page-invoice">
+  <div class="page-header">
+    <div><h1>Invoice Generator</h1><p>Create and export professional invoices</p></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" onclick="clearInvoice()">Clear</button>
+      <button class="btn btn-primary" onclick="exportInvoicePDF()">Export PDF</button>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 420px;gap:20px;align-items:start">
+    <!-- Invoice form -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:20px">Invoice Details</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Invoice Title</label><input class="form-input" id="inv-title" placeholder="Invoice" value="Invoice"></div>
+        <div class="form-group"><label class="form-label">Invoice Number</label><input class="form-input" id="inv-number" placeholder="INV-001"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Issue Date</label><input class="form-input" id="inv-issue" type="date"></div>
+        <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" id="inv-due" type="date"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Bill To (Client)</label><textarea class="form-textarea" id="inv-billto" placeholder="Client Name&#10;Company&#10;Address&#10;Email" style="min-height:80px"></textarea></div>
+        <div class="form-group"><label class="form-label">Pay To (Your Details)</label><textarea class="form-textarea" id="inv-payto" placeholder="blustu™ Talent Agency&#10;Your Address&#10;bank@blustu.agency" style="min-height:80px" value="blustu™ Talent Agency"></textarea></div>
+      </div>
+      <div class="form-group"><label class="form-label">Payment Method</label><input class="form-input" id="inv-payment" placeholder="e.g. Bank Transfer — Sort: 00-00-00 Acc: 00000000"></div>
+
+      <div class="card-title" style="margin:20px 0 12px">Line Items</div>
+      <div id="inv-items">
+        <div class="inv-item-row" style="display:grid;grid-template-columns:1fr 80px 90px 28px;gap:8px;margin-bottom:8px">
+          <input class="form-input" placeholder="Description" oninput="updateInvoicePreview()">
+          <input class="form-input" placeholder="Qty" type="number" value="1" oninput="updateInvoicePreview()">
+          <input class="form-input" placeholder="Rate £" type="number" oninput="updateInvoicePreview()">
+          <button class="btn btn-ghost btn-sm" onclick="removeInvItem(this)" style="padding:4px 8px">✕</button>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="addInvItem()">+ Add Line Item</button>
+
+      <div class="form-row" style="margin-top:20px">
+        <div class="form-group"><label class="form-label">Tax (%)</label><input class="form-input" id="inv-tax" type="number" value="0" placeholder="0" oninput="updateInvoicePreview()"></div>
+        <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="inv-notes" placeholder="Payment terms, thank you note..."></div>
+      </div>
+      <div class="form-row" style="margin-top:16px">
+        <div class="form-group"><label class="form-label">Digital Signature</label><input class="form-input" id="inv-signature" placeholder="Your name / signature"></div>
+        <div class="form-group"><label class="form-label">Signature Date</label><input class="form-input" id="inv-sigdate" type="date"></div>
+      </div>
+    </div>
+
+    <!-- Invoice preview -->
+    <div>
+      <div style="font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Live Preview</div>
+      <div id="invoicePreview" style="background:white;border-radius:var(--radius);padding:32px;box-shadow:var(--shadow-md);font-size:12px;line-height:1.6">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px">
+          <div>
+            <div style="font-size:22px;font-family:'DM Serif Display',serif;color:var(--blue)" id="prev-title">Invoice</div>
+            <div style="color:var(--gray-400);font-size:11px" id="prev-number">INV-001</div>
+          </div>
+          <div style="text-align:right;font-size:11px;color:var(--gray-400)">
+            <div>blustu™ Talent Agency</div>
+            <div id="prev-dates"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:4px">Bill To</div><div id="prev-billto" style="white-space:pre-wrap;font-size:11px"></div></div>
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:4px">Pay To</div><div id="prev-payto" style="white-space:pre-wrap;font-size:11px"></div></div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+          <thead><tr style="background:var(--gray-50)">
+            <th style="text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--gray-400)">Description</th>
+            <th style="text-align:right;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--gray-400)">Qty</th>
+            <th style="text-align:right;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--gray-400)">Rate</th>
+            <th style="text-align:right;padding:6px 8px;font-size:10px;text-transform:uppercase;color:var(--gray-400)">Amount</th>
+          </tr></thead>
+          <tbody id="prev-items"></tbody>
+        </table>
+        <div style="text-align:right;margin-bottom:20px" id="prev-totals"></div>
+        <div style="border-top:1px solid var(--gray-100);padding-top:12px;font-size:11px;color:var(--gray-400)" id="prev-footer"></div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-100)">
+          <div style="font-size:10px;color:var(--gray-400);margin-bottom:4px">Authorised Signature</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:16px;color:var(--gray-900)" id="prev-signature"></div>
+          <div style="font-size:10px;color:var(--gray-400)" id="prev-sigdate"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
 
 <!-- ══ MODALS ══ -->
 
@@ -1405,76 +1611,71 @@ let deals       = Storage.get('deals',       []);
 let mediaKits   = Storage.get('mediaKits',   []);
 let nextId      = Storage.get('nextId',      {camp:1, pitch:1, deal:1, kit:1});
 
-// ── SUPABASE BOOT: load all shared data after login ───────────
+// ── SUPABASE BOOT ─────────────────────────────────────────────
 async function syncAllFromDB() {
   showSyncBanner(true);
   try {
-    // Load all tables in parallel
-    const [c, ca, p, d, mk, im] = await Promise.all([
-      DB.select('creators'),
-      DB.select('campaigns'),
-      DB.select('pitch_decks'),
-      DB.select('deals'),
-      DB.select('media_kits'),
-      DB.select('inbox_messages'),
-    ]);
-    const [nd, ia, pp, su] = await Promise.all([
-      DB.getAppData('nextId'),
-      DB.getAppData('kitAnalytics'),
-      DB.getAppData('profilePics'),
+    const [dbC, dbCa, dbP, dbD, dbMk, dbIm, dbSt] = await Promise.all([
+      DB.select('creators'), DB.select('campaigns'), DB.select('pitch_decks'),
+      DB.select('deals'), DB.select('media_kits'), DB.select('inbox_messages'),
       DB.select('staff_accounts'),
     ]);
 
-    // Creators: if DB has data use it, else seed from defaults
-    if (c && c.length > 0) {
-      creators = c;
-      Storage.set('creators', creators);
+    if (dbC && dbC.length > 0) { creators = dbC; }
+    else { await DB.upsertMany('creators', DEFAULT_CREATORS); creators = DEFAULT_CREATORS; }
+    Storage.set('creators', creators);
+
+    if (dbCa !== null) { campaigns  = dbCa; Storage.set('campaigns',  campaigns);  }
+    if (dbP  !== null) { pitchDecks = dbP;  Storage.set('pitchDecks', pitchDecks); }
+    if (dbD  !== null) { deals      = dbD;  Storage.set('deals',      deals);      }
+    if (dbMk !== null) { mediaKits  = dbMk; Storage.set('mediaKits',  mediaKits);  }
+    if (dbIm && dbIm.length > 0) { inboxMessages = dbIm; Storage.set('inboxMessages', inboxMessages); }
+
+    // Staff — seed into Supabase if empty (first-run)
+    if (dbSt && dbSt.length > 0) {
+      STAFF = dbSt; Storage.set('staff', STAFF);
     } else {
-      // Seed default creators into Supabase on first run
-      await DB.upsertMany('creators', DEFAULT_CREATORS);
-      creators = DEFAULT_CREATORS;
-      Storage.set('creators', creators);
+      const seeded = DEFAULT_STAFF.map((s, i) => ({...s, id: i+1}));
+      await DB.upsertMany('staff_accounts', seeded);
+      STAFF = seeded; Storage.set('staff', STAFF);
     }
 
-    if (ca && ca.length >= 0) { campaigns  = ca;  Storage.set('campaigns',  campaigns); }
-    if (p  && p.length  >= 0) { pitchDecks = p;   Storage.set('pitchDecks', pitchDecks); }
-    if (d  && d.length  >= 0) { deals      = d;   Storage.set('deals',      deals); }
-    if (mk && mk.length >= 0) { mediaKits  = mk;  Storage.set('mediaKits',  mediaKits); }
-    if (im && im.length > 0)  { inboxMessages = im; Storage.set('inboxMessages', inboxMessages); }
-    if (nd) { nextId = nd; Storage.set('nextId', nextId); }
-    if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
+    const [pp, ia] = await Promise.all([DB.getAppData('profilePics'), DB.getAppData('kitAnalytics')]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
+    if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
 
-    // Load staff accounts from Supabase so they work cross-device
-    if (su && su.length > 0) {
-      STAFF = su;
-      Storage.set('staff', STAFF);
-    } else {
-      // Seed default staff into Supabase
-      await DB.upsertMany('staff_accounts', DEFAULT_STAFF.map((s,i)=>({...s, id: i+1})));
-    }
-
-  } catch(e) {
-    console.warn('Supabase sync failed, using cached data:', e);
-  }
+  } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
   renderAll();
 }
 
-// Re-fetch a single table and update local array + re-render
+// Fetch one table and re-render affected UI
 async function refetch(table) {
   const rows = await DB.select(table);
-  if (!rows) return;
+  if (rows === null) return false;
   switch(table) {
-    case 'creators':    creators    = rows; Storage.set('creators',    rows); renderCRM(creators); renderOnboarding(); break;
-    case 'campaigns':   campaigns   = rows; Storage.set('campaigns',   rows); renderCampaigns(currentCampaignFilter); break;
-    case 'pitch_decks': pitchDecks  = rows; Storage.set('pitchDecks',  rows); renderPitchDecks(); break;
-    case 'deals':       deals       = rows; Storage.set('deals',       rows); renderPipeline(); break;
-    case 'media_kits':  mediaKits   = rows; Storage.set('mediaKits',   rows); renderMediaKitList(); break;
+    case 'creators':
+      creators = rows; Storage.set('creators', rows);
+      renderCRM(creators); renderOnboarding();
+      if (currentCreatorId) {
+        renderCreatorDeals(currentCreatorId);
+        renderCreatorContracts(currentCreatorId);
+      }
+      break;
+    case 'campaigns':
+      campaigns = rows; Storage.set('campaigns', rows);
+      renderCampaigns(currentCampaignFilter);
+      break;
+    case 'pitch_decks': pitchDecks = rows; Storage.set('pitchDecks', rows); renderPitchDecks(); break;
+    case 'deals':       deals      = rows; Storage.set('deals',      rows); renderPipeline();   break;
+    case 'media_kits':  mediaKits  = rows; Storage.set('mediaKits',  rows); renderMediaKitList(); break;
     case 'inbox_messages': inboxMessages = rows; Storage.set('inboxMessages', rows); renderInbox(); break;
+    case 'contracts':
+      if (currentCreatorId) renderCreatorContracts(currentCreatorId);
+      break;
   }
-  updateDashStats();
-  populateSelects();
+  updateDashStats(); populateSelects();
+  return true;
 }
 
 function showSyncBanner(show) {
@@ -1509,63 +1710,95 @@ let currentPortalCreatorId = null;
 let currentPortalStep = 1;
 let portalData = {};
 
+// ── prefetchStaff: load staff from Supabase BEFORE login prompt ──
+// This is what makes cross-device auth work for ALL staff accounts.
+async function prefetchStaff() {
+  try {
+    const rows = await DB.select('staff_accounts');
+    if (rows && rows.length > 0) {
+      STAFF = rows;
+      Storage.set('staff', STAFF);
+      console.log('[Auth] Prefetched', STAFF.length, 'staff accounts from Supabase');
+    }
+  } catch(e) {
+    console.warn('[Auth] Staff prefetch failed, using local cache:', e);
+  }
+}
+
 // ══ AUTH ══
-// doLogin is called both from button click and Enter key.
-// It runs after DOMContentLoaded so all elements exist.
-function doLogin() {
+async function doLogin() {
   const emailEl = document.getElementById('loginEmail');
   const passEl  = document.getElementById('loginPassword');
   const errEl   = document.getElementById('authError');
+  const btnEl   = document.getElementById('loginBtn');
   if (!emailEl || !passEl) return;
 
   const email = emailEl.value.trim().toLowerCase();
   const pass  = passEl.value;
-  const staff = STAFF.find(s => s.email === email && s.pass === pass);
-
-  if (!staff) {
+  if (!email || !pass) {
     errEl.style.display = 'block';
-    errEl.textContent = 'Invalid email or password. Please try again.';
+    errEl.textContent = 'Please enter your email and password.';
     return;
   }
 
   errEl.style.display = 'none';
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Signing in…'; }
+
+  // 1. Try Supabase directly (works on ANY device, always up to date)
+  let staff = null;
+  try {
+    const rows = await DB._req('GET', 'staff_accounts', null,
+      `?email=eq.${encodeURIComponent(email)}&pass=eq.${encodeURIComponent(pass)}&limit=1`);
+    if (rows && rows.length > 0) {
+      staff = rows[0];
+      // Keep local STAFF array in sync
+      const idx = STAFF.findIndex(s => s.email === email);
+      if (idx > -1) STAFF[idx] = staff; else STAFF.push(staff);
+      Storage.set('staff', STAFF);
+    }
+  } catch(e) {
+    console.warn('[Auth] Supabase login query failed:', e);
+  }
+
+  // 2. Fallback to local STAFF array (covers offline / Supabase down)
+  if (!staff) {
+    staff = STAFF.find(s => s.email === email && s.pass === pass);
+  }
+
+  if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Sign In'; }
+
+  if (!staff) {
+    errEl.style.display = 'block';
+    errEl.textContent = 'Invalid email or password.';
+    return;
+  }
+
   currentUser = staff;
+  Storage.set('lastUser', email);
 
-  // Persist last logged-in user email (not password) for session hint
-  saveToStorage('lastUser', email);
-
-  // Update auth screen
   document.getElementById('authScreen').classList.add('hidden');
 
-  // Update sidebar
   const role = staff.systemRole || 'readonly';
   document.getElementById('sidebarName').textContent = staff.name;
   document.getElementById('sidebarAvatar').textContent = staff.name[0].toUpperCase();
+  document.getElementById('sidebarRole').innerHTML =
+    `<span class="user-role-badge role-${role}">${ROLE_LABELS[role]||role}</span>`;
 
-  // Add role badge in sidebar
-  const roleEl = document.getElementById('sidebarRole');
-  roleEl.innerHTML = `<span class="user-role-badge role-${role}">${ROLE_LABELS[role]||role}</span>`;
-
-  // Greeting
   const h = new Date().getHours();
   const greet = h<12?'Good morning':h<17?'Good afternoon':'Good evening';
   const greetEl = document.getElementById('dashGreeting');
-  if (greetEl) greetEl.textContent = greet + `, ${staff.name}. 👋`;
+  if (greetEl) greetEl.textContent = `${greet}, ${staff.name}. 👋`;
 
-  // Profile modal
   const pmName = document.getElementById('profile-modal-name');
   const pmEmail = document.getElementById('profile-modal-email');
   const pmAvatar = document.getElementById('profile-modal-avatar');
   const pmDisplay = document.getElementById('profile-modal-display');
-  if (pmName) pmName.textContent = staff.name;
-  if (pmEmail) pmEmail.textContent = staff.email;
-  if (pmAvatar) pmAvatar.textContent = staff.name[0];
-  if (pmDisplay) pmDisplay.value = staff.name;
+  if (pmName)    pmName.textContent    = staff.name;
+  if (pmEmail)   pmEmail.textContent   = staff.email;
+  if (pmAvatar)  pmAvatar.textContent  = staff.name[0];
+  if (pmDisplay) pmDisplay.value       = staff.name;
 
-  // Apply permissions UI
   applyPermissionsUI();
-
-  // Sync all data from Supabase (shared across all staff)
   syncAllFromDB();
 }
 
@@ -1630,16 +1863,44 @@ function closeModal(id) {
   if(el) el.classList.remove('open');
 }
 
-const pageTitles={dashboard:'Dashboard',crm:'Creator CRM',creatorprofile:'Creator Profile',onboarding:'Creator Onboarding',mediakit:'Media Kits',campaigns:'Campaigns',pitchdecks:'Pitch Decks',pipeline:'Deal Pipeline',inbox:'Inbox',users:'Users & Access'};
+const pageTitles = {
+  dashboard:'Dashboard', crm:'Creator CRM', creatorprofile:'Creator Profile',
+  onboarding:'Creator Onboarding', mediakit:'Media Kits', campaigns:'Campaigns',
+  pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline', inbox:'Inbox',
+  users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator'
+};
 
 function showPage(id, btn) {
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  const page=document.getElementById('page-'+id);
-  if(page) page.classList.add('active');
-  if(btn) btn.classList.add('active');
-  document.getElementById('topbarTitle').textContent=pageTitles[id]||id;
-  closeSidebar(); // auto-close on mobile
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  // Show target page — special pages live in wrapper divs outside <main>
+  if (id === 'reports' || id === 'invoice') {
+    // Move page element into main content area if needed
+    const wrapper = document.getElementById('page-'+id+'-wrapper');
+    const page    = document.getElementById('page-'+id);
+    if (wrapper) wrapper.style.display = 'block';
+    if (page) {
+      const content = document.querySelector('.content');
+      if (content && page.parentElement !== content) content.appendChild(page);
+      page.classList.add('active');
+    }
+    if (id === 'reports') populateReportSelector();
+    if (id === 'invoice') initInvoice();
+  } else {
+    // Hide special wrappers
+    ['reports','invoice'].forEach(pid => {
+      const w = document.getElementById('page-'+pid+'-wrapper');
+      if (w) w.style.display = 'none';
+    });
+    const page = document.getElementById('page-'+id);
+    if (page) page.classList.add('active');
+  }
+
+  if (btn) btn.classList.add('active');
+  const titleEl = document.getElementById('topbarTitle');
+  if (titleEl) titleEl.textContent = pageTitles[id] || id;
+  closeSidebar();
 }
 
 function statusBadge(s){
@@ -1945,42 +2206,38 @@ function openCreatorQuickView(id){
   openModal('creatorModal');
 }
 
-function switchProfileTab(id,btn){
-  document.querySelectorAll('.profile-tab-content').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.profile-tab').forEach(t=>t.classList.remove('active'));
-  const el=document.getElementById('ptab-'+id);
-  if(el)el.classList.add('active');
-  if(btn)btn.classList.add('active');
-  else document.querySelectorAll('.profile-tab').forEach(t=>{if(t.onclick&&t.toString().includes(id))t.classList.add('active');});
-
-  // When switching to deals tab, render deals for this creator
-  if (id === 'deals' && currentCreatorId) {
-    renderCreatorDeals(currentCreatorId);
-  }
+function switchProfileTab(id, btn) {
+  document.querySelectorAll('.profile-tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+  const el = document.getElementById('ptab-'+id);
+  if (el) el.classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (id === 'deals' && currentCreatorId) renderCreatorDeals(currentCreatorId);
+  if (id === 'contracts' && currentCreatorId) renderCreatorContracts(currentCreatorId);
 }
 
 function renderCreatorDeals(creatorId) {
-  const el = document.getElementById('ptab-deals');
-  if (!el) return;
+  const bodyEl = document.getElementById('profile-deals-body');
+  if (!bodyEl) return;
   const c = creators.find(x => x.id === creatorId);
-  // Match by creatorId OR by creator name (for legacy records)
-  const creatorDeals = deals.filter(d =>
-    d.creatorId === creatorId ||
+  // Match by numeric creatorId OR by creator name (for legacy records)
+  const myDeals = deals.filter(d =>
+    Number(d.creatorId) === Number(creatorId) ||
     (c && d.creator && d.creator.toLowerCase() === c.name.toLowerCase())
   );
-  if (!creatorDeals.length) {
-    el.innerHTML = '<div style="font-size:13px;color:var(--gray-400);padding:16px 0">No deals found for this creator.</div>';
+  if (!myDeals.length) {
+    bodyEl.innerHTML = '<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No deals found for this creator yet.</div>';
     return;
   }
-  el.innerHTML = `
+  bodyEl.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:8px">
-      ${creatorDeals.map(d=>`
-        <div style="padding:12px;border:1px solid var(--gray-100);border-radius:10px;cursor:pointer" onclick="closeModal('dummy');showPage('pipeline',document.querySelector('[onclick*=pipeline]'));setTimeout(()=>openEditDeal(${d.id}),200)">
-          <div style="display:flex;justify-content:space-between;align-items:center">
+      ${myDeals.map(d => `
+        <div style="padding:12px;border:1px solid var(--gray-100);border-radius:10px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--gray-100)'" onclick="showPage('pipeline',document.querySelector('[onclick*=pipeline]'));setTimeout(()=>openEditDeal(${d.id}),150)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <div style="font-size:13px;font-weight:600">${d.brand}</div>
             ${statusBadge(d.stage)}
           </div>
-          <div style="font-size:12px;color:var(--gray-400);margin-top:4px">${fmtMoney(d.value)} ${d.notes?'· '+d.notes.substring(0,40)+'…':''}</div>
+          <div style="font-size:12px;color:var(--gray-400)">${fmtMoney(d.value)}${d.notes ? ' · '+d.notes.substring(0,50) : ''}</div>
         </div>`).join('')}
     </div>`;
 }
@@ -2069,22 +2326,27 @@ async function sendInvite(){
 
 // ══ ONBOARDING PORTAL ══
 function checkPortalParam(){
-  const params=new URLSearchParams(location.search);
-  const ob=params.get('onboard');
-  if(!ob)return;
-  try{
-    const decoded=atob(ob);
-    const [idStr,name]=decoded.split(':');
-    const id=parseInt(idStr);
-    currentPortalCreatorId=id;
-    document.getElementById('portalCreatorName').textContent=`Hi ${name}! Please complete your onboarding below.`;
+  const params = new URLSearchParams(location.search);
+  const ob = params.get('onboard');
+  if (!ob) return;
+  try {
+    const decoded = atob(ob);
+    const parts = decoded.split(':');
+    const id = parseInt(parts[0], 10);
+    const name = parts.slice(1).join(':'); // handle names with colons
+    if (isNaN(id)) { console.error('Invalid onboarding token - bad id:', decoded); return; }
+    currentPortalCreatorId = id;
+    console.log('Portal: creator id =', id, 'name =', name);
+    document.getElementById('portalCreatorName').textContent = `Hi ${name}! Please complete your onboarding below.`;
     // Pre-fill existing niche if available
-    const c=creators.find(x=>x.id===id);
-    if(c&&c.niche)document.getElementById('ob-niche').value=c.niche;
+    const c = creators.find(x => x.id === id);
+    if (c && c.niche) document.getElementById('ob-niche').value = c.niche;
     showPortalStep(1);
     document.getElementById('onboardPortal').classList.add('show');
     document.getElementById('authScreen').classList.add('hidden');
-  }catch(e){}
+  } catch(e) {
+    console.error('Portal decode error:', e);
+  }
 }
 
 function showPortalStep(n){
@@ -2145,20 +2407,35 @@ function buildReview(){
 
 async function submitOnboarding(){
   collectPortalData();
-  const c=creators.find(x=>x.id===currentPortalCreatorId);
-  if(c){
-    c.onboarding=portalData;
-    c.status='Active';
-    if(portalData.niche) c.niche=portalData.niche;
-    console.log('Saving onboarding for creator:', c.id, c.name);
-    const result = await DB.upsertOne('creators', c);
-    console.log('Onboarding save result:', result);
-    if (result) {
-      Storage.set('creators', creators);
-    } else {
-      showToast('⚠️ Onboarding saved locally but failed to sync — try again');
+
+  // The portal loads BEFORE login, so creators[] may be empty.
+  // Always fetch the creator fresh from Supabase.
+  let creator = creators.find(x => x.id === currentPortalCreatorId);
+  if (!creator) {
+    const rows = await DB._req('GET', 'creators', null, `?id=eq.${currentPortalCreatorId}&limit=1`);
+    if (!rows || !rows.length) {
+      alert('Error: Creator not found. Please contact your agency.');
+      return;
     }
+    creator = rows[0];
+    creators.push(creator);
   }
+
+  creator.onboarding = portalData;
+  creator.status = 'Active';
+  if (portalData.niche) creator.niche = portalData.niche;
+
+  console.log('[Onboarding] Saving for creator id:', creator.id, typeof creator.id);
+
+  const result = await DB.upsertOne('creators', creator);
+  console.log('[Onboarding] Save result:', result);
+
+  if (!result) {
+    alert('❌ Failed to save onboarding data. Please check your internet connection and try again.');
+    return;
+  }
+
+  Storage.set('creators', creators);
   showPortalStep(5);
 }
 
@@ -2249,18 +2526,18 @@ async function saveCampaign(){
 }
 
 function deleteCampaign(){
-  const id=parseInt(document.getElementById('edit-camp-id').value);
-  const c = campaigns.find(x=>x.id===id);
+  const id = parseInt(document.getElementById('edit-camp-id').value);
+  const c = campaigns.find(x => x.id === id);
   if (!c) return;
   showConfirm('Delete Campaign?', `Delete "${c.brand} × ${c.creator}"? Linked pipeline deals will also be removed.`, async () => {
-    console.log('Deleting campaign:', {table:'campaigns', id, typeofId: typeof id});
     closeModal('editCampaignModal');
-    const r1 = await DB.delete('campaigns', id);
-    console.log('Delete campaign result:', r1);
-    // Delete linked deals
-    const linkedDeals = deals.filter(d => d.campaignId === id);
-    for (const d of linkedDeals) { await DB.delete('deals', d.id); }
-    // Refetch both
+    console.log('[DB] DELETE campaigns id=', id);
+    const r = await DB.delete('campaigns', id);
+    console.log('[DB] DELETE campaigns result:', r);
+    if (r === null) { showToast('❌ Delete failed — check console'); return; }
+    // Delete any linked deals
+    const linked = deals.filter(d => d.campaignId === id);
+    for (const d of linked) await DB.delete('deals', d.id);
     await Promise.all([refetch('campaigns'), refetch('deals')]);
     updateDashStats();
     showToast('Campaign deleted');
@@ -2404,14 +2681,15 @@ function openEditPitch(id){
 }
 
 function deletePitch(){
-  const id=parseInt(document.getElementById('edit-pitch-id').value);
-  const p = pitchDecks.find(x=>x.id===id);
+  const id = parseInt(document.getElementById('edit-pitch-id').value);
+  const p = pitchDecks.find(x => x.id === id);
   if (!p) return;
   closeModal('editPitchModal');
   showConfirm('Delete Pitch Deck?', `Delete pitch for "${p.brand} × ${p.creator}"?`, async () => {
-    console.log('Deleting pitch deck:', {table:'pitch_decks', id, typeofId: typeof id});
-    const result = await DB.delete('pitch_decks', id);
-    console.log('Delete pitch result:', result);
+    console.log('[DB] DELETE pitch_decks id=', id);
+    const r = await DB.delete('pitch_decks', id);
+    console.log('[DB] DELETE pitch_decks result:', r);
+    if (r === null) { showToast('❌ Delete failed'); return; }
     await refetch('pitch_decks');
     showToast('Pitch deck deleted');
   });
@@ -2532,14 +2810,15 @@ function openEditDeal(id){
 }
 
 function deleteDeal(){
-  const id=parseInt(document.getElementById('edit-deal-id').value);
-  const d = deals.find(x=>x.id===id);
+  const id = parseInt(document.getElementById('edit-deal-id').value);
+  const d = deals.find(x => x.id === id);
   if (!d) return;
   closeModal('editDealModal');
   showConfirm('Delete Deal?', `Remove deal "${d.brand} × ${d.creator}" from pipeline?`, async () => {
-    console.log('Deleting deal:', {table:'deals', id, typeofId: typeof id});
-    const result = await DB.delete('deals', id);
-    console.log('Delete deal result:', result);
+    console.log('[DB] DELETE deals id=', id);
+    const r = await DB.delete('deals', id);
+    console.log('[DB] DELETE deals result:', r);
+    if (r === null) { showToast('❌ Delete failed'); return; }
     await refetch('deals');
     updateDashStats();
     showToast('Deal removed');
@@ -3102,7 +3381,12 @@ async function saveMediaKits()  { Storage.set('mediaKits',  mediaKits);  await D
 async function saveNextId()     { Storage.set('nextId', nextId); await DB.setAppData('nextId', nextId); }
 
 // ── INIT ─────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+  // CRITICAL: prefetch staff_accounts from Supabase BEFORE showing login.
+  // Without this, only the first device (with localStorage) can log in.
+  // Every other device starts with DEFAULT_STAFF only — Rayyan/others fail.
+  await prefetchStaff();
+
   checkPortalParam();
   const params = new URLSearchParams(location.search);
   if (!params.get('onboard')) {
@@ -3113,15 +3397,381 @@ document.addEventListener('DOMContentLoaded', function() {
     if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   });
   document.getElementById('nav-dashboard').classList.add('active');
+  initInvoice();
 
-  // Warn before leaving if logged in
   window.addEventListener('beforeunload', (e) => {
-    if (currentUser) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
+    if (currentUser) { e.preventDefault(); e.returnValue = ''; }
   });
 });
+
+// ══════════════════════════════════════════════════════════════
+// ── CONTRACTS ────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+function openUploadContract() {
+  const fi = document.getElementById('contractFileInput');
+  if (fi) fi.click();
+}
+
+async function handleContractUpload(event) {
+  const file = event.target.files[0];
+  if (!file || !currentCreatorId) return;
+  event.target.value = '';
+  if (file.type !== 'application/pdf') { showToast('Please upload a PDF file'); return; }
+
+  showToast('Uploading contract…');
+  const fileName = `creator_${currentCreatorId}_${Date.now()}.pdf`;
+
+  // Upload to Supabase Storage bucket "contracts"
+  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/contracts/${fileName}`;
+  let pdfUrl = null;
+  try {
+    const r = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/pdf',
+        'x-upsert': 'true'
+      },
+      body: file
+    });
+    if (r.ok) {
+      pdfUrl = `${SUPABASE_URL}/storage/v1/object/public/contracts/${fileName}`;
+    } else {
+      const err = await r.text();
+      console.error('[Contracts] Upload failed:', err);
+      showToast('❌ Upload failed. Check Supabase Storage bucket "contracts" exists.');
+      return;
+    }
+  } catch(e) {
+    console.error('[Contracts] Upload error:', e);
+    showToast('❌ Upload error — check network');
+    return;
+  }
+
+  // Save contract metadata to Supabase
+  const contract = {
+    id: Date.now() % 2147483647,
+    influencer_id: currentCreatorId,
+    contract_name: file.name.replace(/\.pdf$/i, ''),
+    start_date: null,
+    end_date: null,
+    status: 'Active',
+    pdf_url: pdfUrl,
+    notes: '',
+    created_at: new Date().toISOString()
+  };
+
+  console.log('[Contracts] Saving:', contract);
+  const result = await DB.upsertOne('contracts', contract);
+  console.log('[Contracts] Save result:', result);
+
+  if (!result) { showToast('❌ Contract metadata save failed'); return; }
+  showToast('✅ Contract uploaded!');
+  await renderCreatorContracts(currentCreatorId);
+}
+
+async function renderCreatorContracts(creatorId) {
+  const el = document.getElementById('profile-contracts-body');
+  if (!el) return;
+  el.innerHTML = '<div style="font-size:13px;color:var(--gray-400)">Loading…</div>';
+
+  const rows = await DB._req('GET', 'contracts', null,
+    `?influencer_id=eq.${creatorId}&order=created_at.desc`);
+
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--gray-400)">No contracts uploaded yet.</div>';
+    return;
+  }
+
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">
+    ${rows.map(c => `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--gray-100);border-radius:10px;background:var(--gray-50)">
+        <div style="width:36px;height:36px;background:var(--red-light);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;margin-bottom:2px">${c.contract_name||'Contract'}</div>
+          <div style="font-size:11px;color:var(--gray-400)">
+            ${c.start_date?'From '+c.start_date:''}${c.end_date?' · To '+c.end_date:''}
+            · Uploaded ${new Date(c.created_at).toLocaleDateString('en-GB')}
+          </div>
+        </div>
+        ${statusBadge(c.status||'Active')}
+        <a href="${c.pdf_url}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration:none;flex-shrink:0">View PDF</a>
+        <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="deleteContract(${c.id})">✕</button>
+      </div>`).join('')}
+  </div>`;
+}
+
+async function deleteContract(id) {
+  if (!confirm('Delete this contract?')) return;
+  console.log('[Contracts] Deleting id:', id);
+  const r = await DB.delete('contracts', id);
+  console.log('[Contracts] Delete result:', r);
+  if (r === null) { showToast('❌ Delete failed'); return; }
+  showToast('Contract deleted');
+  await renderCreatorContracts(currentCreatorId);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── CAMPAIGN REPORTS ─────────────────────════════════════════
+// ══════════════════════════════════════════════════════════════
+
+function populateReportSelector() {
+  const sel = document.getElementById('reportCampaignSelect');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Select a campaign to view its report…</option>' +
+    campaigns.map(c => `<option value="${c.id}">${c.brand} × ${c.creator} (${c.status})</option>`).join('');
+  if (prev) sel.value = prev;
+}
+
+function switchReportTab(id, btn) {
+  document.querySelectorAll('[id^="rtab-"]').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-reports .profile-tab').forEach(t => t.classList.remove('active'));
+  const el = document.getElementById('rtab-'+id);
+  if (el) el.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function loadReport(campId) {
+  if (!campId) return;
+  const camp = campaigns.find(x => String(x.id) === String(campId));
+  if (!camp) return;
+
+  document.getElementById('reportContent').style.display = 'block';
+  document.getElementById('reportEmpty').style.display = 'none';
+
+  // Header
+  document.getElementById('reportTitle').textContent = `${camp.brand} × ${camp.creator}`;
+  document.getElementById('reportMeta').textContent =
+    `${camp.status} · Deadline: ${camp.deadline||'TBD'} · ${camp.deliverables||'—'}`;
+  document.getElementById('reportTotalValue').textContent = fmtMoney(camp.value);
+
+  const creator = creators.find(x => x.name === camp.creator);
+  const ob = creator && creator.onboarding;
+  const campDeals = deals.filter(d =>
+    String(d.campaignId) === String(campId) || d.brand === camp.brand
+  );
+
+  // KPI Cards
+  const kpis = [
+    {label:'Progress', value:`${camp.progress||0}%`, color:'var(--blue)'},
+    {label:'Campaign Value', value:fmtMoney(camp.value), color:'var(--green)'},
+    {label:'Linked Deals', value:campDeals.length, color:'var(--amber)'},
+    {label:'Status', value:camp.status, color:'var(--blue)'},
+    {label:'Deliverables', value:camp.deliverables||'—', color:'var(--gray-600)'},
+    {label:'Deadline', value:camp.deadline||'TBD', color:'var(--red)'},
+  ];
+  document.getElementById('reportKPIs').innerHTML = kpis.map(k => `
+    <div style="background:white;border-radius:12px;padding:16px 18px;box-shadow:var(--shadow-sm);border:1px solid var(--gray-100)">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gray-400);margin-bottom:6px">${k.label}</div>
+      <div style="font-size:20px;font-weight:700;color:${k.color};font-family:'DM Serif Display',serif">${k.value}</div>
+    </div>`).join('');
+
+  // Creator performance table
+  document.getElementById('reportCreatorTableBody').innerHTML = `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="creator-avatar" style="background:${creator?avatarColor(creator.id):'var(--blue)'};width:28px;height:28px;font-size:11px">${avatarLetter(camp.creator)}</div>
+          <div>
+            <div style="font-weight:600;font-size:13px">${camp.creator}</div>
+            <div style="font-size:11px;color:var(--gray-400)">${creator?creator.email:''}</div>
+          </div>
+        </div>
+      </td>
+      <td>${camp.deliverables||'—'}</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td style="font-weight:600;color:var(--blue)">${fmtMoney(camp.value)}</td>
+      <td>${statusBadge(camp.status)}</td>
+    </tr>`;
+
+  // Creators detail tab
+  document.getElementById('reportCreatorsDetail').innerHTML = creator ? `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div class="creator-avatar" style="background:${avatarColor(creator.id)};width:48px;height:48px;font-size:20px">${avatarLetter(creator.name)}</div>
+        <div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:2px">${creator.name}</div>
+          <div style="font-size:13px;color:var(--gray-400)">${creator.niche} · ${creator.location}</div>
+        </div>
+        ${statusBadge(creator.status)}
+      </div>
+      ${ob ? `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">
+          ${ob.tiktok?`<div style="background:var(--gray-50);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--gray-400);margin-bottom:2px">TikTok</div><div style="font-size:12px;font-weight:600">${ob.tiktok}</div></div>`:''}
+          ${ob.instagram?`<div style="background:var(--gray-50);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--gray-400);margin-bottom:2px">Instagram</div><div style="font-size:12px;font-weight:600">${ob.instagram}</div></div>`:''}
+          ${ob.rates?Object.entries(ob.rates).filter(([,v])=>v).map(([k,v])=>`
+            <div style="background:var(--blue-light);border-radius:8px;padding:10px">
+              <div style="font-size:10px;color:var(--blue);margin-bottom:2px">${k}</div>
+              <div style="font-size:15px;font-weight:700;color:var(--blue)">£${v}</div>
+            </div>`).join(''):''}
+        </div>` :
+        '<div style="font-size:13px;color:var(--gray-400)">Creator hasn\'t completed onboarding — no rate data yet.</div>'}
+    </div>` : '<div class="card"><div style="font-size:13px;color:var(--gray-400)">Creator not found in roster.</div></div>';
+
+  // Content tab
+  document.getElementById('reportContentDetail').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="padding:14px;background:var(--gray-50);border-radius:10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:4px">DELIVERABLES</div>
+        <div style="font-size:14px;font-weight:600">${camp.deliverables||'Not specified'}</div>
+      </div>
+      <div style="padding:14px;background:var(--gray-50);border-radius:10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:8px">PROGRESS</div>
+        <div class="progress-bar" style="margin-bottom:6px"><div class="progress-fill ${camp.status==='Live'?'green':''}" style="width:${camp.progress||0}%"></div></div>
+        <div style="font-size:13px;font-weight:600">${camp.progress||0}% complete</div>
+      </div>
+      ${camp.notes?`<div style="padding:14px;background:var(--gray-50);border-radius:10px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:4px">BRIEF / NOTES</div><div style="font-size:13px">${camp.notes}</div></div>`:''}
+    </div>`;
+
+  // Audience tab
+  document.getElementById('reportAudienceDetail').innerHTML = ob ? `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${ob.bio?`<div style="padding:14px;background:var(--gray-50);border-radius:10px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:4px">BIO</div><div style="font-size:13px">${ob.bio}</div></div>`:''}
+      ${ob.niche?`<div style="padding:14px;background:var(--gray-50);border-radius:10px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:4px">NICHE / CONTENT</div><div style="font-size:14px;font-weight:600">${ob.niche}</div></div>`:''}
+      ${ob.restrictions?`<div style="padding:14px;background:var(--red-light);border-radius:10px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:4px">BRAND RESTRICTIONS</div><div style="font-size:13px;color:var(--red)">${ob.restrictions}</div></div>`:''}
+      ${ob.preferences?`<div style="padding:14px;background:var(--green-light);border-radius:10px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--green);margin-bottom:4px">PREFERENCES</div><div style="font-size:13px">${ob.preferences}</div></div>`:''}
+    </div>` : '<div style="font-size:13px;color:var(--gray-400)">Audience data requires creator onboarding. Send them their onboarding link.</div>';
+}
+
+function exportReportPDF() {
+  showToast('Opening print dialog — choose "Save as PDF"');
+  setTimeout(() => window.print(), 400);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── INVOICE GENERATOR ────────────────────════════════════════
+// ══════════════════════════════════════════════════════════════
+
+let _invoiceInitDone = false;
+function initInvoice() {
+  if (_invoiceInitDone) return;
+  _invoiceInitDone = true;
+  const today = new Date().toISOString().split('T')[0];
+  const due30 = new Date(Date.now() + 30*864e5).toISOString().split('T')[0];
+  const set = (id, val) => { const el=document.getElementById(id); if(el&&!el.value) el.value=val; };
+  set('inv-issue', today); set('inv-due', due30); set('inv-sigdate', today);
+  set('inv-number', 'INV-' + Date.now().toString().slice(-4));
+  set('inv-payto', 'blustu™ Talent Agency\ncontact@blustu.agency');
+
+  // Wire up live preview
+  document.querySelectorAll('#page-invoice input, #page-invoice textarea').forEach(el => {
+    el.addEventListener('input', updateInvoicePreview);
+  });
+  updateInvoicePreview();
+}
+
+function addInvItem() {
+  const container = document.getElementById('inv-items');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.className = 'inv-item-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 80px 90px 32px;gap:8px;margin-bottom:8px';
+  row.innerHTML = `
+    <input class="form-input" placeholder="Description" oninput="updateInvoicePreview()">
+    <input class="form-input" type="number" placeholder="Qty" value="1" oninput="updateInvoicePreview()">
+    <input class="form-input" type="number" placeholder="Rate £" oninput="updateInvoicePreview()">
+    <button class="btn btn-ghost btn-sm" onclick="removeInvItem(this)" style="padding:4px 8px;font-size:14px">✕</button>`;
+  container.appendChild(row);
+  updateInvoicePreview();
+}
+
+function removeInvItem(btn) { btn.parentElement.remove(); updateInvoicePreview(); }
+
+function updateInvoicePreview() {
+  const g = id => document.getElementById(id)?.value || '';
+  const title   = g('inv-title') || 'Invoice';
+  const number  = g('inv-number');
+  const issue   = g('inv-issue');
+  const due     = g('inv-due');
+  const billto  = g('inv-billto');
+  const payto   = g('inv-payto');
+  const payment = g('inv-payment');
+  const tax     = parseFloat(g('inv-tax')) || 0;
+  const notes   = g('inv-notes');
+  const sig     = g('inv-signature');
+  const sigdate = g('inv-sigdate');
+
+  const p = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val||''; };
+  p('prev-title', title); p('prev-number', number);
+  p('prev-billto', billto); p('prev-payto', payto);
+  p('prev-signature', sig); p('prev-sigdate', sigdate);
+
+  const datesEl = document.getElementById('prev-dates');
+  if (datesEl) datesEl.innerHTML = `<div>Issued: ${issue||'—'}</div><div>Due: ${due||'—'}</div>`;
+
+  const rows = document.querySelectorAll('.inv-item-row');
+  let subtotal = 0;
+  const tbody = document.getElementById('prev-items');
+  if (tbody) {
+    tbody.innerHTML = '';
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll('input');
+      const desc = inputs[0]?.value || '';
+      const qty  = parseFloat(inputs[1]?.value || 1);
+      const rate = parseFloat(inputs[2]?.value || 0);
+      if (!desc && !rate) return;
+      const amount = qty * rate;
+      subtotal += amount;
+      tbody.innerHTML += `<tr>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--gray-100)">${desc}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--gray-100);text-align:right">${qty}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--gray-100);text-align:right">£${rate.toFixed(2)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--gray-100);text-align:right;font-weight:600">£${amount.toFixed(2)}</td>
+      </tr>`;
+    });
+  }
+
+  const taxAmt = subtotal * (tax/100);
+  const total = subtotal + taxAmt;
+  const totalsEl = document.getElementById('prev-totals');
+  if (totalsEl) totalsEl.innerHTML = `
+    <div style="font-size:11px;color:var(--gray-400);margin-bottom:3px">Subtotal: £${subtotal.toFixed(2)}</div>
+    ${tax>0?`<div style="font-size:11px;color:var(--gray-400);margin-bottom:3px">Tax (${tax}%): £${taxAmt.toFixed(2)}</div>`:''}
+    <div style="font-size:20px;font-weight:700;border-top:2px solid var(--gray-900);padding-top:6px;margin-top:6px">Total: £${total.toFixed(2)}</div>`;
+
+  const footerEl = document.getElementById('prev-footer');
+  if (footerEl) footerEl.innerHTML =
+    (payment ? `<div>Payment method: ${payment}</div>` : '') +
+    (notes   ? `<div style="margin-top:4px">${notes}</div>` : '');
+}
+
+function clearInvoice() {
+  ['inv-title','inv-number','inv-issue','inv-due','inv-billto','inv-payto',
+   'inv-payment','inv-tax','inv-notes','inv-signature','inv-sigdate'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  const items = document.getElementById('inv-items');
+  if (items) items.innerHTML='';
+  _invoiceInitDone = false;
+  initInvoice();
+}
+
+function exportInvoicePDF() {
+  const preview = document.getElementById('invoicePreview');
+  if (!preview) { showToast('No invoice to export'); return; }
+  const win = window.open('', '_blank', 'width=800,height=1100');
+  if (!win) { showToast('Allow popups to export PDF'); return; }
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'DM Sans',sans-serif;padding:48px;max-width:680px;margin:0 auto;font-size:13px;color:#0f1120;line-height:1.6}
+      table{width:100%;border-collapse:collapse}
+      @media print{body{padding:28px}button{display:none!important}}
+    </style>
+    </head><body>${preview.innerHTML}
+    <script>window.onload=()=>{setTimeout(()=>window.print(),600)}<\/script>
+    </body></html>`);
+  win.document.close();
+}
 </script>
 </body>
 </html>
