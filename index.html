@@ -33,8 +33,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--off-white);color:var(--gr
 .auth-error{background:var(--red-light);color:var(--red);font-size:12px;font-weight:600;padding:10px 14px;border-radius:8px;margin-bottom:16px;display:none;}
 
 /* ── ONBOARDING PORTAL ── */
-#onboardPortal{position:fixed;inset:0;background:var(--off-white);z-index:9998;display:none;overflow-y:auto;pointer-events:none;}
-#onboardPortal.show{pointer-events:all;}
+#onboardPortal{position:fixed;inset:0;background:var(--off-white);z-index:9998;display:none;overflow-y:auto;}
+#onboardPortal.show{display:block;}
+/* Portal buttons need explicit pointer-events to survive any inherited none */
+#onboardPortal .btn,
+#onboardPortal input,
+#onboardPortal textarea,
+#onboardPortal select {pointer-events:auto;}
 #onboardPortal.show{display:block;}
 .portal-wrap{max-width:620px;margin:40px auto;padding:0 20px 60px;}
 .portal-header{background:var(--white);border-radius:var(--radius);padding:28px;margin-bottom:20px;border:1px solid var(--gray-100);}
@@ -825,11 +830,11 @@ tr:hover td{background:var(--gray-50);}
 
       <!-- Full onboarding tracker table -->
       <div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
-        <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--gray-100)">
-          <div class="card-title" style="margin:0">All Creators — Onboarding Status</div>
-          <div class="crm-search" style="width:220px">
+        <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--gray-100)">
+          <div class="card-title" style="margin:0;white-space:nowrap">All Creators — Onboarding Status</div>
+          <div class="crm-search" style="max-width:200px;width:100%;flex-shrink:1">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B93A8" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input type="text" placeholder="Search…" oninput="filterOnboardingTracker(this.value)" id="obSearchInput">
+            <input type="text" placeholder="Search creators…" oninput="filterOnboardingTracker(this.value)" id="obSearchInput">
           </div>
         </div>
         <div class="table-wrap">
@@ -1316,7 +1321,19 @@ tr:hover td{background:var(--gray-50);}
   <div class="modal">
     <div class="modal-header"><div class="modal-title">New Campaign</div><button class="modal-close" onclick="closeModal('addCampaignModal')">✕</button></div>
     <div class="modal-body">
-      <div class="form-row"><div class="form-group"><label class="form-label">Brand Name</label><input class="form-input" id="camp-brand" placeholder="e.g. GymShark"></div><div class="form-group"><label class="form-label">Creator</label><div style="display:flex;gap:6px"><select class="form-select" id="camp-creator" style="flex:1"></select><button class="btn btn-ghost btn-sm" style="white-space:nowrap" onclick="closeModal('addCampaignModal');openCreatorGrid(function(sel){if(sel.length){document.getElementById('camp-creator').value=sel[0].name;}openModal('addCampaignModal');})">🔍 Grid</button></div></div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Brand Name</label><input class="form-input" id="camp-brand" placeholder="e.g. GymShark"></div>
+        <div class="form-group">
+          <label class="form-label">Creator(s)</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start">
+            <select class="form-select" id="camp-creator" style="flex:1;min-width:120px"></select>
+            <button class="btn btn-ghost btn-sm" style="white-space:nowrap;flex-shrink:0" onclick="openGridForCampaignModal()">🔍 Multi-select</button>
+          </div>
+          <!-- Multi-creator chips: populated when grid selection > 1 -->
+          <div id="camp-creators-chips" style="display:none;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"></div>
+          <input type="hidden" id="camp-creator-ids" value="">
+        </div>
+      </div>
       <div class="form-row"><div class="form-group"><label class="form-label">Deal Value (£)</label><input class="form-input" id="camp-value" type="number" placeholder="800"></div><div class="form-group"><label class="form-label">Deadline</label><input class="form-input" id="camp-deadline" type="date"></div></div>
       <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="camp-status"><option>Negotiating</option><option>Live</option><option>Completed</option><option>Paused</option></select></div>
       <div class="form-group"><label class="form-label">Deliverables</label><input class="form-input" id="camp-deliverables" placeholder="e.g. 1× Reel + 3× Stories"></div>
@@ -2705,11 +2722,8 @@ function checkPortalParam(){
     showPortalStep(1);
     document.getElementById('onboardPortal').classList.add('show');
     document.getElementById('authScreen').classList.add('hidden');
-    // Ensure sidebar/topbar don't capture clicks on top of portal
-    const sidebar = document.querySelector('.sidebar');
-    const topbar  = document.querySelector('.topbar');
-    if (sidebar) sidebar.style.pointerEvents = 'none';
-    if (topbar)  topbar.style.pointerEvents  = 'none';
+    // Sidebar (z-index:100) and topbar (z-index:50) are below portal (z-index:9998)
+    // No pointer-events manipulation needed — z-index handles it correctly.
   } catch(e) {
     console.error('Portal decode error:', e);
   }
@@ -2731,28 +2745,37 @@ function portalNext(n){
 }
 
 function collectPortalData(){
-  portalData.tiktok=document.getElementById('ob-tiktok').value.trim();
-  portalData.instagram=document.getElementById('ob-instagram').value.trim();
-  portalData.youtube=document.getElementById('ob-youtube').value.trim();
-  portalData.other=document.getElementById('ob-other').value.trim();
-  portalData.rates={
-    'TikTok Video':document.getElementById('ob-rate-tiktok').value,
-    'Instagram Reel':document.getElementById('ob-rate-reel').value,
+  portalData.tiktok    = document.getElementById('ob-tiktok').value.trim();
+  portalData.instagram = document.getElementById('ob-instagram').value.trim();
+  portalData.youtube   = document.getElementById('ob-youtube').value.trim();
+  portalData.other     = document.getElementById('ob-other').value.trim();
+  portalData.rates = {
+    'TikTok Video':   document.getElementById('ob-rate-tiktok').value,
+    'Instagram Reel': document.getElementById('ob-rate-reel').value,
     'Instagram Story':document.getElementById('ob-rate-story').value,
-    'YouTube':document.getElementById('ob-rate-youtube').value,
-    'Long-form':document.getElementById('ob-rate-long').value,
+    'YouTube':        document.getElementById('ob-rate-youtube').value,
+    'Long-form':      document.getElementById('ob-rate-long').value,
   };
-  portalData.usage={
-    '30 days':document.getElementById('ob-usage-30').value,
-    '60 days':document.getElementById('ob-usage-60').value,
-    '90 days':document.getElementById('ob-usage-90').value,
+  portalData.usage = {
+    '30 days':  document.getElementById('ob-usage-30').value,
+    '60 days':  document.getElementById('ob-usage-60').value,
+    '90 days':  document.getElementById('ob-usage-90').value,
     'Perpetual':document.getElementById('ob-usage-perp').value,
   };
-  portalData.extraFees=document.getElementById('ob-extra-fees').value.trim();
-  portalData.bio=document.getElementById('ob-bio').value.trim();
-  portalData.niche=document.getElementById('ob-niche').value.trim();
-  portalData.restrictions=document.getElementById('ob-restrictions').value.trim();
-  portalData.preferences=document.getElementById('ob-preferences').value.trim();
+  portalData.extraFees   = document.getElementById('ob-extra-fees').value.trim();
+  portalData.bio         = document.getElementById('ob-bio').value.trim();
+  portalData.niche       = document.getElementById('ob-niche').value.trim();
+  portalData.restrictions= document.getElementById('ob-restrictions').value.trim();
+  portalData.preferences = document.getElementById('ob-preferences').value.trim();
+  // Optional stats fields (from Your Stats section in step 1)
+  const flrEl = document.getElementById('ob-followers');
+  const engEl = document.getElementById('ob-engrate');
+  const avgEl = document.getElementById('ob-avgviews');
+  const audEl = document.getElementById('ob-audience');
+  if (flrEl) portalData.followers      = flrEl.value.trim();
+  if (engEl) portalData.engagementRate = engEl.value ? parseFloat(engEl.value) : null;
+  if (avgEl) portalData.avgViews       = avgEl.value.trim();
+  if (audEl) portalData.audience       = audEl.value.trim();
 }
 
 function buildReview(){
@@ -2850,6 +2873,11 @@ async function submitOnboarding(){
 
 function closePortal(){
   document.getElementById('onboardPortal').classList.remove('show');
+  // Restore sidebar/topbar pointer-events in case they were ever disabled
+  const sidebar = document.querySelector('.sidebar');
+  const topbar  = document.querySelector('.topbar');
+  if (sidebar) sidebar.style.pointerEvents = '';
+  if (topbar)  topbar.style.pointerEvents  = '';
   if(currentUser){
     renderAll();
   } else {
@@ -2897,40 +2925,107 @@ function renderCampaigns(filter){
     `<div class="empty-state" style="padding:24px"><h3>No active campaigns</h3><p>Create a campaign to start tracking</p></div>`;
 }
 
+// ── Multi-creator grid integration for campaign modal ─────────
+function openGridForCampaignModal() {
+  // Store any currently selected creator before closing modal
+  const currentCreator = document.getElementById('camp-creator').value;
+  closeModal('addCampaignModal');
+  openCreatorGrid(function(sel) {
+    if (sel.length === 0) { openModal('addCampaignModal'); return; }
+    const names = sel.map(c => c.name);
+    const ids   = sel.map(c => c.id);
+    // Always set the dropdown to first selected (for legacy compat)
+    document.getElementById('camp-creator').value = names[0];
+    // Store all IDs for multi-creator save
+    document.getElementById('camp-creator-ids').value = JSON.stringify(ids);
+    // Show chips if multiple selected
+    const chipsEl = document.getElementById('camp-creators-chips');
+    if (sel.length > 1 && chipsEl) {
+      chipsEl.style.display = 'flex';
+      chipsEl.innerHTML = sel.map(c =>
+        `<span style="background:var(--blue-light);color:var(--blue);border:1px solid rgba(33,152,237,.2);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600">${c.name}</span>`
+      ).join('');
+    } else if (chipsEl) {
+      chipsEl.style.display = 'none';
+      chipsEl.innerHTML = '';
+    }
+    openModal('addCampaignModal');
+  });
+}
+
 async function saveCampaign(){
-  const brand=document.getElementById('camp-brand').value.trim();
-  const creator=document.getElementById('camp-creator').value;
-  if(!brand){showToast('Please enter a brand name');return;}
+  const brand   = document.getElementById('camp-brand').value.trim();
+  const creator = document.getElementById('camp-creator').value;
+  if (!brand)    { showToast('Please enter a brand name'); return; }
+  if (!creator)  { showToast('Please select a creator');  return; }
+
   const campId = Date.now() % 2147483647;
   const dealId = (campId + 1) % 2147483647;
-  const cr = creators.find(x => x.name === creator);
-  const c={
-    id: campId, brand, creator,
-    creatorId: cr ? cr.id : null,
-    value:document.getElementById('camp-value').value||0,
-    deadline:document.getElementById('camp-deadline').value,
-    status:document.getElementById('camp-status').value,
+
+  // Multi-creator support: read stored IDs from hidden field
+  let creatorIds = [];
+  let creatorNames = creator;
+  try {
+    const storedIds = document.getElementById('camp-creator-ids').value;
+    if (storedIds) {
+      creatorIds = JSON.parse(storedIds);
+      // Build comma-separated names from IDs
+      const resolvedNames = creatorIds.map(id => {
+        const c = creators.find(x => x.id === id);
+        return c ? c.name : null;
+      }).filter(Boolean);
+      if (resolvedNames.length > 0) creatorNames = resolvedNames.join(', ');
+    }
+  } catch(e) { /* fallback to single creator */ }
+
+  // Fallback: if no grid IDs, use the dropdown selection
+  if (!creatorIds.length) {
+    const cr = creators.find(x => x.name === creator);
+    creatorIds = cr ? [cr.id] : [];
+    creatorNames = creator;
+  }
+
+  const primaryCreatorId = creatorIds[0] || null;
+
+  const c = {
+    id: campId, brand,
+    creator: creatorNames,            // comma-separated for multi, single for one
+    creatorId: primaryCreatorId,      // primary creator (for legacy pipeline)
+    creatorIds: creatorIds,           // all selected creator IDs (additive field)
+    value:       document.getElementById('camp-value').value || 0,
+    deadline:    document.getElementById('camp-deadline').value,
+    status:      document.getElementById('camp-status').value,
     deliverables:document.getElementById('camp-deliverables').value.trim(),
-    progress:parseInt(document.getElementById('camp-progress').value)||0,
-    notes:document.getElementById('camp-notes').value.trim(),
-    campaignId: null
+    progress:    parseInt(document.getElementById('camp-progress').value) || 0,
+    notes:       document.getElementById('camp-notes').value.trim(),
+    campaignId:  null
   };
+
   const stageMap = {Live:'Live', Negotiating:'Negotiating', Completed:'Completed', Paused:'Negotiating'};
   const d = {
-    id: dealId, brand: c.brand, creator: c.creator,
-    creatorId: c.creatorId || null, value: c.value,
+    id: dealId, brand: c.brand, creator: creatorNames,
+    creatorId: primaryCreatorId, value: c.value,
     stage: stageMap[c.status] || 'Prospect',
     notes: `Linked from campaign: ${c.brand}`,
     campaignId: campId
   };
+
   closeModal('addCampaignModal');
-  ['camp-brand','camp-value','camp-deadline','camp-deliverables','camp-notes'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('camp-progress').value='0';
+  // Reset form fields
+  ['camp-brand','camp-value','camp-deadline','camp-deliverables','camp-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('camp-progress').value = '0';
+  document.getElementById('camp-creator-ids').value = '';
+  const chipsEl = document.getElementById('camp-creators-chips');
+  if (chipsEl) { chipsEl.style.display = 'none'; chipsEl.innerHTML = ''; }
+
   const [r1, r2] = await Promise.all([DB.upsertOne('campaigns', c), DB.upsertOne('deals', d)]);
   if (!r1) { showToast('❌ Campaign save failed'); return; }
   await Promise.all([refetch('campaigns'), refetch('deals')]);
   updateDashStats();
-  addActivity(`Campaign created: <strong>${brand} × ${creator}</strong>`);
+  addActivity(`Campaign created: <strong>${brand} × ${creatorNames}</strong>`);
   showToast('Campaign created!');
 }
 
@@ -3362,15 +3457,28 @@ function onKitCreatorChange(val){
 }
 
 function generateKit(){
-  const name=document.getElementById('kit-creator-select').value;
-  const c=creators.find(x=>x.name===name);
-  if(!c)return;
+  const name = document.getElementById('kit-creator-select').value;
+  const c    = creators.find(x => x.name === name);
+  if (!c) { showToast('Please select a creator first'); return; }
+
+  // Close modal immediately so UI never gets stuck in "Generating…" state
   closeModal('genKitModal');
-  if(!mediaKits.find(k=>k.creatorId===c.id)){
-    mediaKits.push({creatorId:c.id,creatorName:c.name,initial:avatarLetter(c.name),updated:'Just now',views:0});
+
+  // Reset the generate button to its default state (in case it was loading)
+  const genBtn = document.querySelector('#genKitModal .btn-primary');
+  if (genBtn) { genBtn.disabled = false; genBtn.textContent = 'Generate Kit'; }
+
+  // Add or update kit record
+  if (!mediaKits.find(k => k.creatorId === c.id)) {
+    mediaKits.push({creatorId:c.id, creatorName:c.name, initial:avatarLetter(c.name), updated:'Just now', views:0});
   }
+
   onKitCreatorChange(name);
   renderMediaKitList();
+
+  // Pre-fill admin stats from overrides (previously in the override wrapper)
+  selectKitPreview(c.id);
+
   addActivity(`Media kit generated for <strong>${name}</strong>`);
   showToast(`Media kit generated for ${name}!`);
   saveMediaKits();
@@ -4875,39 +4983,15 @@ function confirmGridSelection() {
 // so we just remove this duplicate wrapper to avoid infinite recursion.
 // (No-op: renderAll is the canonical definition in renderAll() above)
 
-// Override generateKit to pre-fill admin fields and ensure modal closes
-const _origGenerateKit = generateKit;
-function generateKit() {
-  const btn = document.querySelector('#genKitModal .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
-  _origGenerateKit();
-  // Ensure modal is closed (belt + suspenders)
-  closeModal('genKitModal');
-  if (btn) { btn.disabled = false; btn.textContent = 'Generate Kit'; }
-  // After generating, pre-fill admin stats from overrides
-  const name = document.getElementById('kit-creator-select').value;
-  const c = creators.find(x => x.name === name);
-  if (c) selectKitPreview(c.id);
-}
+// generateKit override removed — logic folded into the main generateKit function above
+// (was causing "stuck on Generating…" due to modal-hidden button state mutation)
 
 // ══════════════════════════════════════════════════════════════
 // ── ONBOARDING: Add stats step to portal ─────────────────────
 // ══════════════════════════════════════════════════════════════
 // NOTE: We add optional stat fields to collectPortalData so creators
 // can submit followers/eng rate directly (still self-reported).
-const _origCollectPortalData = collectPortalData;
-function collectPortalData() {
-  _origCollectPortalData();
-  // Capture optional analytics fields if present in portal
-  const flr = document.getElementById('ob-followers');
-  const eng = document.getElementById('ob-engrate');
-  const avg = document.getElementById('ob-avgviews');
-  const aud = document.getElementById('ob-audience');
-  if (flr) portalData.followers     = flr.value.trim();
-  if (eng) portalData.engagementRate = eng.value ? parseFloat(eng.value) : null;
-  if (avg) portalData.avgViews      = avg.value.trim();
-  if (aud) portalData.audience      = aud.value.trim();
-}
+// collectPortalData override removed in v11 — stats fields merged into main collectPortalData()
 
 </script>
 
