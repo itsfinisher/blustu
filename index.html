@@ -45,6 +45,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--off-white);color:var(--gr
 .portal-section-title span{background:var(--blue);color:white;width:22px;height:22px;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .portal-step{display:none;}
 .portal-step.active{display:block;}
+.creator-grid-card:hover { border-color: var(--blue) !important; box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.creator-grid-card.selected { border-color: var(--blue) !important; background: var(--blue-light) !important; }
+
 .portal-progress{display:flex;gap:6px;margin-bottom:24px;}
 .portal-progress-dot{flex:1;height:4px;border-radius:2px;background:var(--gray-200);}
 .portal-progress-dot.done{background:var(--blue);}
@@ -454,6 +457,18 @@ tr:hover td{background:var(--gray-50);}
         <div class="form-group"><label class="form-label">YouTube Channel URL</label><input class="form-input" id="ob-youtube" placeholder="https://youtube.com/@yourchannel"></div>
         <div class="form-group"><label class="form-label">Other Platform <span style="color:var(--gray-400);font-weight:400">(optional)</span></label><input class="form-input" id="ob-other" placeholder="e.g. https://twitter.com/yourhandle"></div>
       </div>
+      <div class="portal-section" style="margin-top:16px">
+        <div class="portal-section-title"><span>★</span>Your Stats <span style="font-size:12px;font-weight:400;color:var(--gray-400)">(optional — helps us pitch you better)</span></div>
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px">Share your approximate numbers so we can build better brand pitches. These can always be updated later.</div>
+        <div class="rate-grid">
+          <div class="form-group"><label class="form-label">Followers (any platform)</label><input class="form-input" id="ob-followers" placeholder="e.g. 45K or 45000"></div>
+          <div class="form-group"><label class="form-label">Avg. Views per video</label><input class="form-input" id="ob-avgviews" placeholder="e.g. 12K"></div>
+        </div>
+        <div class="rate-grid">
+          <div class="form-group"><label class="form-label">Engagement Rate (%)</label><input class="form-input" id="ob-engrate" type="number" step="0.1" min="0" max="100" placeholder="e.g. 4.5"></div>
+          <div class="form-group"><label class="form-label">Main audience</label><input class="form-input" id="ob-audience" placeholder="e.g. 18-24 UK Female"></div>
+        </div>
+      </div>
       <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" onclick="portalNext(2)">Continue →</button></div>
     </div>
 
@@ -624,10 +639,10 @@ tr:hover td{background:var(--gray-50);}
         </button>
       </div>
       <div class="stats-grid">
-        <div class="stat-card"><div class="stat-label">Active Creators</div><div class="stat-value" id="stat-creators">22</div><div class="stat-change up">Full roster loaded</div></div>
+        <div class="stat-card"><div class="stat-label">Total Creators</div><div class="stat-value" id="stat-creators">25</div><div class="stat-change up" id="stat-creators-sub">Full roster</div></div>
         <div class="stat-card"><div class="stat-label">Active Campaigns</div><div class="stat-value" id="stat-campaigns">0</div><div class="stat-change neutral" id="stat-campaigns-sub">No campaigns yet</div></div>
         <div class="stat-card"><div class="stat-label">Pipeline Value</div><div class="stat-value" id="stat-pipeline">£0</div><div class="stat-change up" id="stat-pipeline-sub">Total deal value</div></div>
-        <div class="stat-card"><div class="stat-label">Avg. Engagement</div><div class="stat-value">—</div><div class="stat-change neutral" title="Metrics populate after creators connect socials">Socials pending</div></div>
+        <div class="stat-card"><div class="stat-label">Avg. Engagement</div><div class="stat-value" id="stat-avg-eng">—</div><div class="stat-change neutral" id="stat-avg-eng-sub">From admin data</div></div>
       </div>
       <div class="grid-2">
         <div class="card">
@@ -682,6 +697,34 @@ tr:hover td{background:var(--gray-50);}
       </div>
     </div>
 
+    <!-- ══ INFLUENCER GRID (campaign picker) ══ -->
+    <div class="page" id="page-creatorgrid">
+      <div class="page-header">
+        <div>
+          <button class="btn btn-ghost btn-sm" id="gridBackBtn" onclick="closeCreatorGrid()" style="margin-bottom:6px">← Back</button>
+          <h1>Select Creators</h1><p id="gridSubTitle">Choose creators for this campaign</p>
+        </div>
+        <button class="btn btn-primary" id="gridConfirmBtn" onclick="confirmGridSelection()" disabled>Add Selected (0)</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+        <div class="crm-search" style="flex:1;min-width:200px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B93A8" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" placeholder="Search creators…" oninput="filterCreatorGrid(this.value)" id="gridSearch">
+        </div>
+        <select class="form-select" style="width:150px" onchange="filterCreatorGrid()" id="gridNicheFilter">
+          <option value="">All Niches</option>
+        </select>
+        <select class="form-select" style="width:160px" onchange="filterCreatorGrid()" id="gridFollowerFilter">
+          <option value="">Any Followers</option>
+          <option value="0-10k">Under 10K</option>
+          <option value="10k-50k">10K – 50K</option>
+          <option value="50k-100k">50K – 100K</option>
+          <option value="100k+">100K+</option>
+        </select>
+      </div>
+      <div id="creatorGridBody" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px"></div>
+    </div>
+
     <!-- ══ CREATOR PROFILE ══ -->
     <div class="page" id="page-creatorprofile">
       <div class="page-header">
@@ -717,7 +760,7 @@ tr:hover td{background:var(--gray-50);}
         </div>
       </div>
       <div class="profile-tab-content" id="ptab-socials">
-        <div class="card"><div class="card-title" style="margin-bottom:16px">Social Platforms & Rates</div><div id="profile-socials-body"></div></div>
+        <div id="profile-socials-body"></div>
       </div>
       <div class="profile-tab-content" id="ptab-deals">
         <div class="card"><div class="card-title" style="margin-bottom:12px">Deals</div><div id="profile-deals-body"></div></div>
@@ -783,48 +826,103 @@ tr:hover td{background:var(--gray-50);}
         <div><h1>Media Kits</h1><p>Generate and share media kits for your talent</p></div>
         <button class="btn btn-primary" onclick="openModal('genKitModal')">+ Generate Kit</button>
       </div>
-      <div class="grid-2">
-        <div>
-          <div style="margin-bottom:10px;font-size:13px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Preview</div>
-          <div class="media-kit-preview">
-            <div><div class="mk-creator-name" id="mk-name">Select a creator</div><div class="mk-niche" id="mk-niche">Generate a kit to preview</div></div>
-            <div>
-              <div class="mk-stats">
-                <div class="mk-stat"><div class="mk-stat-val" id="mk-stat1">—</div><div class="mk-stat-label">Followers</div></div>
-                <div class="mk-stat"><div class="mk-stat-val">—</div><div class="mk-stat-label">Eng. Rate</div></div>
-                <div class="mk-stat"><div class="mk-stat-val">—</div><div class="mk-stat-label">Avg. Reach</div></div>
+
+      <!-- Media Kit Tabs -->
+      <div class="profile-tabs" style="margin-bottom:20px">
+        <button class="profile-tab active" onclick="switchMKTab('kit',this)">Media Kit</button>
+        <button class="profile-tab" onclick="switchMKTab('ratekit',this)">Rate Kit</button>
+        <button class="profile-tab" onclick="switchMKTab('analytics',this)">Analytics</button>
+      </div>
+
+      <!-- Tab: Media Kit -->
+      <div class="profile-tab-content active" id="mktab-kit">
+        <div class="grid-2">
+          <div>
+            <div style="margin-bottom:10px;font-size:13px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Preview</div>
+            <div class="media-kit-preview">
+              <div><div class="mk-creator-name" id="mk-name">Select a creator</div><div class="mk-niche" id="mk-niche">Generate a kit to preview</div></div>
+              <div>
+                <div class="mk-stats">
+                  <div class="mk-stat"><div class="mk-stat-val" id="mk-stat1">—</div><div class="mk-stat-label">Followers</div></div>
+                  <div class="mk-stat"><div class="mk-stat-val" id="mk-stat-eng">—</div><div class="mk-stat-label">Eng. Rate</div></div>
+                  <div class="mk-stat"><div class="mk-stat-val" id="mk-stat-reach">—</div><div class="mk-stat-label">Avg. Views</div></div>
+                </div>
+                <div class="mk-platforms" id="mk-platforms"><div class="mk-platform">📸 Instagram</div><div class="mk-platform">🎵 TikTok</div></div>
               </div>
-              <div class="mk-platforms" id="mk-platforms"><div class="mk-platform">📸 Instagram</div><div class="mk-platform">🎵 TikTok</div></div>
+              <div style="position:relative;z-index:1"><div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:16px">Represented by blustu™ · <span id="mk-email">—</span></div></div>
             </div>
-            <div style="position:relative;z-index:1"><div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:16px">Represented by blustu™ · <span id="mk-email">—</span></div></div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn btn-primary" style="flex:1" onclick="shareKit()">Share Link</button>
-            <button class="btn btn-ghost" onclick="showToast('PDF export coming soon')">Download PDF</button>
-          </div>
-          <div class="card" style="margin-top:14px">
-            <div class="card-title">Edit Kit</div>
-            <div class="form-group" style="margin-top:12px"><label class="form-label">Bio line</label><input class="form-input" id="mk-edit-bio" placeholder="Creator bio..." oninput="updateKitPreview()"></div>
-            <div class="form-row">
-              <div class="form-group"><label class="form-label">Platform 1</label><input class="form-input" id="mk-edit-p1" value="📸 Instagram" oninput="updateKitPreview()"></div>
-              <div class="form-group"><label class="form-label">Platform 2</label><input class="form-input" id="mk-edit-p2" value="🎵 TikTok" oninput="updateKitPreview()"></div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn btn-primary" style="flex:1" onclick="shareKit()">Share Link</button>
+              <button class="btn btn-ghost" onclick="showToast('PDF export coming soon')">Download PDF</button>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="saveKitEdits()">Save Changes</button>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-title" style="margin-bottom:12px">Edit Kit (Admin)</div>
+              <div class="form-group"><label class="form-label">Bio / Tagline</label><input class="form-input" id="mk-edit-bio" placeholder="Creator bio..." oninput="updateKitPreview()"></div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Platform 1</label><input class="form-input" id="mk-edit-p1" value="📸 Instagram" oninput="updateKitPreview()"></div>
+                <div class="form-group"><label class="form-label">Platform 2</label><input class="form-input" id="mk-edit-p2" value="🎵 TikTok" oninput="updateKitPreview()"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Followers (admin)</label><input class="form-input" id="mk-edit-followers" placeholder="e.g. 45K" oninput="updateKitPreview()"></div>
+                <div class="form-group"><label class="form-label">Engagement Rate %</label><input class="form-input" id="mk-edit-eng" placeholder="e.g. 4.2" type="number" step="0.1" oninput="updateKitPreview()"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Avg. Views</label><input class="form-input" id="mk-edit-reach" placeholder="e.g. 12K" oninput="updateKitPreview()"></div>
+                <div class="form-group"><label class="form-label">Audience</label><input class="form-input" id="mk-edit-audience" placeholder="e.g. 18-24, UK female"></div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveKitAdminData()">💾 Save Admin Data</button>
+            </div>
+            <div style="margin-bottom:10px;font-size:13px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">All Media Kits</div>
+            <div class="card" style="padding:0;overflow:hidden">
+              <table><thead><tr><th>Creator</th><th>Eng. Rate</th><th>Updated</th><th></th></tr></thead><tbody id="mkListBody"></tbody></table>
+            </div>
           </div>
         </div>
-        <div>
-          <div style="margin-bottom:10px;font-size:13px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">All Media Kits</div>
-          <div class="card" style="padding:0;overflow:hidden">
-            <table><thead><tr><th>Creator</th><th>Updated</th><th>Views</th><th></th></tr></thead><tbody id="mkListBody"></tbody></table>
+      </div>
+
+      <!-- Tab: Rate Kit -->
+      <div class="profile-tab-content" id="mktab-ratekit">
+        <div class="grid-2">
+          <div>
+            <div class="card">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                <div class="card-title">Rate Card Preview</div>
+                <select class="form-select" style="width:180px" id="rateKitSelector" onchange="renderRateKit(this.value)">
+                  <option value="">Select creator…</option>
+                </select>
+              </div>
+              <div id="rateKitPreview">
+                <div style="font-size:13px;color:var(--gray-400)">Select a creator to view their rate card.</div>
+              </div>
+            </div>
           </div>
-          <div class="card" style="margin-top:14px">
+          <div>
+            <div class="card">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                <div class="card-title">Edit Admin Rates</div>
+                <span style="font-size:11px;color:var(--gray-400)">Overrides self-reported</span>
+              </div>
+              <div id="rateKitEditBody">
+                <div style="font-size:13px;color:var(--gray-400)">Select a creator above to edit their rates.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Analytics -->
+      <div class="profile-tab-content" id="mktab-analytics">
+        <div class="grid-2">
+          <div class="card">
             <div class="card-title" style="margin-bottom:16px">Analytics</div>
             <div class="analytics-grid" id="kit-analytics-display">
               <div class="analytics-stat"><div class="analytics-stat-val" id="ana-views">—</div><div class="analytics-stat-label">Total Views</div></div>
               <div class="analytics-stat"><div class="analytics-stat-val" id="ana-opens">—</div><div class="analytics-stat-label">Opens</div></div>
               <div class="analytics-stat"><div class="analytics-stat-val" id="ana-clicks">—</div><div class="analytics-stat-label">Link Clicks</div></div>
             </div>
-            <div style="margin-bottom:12px">
+            <div style="margin-top:16px;margin-bottom:12px">
               <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-bottom:8px">Age Breakdown</div>
               <div id="ana-age-display"></div>
             </div>
@@ -840,6 +938,7 @@ tr:hover td{background:var(--gray-50);}
           </div>
         </div>
       </div>
+
     </div>
 
     <!-- ══ CAMPAIGNS ══ -->
@@ -1168,7 +1267,7 @@ tr:hover td{background:var(--gray-50);}
   <div class="modal">
     <div class="modal-header"><div class="modal-title">New Campaign</div><button class="modal-close" onclick="closeModal('addCampaignModal')">✕</button></div>
     <div class="modal-body">
-      <div class="form-row"><div class="form-group"><label class="form-label">Brand Name</label><input class="form-input" id="camp-brand" placeholder="e.g. GymShark"></div><div class="form-group"><label class="form-label">Creator</label><select class="form-select" id="camp-creator"></select></div></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Brand Name</label><input class="form-input" id="camp-brand" placeholder="e.g. GymShark"></div><div class="form-group"><label class="form-label">Creator</label><div style="display:flex;gap:6px"><select class="form-select" id="camp-creator" style="flex:1"></select><button class="btn btn-ghost btn-sm" style="white-space:nowrap" onclick="closeModal('addCampaignModal');openCreatorGrid(function(sel){if(sel.length){document.getElementById('camp-creator').value=sel[0].name;}openModal('addCampaignModal');})">🔍 Grid</button></div></div></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Deal Value (£)</label><input class="form-input" id="camp-value" type="number" placeholder="800"></div><div class="form-group"><label class="form-label">Deadline</label><input class="form-input" id="camp-deadline" type="date"></div></div>
       <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="camp-status"><option>Negotiating</option><option>Live</option><option>Completed</option><option>Paused</option></select></div>
       <div class="form-group"><label class="form-label">Deliverables</label><input class="form-input" id="camp-deliverables" placeholder="e.g. 1× Reel + 3× Stories"></div>
@@ -1677,9 +1776,14 @@ async function syncAllFromDB() {
       STAFF = seeded; Storage.set('staff', STAFF);
     }
 
-    const [pp, ia] = await Promise.all([DB.getAppData('profilePics'), DB.getAppData('kitAnalytics')]);
+    const [pp, ia, ao] = await Promise.all([
+      DB.getAppData('profilePics'),
+      DB.getAppData('kitAnalytics'),
+      DB.getAppData('adminOverrides'),
+    ]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
+    if (ao) { adminOverrides = ao; Storage.set('adminOverrides', adminOverrides); }
 
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
@@ -1746,6 +1850,50 @@ let currentInboxId = null;
 let currentPortalCreatorId = null;
 let currentPortalStep = 1;
 let portalData = {};
+
+// Admin override data — keyed by creator id (integer)
+// Shape per creator: { rates, usage, engagementRate, followers, avgViews, audience, niche, updatedBy, updatedAt }
+let adminOverrides = Storage.get('adminOverrides', {});
+function saveAdminOverrides() {
+  Storage.set('adminOverrides', adminOverrides);
+  DB.setAppData('adminOverrides', adminOverrides);
+}
+
+// ── resolveCreator: merges admin overrides on top of self-reported for a creator ──
+// Returns a "resolved" object with both layers visible
+function resolveCreator(c) {
+  const ao = adminOverrides[c.id] || {};
+  const ob = c.onboarding || {};
+  return {
+    // Self reported (from onboarding form)
+    srRates:       ob.rates  || {},
+    srUsage:       ob.usage  || {},
+    srEngRate:     ob.engagementRate || null,
+    srFollowers:   ob.followers || null,
+    srAvgViews:    ob.avgViews || null,
+    srAudience:    ob.audience || null,
+    // Admin overrides
+    aoRates:       ao.rates  || null,
+    aoUsage:       ao.usage  || null,
+    aoEngRate:     ao.engagementRate || null,
+    aoFollowers:   ao.followers || null,
+    aoAvgViews:    ao.avgViews || null,
+    aoAudience:    ao.audience || null,
+    aoNiche:       ao.niche   || null,
+    // Resolved = admin ?? self-reported
+    rates:         ao.rates   || ob.rates  || {},
+    usage:         ao.usage   || ob.usage  || {},
+    engRate:       ao.engagementRate != null ? ao.engagementRate : (ob.engagementRate || null),
+    followers:     ao.followers  || ob.followers  || null,
+    avgViews:      ao.avgViews   || ob.avgViews   || null,
+    audience:      ao.audience   || ob.audience   || null,
+    niche:         ao.niche      || c.niche        || ob.niche || '—',
+  };
+}
+
+// ── Grid state ──
+let gridSelectionIds = new Set();
+let gridCallbackFn = null;   // called with array of selected creator ids when confirmed
 
 // ── prefetchStaff: load staff from Supabase BEFORE login prompt ──
 // This is what makes cross-device auth work for ALL staff accounts.
@@ -2116,24 +2264,8 @@ function openCreatorProfile(id){
     </div>
     <button class="btn btn-ghost btn-sm" style="margin-top:12px;width:100%" onclick="showPage('onboarding',document.querySelector('[onclick*=onboarding]'))">Go to Onboarding</button>`;
 
-  // Socials & Rates tab
-  const ob=c.onboarding;
-  document.getElementById('profile-socials-body').innerHTML = ob ? `
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
-      ${ob.tiktok?`<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--gray-50);border-radius:10px"><span style="font-size:18px">🎵</span><div><div style="font-size:13px;font-weight:600">TikTok</div><a href="${ob.tiktok}" style="font-size:11px;color:var(--blue)">${ob.tiktok}</a></div></div>`:''}
-      ${ob.instagram?`<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--gray-50);border-radius:10px"><span style="font-size:18px">📸</span><div><div style="font-size:13px;font-weight:600">Instagram</div><a href="${ob.instagram}" style="font-size:11px;color:var(--blue)">${ob.instagram}</a></div></div>`:''}
-      ${ob.youtube?`<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--gray-50);border-radius:10px"><span style="font-size:18px">▶️</span><div><div style="font-size:13px;font-weight:600">YouTube</div><a href="${ob.youtube}" style="font-size:11px;color:var(--blue)">${ob.youtube}</a></div></div>`:''}
-    </div>
-    <div class="card-title" style="margin-bottom:12px">Rates (self-reported)</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-      ${ob.rates?Object.entries(ob.rates).filter(([k,v])=>v).map(([k,v])=>`<div style="background:var(--gray-50);border-radius:8px;padding:10px"><div style="font-size:11px;color:var(--gray-400)">${k}</div><div style="font-size:15px;font-weight:600;font-family:'DM Serif Display',serif">£${v}</div></div>`).join(''):'<div style="color:var(--gray-400);font-size:12px">No rates submitted</div>'}
-    </div>
-    ${ob.bio?`<div style="margin-bottom:12px"><div class="card-title" style="margin-bottom:6px">Bio</div><div style="font-size:13px;color:var(--gray-600)">${ob.bio}</div></div>`:''}
-    ${ob.restrictions?`<div style="margin-bottom:8px"><div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:4px">Brand Restrictions</div><div style="font-size:12px;color:var(--gray-600)">${ob.restrictions}</div></div>`:''}
-  ` : `<div style="background:var(--blue-light);border-radius:10px;padding:16px;font-size:13px;color:var(--blue);line-height:1.6">
-    ℹ️ This creator hasn't completed onboarding yet. Send them their onboarding link to collect their social platforms, rates, and background info.
-    <br><br><button class="btn btn-ghost btn-sm" onclick="openModal('inviteCreatorModal')">Send Onboarding Link</button>
-  </div>`;
+  // Socials & Rates tab — full dual-layer display
+  renderProfileSocials(c);
 
   document.getElementById('profile-notes-input').value=c.notes||'';
   switchProfileTab('overview',document.querySelector('.profile-tab'));
@@ -3171,12 +3303,35 @@ function shareKit(){
 
 // ══ DASH STATS ══
 function updateDashStats(){
-  document.getElementById('stat-creators').textContent=creators.filter(c=>c.status==='Active').length;
+  // Total creators — never decreases on onboarding (only on delete)
+  document.getElementById('stat-creators').textContent = creators.length;
+  const sub = document.getElementById('stat-creators-sub');
+  if (sub) {
+    const active = creators.filter(c=>c.status==='Active').length;
+    const onboarded = creators.filter(c=>c.onboarding).length;
+    sub.textContent = `${active} active · ${onboarded} onboarded`;
+  }
+
   const activeCamps=campaigns.filter(c=>c.status==='Live'||c.status==='Negotiating');
   document.getElementById('stat-campaigns').textContent=activeCamps.length;
   document.getElementById('stat-campaigns-sub').textContent=activeCamps.length?`${activeCamps.length} in progress`:'No active campaigns';
   const pipVal=deals.filter(d=>d.stage!=='Lost'&&d.stage!=='Completed').reduce((s,d)=>s+Number(d.value||0),0);
   document.getElementById('stat-pipeline').textContent=fmtMoney(pipVal);
+
+  // Avg engagement rate from admin overrides (resolved)
+  const engRates = creators.map(c=>resolveCreator(c).engRate).filter(v=>v!=null&&v!=='');
+  const avgEngEl = document.getElementById('stat-avg-eng');
+  const avgSubEl = document.getElementById('stat-avg-eng-sub');
+  if (avgEngEl) {
+    if (engRates.length) {
+      const avg = (engRates.reduce((s,v)=>s+parseFloat(v),0)/engRates.length).toFixed(1);
+      avgEngEl.textContent = avg+'%';
+      if (avgSubEl) avgSubEl.textContent = `Across ${engRates.length} creator${engRates.length>1?'s':''}`;
+    } else {
+      avgEngEl.textContent = '—';
+      if (avgSubEl) avgSubEl.textContent = 'No data yet';
+    }
+  }
 }
 
 // ══ POPULATE SELECTS ══
@@ -3849,6 +4004,680 @@ function exportInvoicePDF() {
     </body></html>`);
   win.document.close();
 }
+
+// ══════════════════════════════════════════════════════════════
+// ── PROFILE SOCIALS: Full dual-layer display ──────────────────
+// ══════════════════════════════════════════════════════════════
+
+function renderProfileSocials(c) {
+  const el = document.getElementById('profile-socials-body');
+  if (!el) return;
+  const ob = c.onboarding || {};
+  const ao = adminOverrides[c.id] || {};
+
+  if (!ob && !Object.keys(ob).length && !c.onboarding) {
+    el.innerHTML = `<div class="card">
+      <div style="background:var(--blue-light);border-radius:10px;padding:16px;font-size:13px;color:var(--blue);line-height:1.6">
+        ℹ️ This creator hasn't completed onboarding yet.
+        <br><br><button class="btn btn-ghost btn-sm" onclick="openModal('inviteCreatorModal')">Send Onboarding Link</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  // Format a rate-grid section (self-reported or admin)
+  function rateGrid(rateObj, label, color) {
+    if (!rateObj || !Object.keys(rateObj).length) return `<div style="font-size:12px;color:var(--gray-400);padding:8px 0">No ${label} submitted</div>`;
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${
+      Object.entries(rateObj).map(([k,v]) =>
+        `<div style="background:${color};border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:var(--gray-400)">${k}</div>
+          <div style="font-size:15px;font-weight:600;font-family:'DM Serif Display',serif">${v?'£'+v:'—'}</div>
+        </div>`
+      ).join('')
+    }</div>`;
+  }
+
+  const socials = [
+    ob.tiktok    ? {icon:'🎵',name:'TikTok',    url:ob.tiktok}    : null,
+    ob.instagram ? {icon:'📸',name:'Instagram', url:ob.instagram} : null,
+    ob.youtube   ? {icon:'▶️', name:'YouTube',   url:ob.youtube}   : null,
+    ob.other     ? {icon:'🔗',name:'Other',     url:ob.other}     : null,
+  ].filter(Boolean);
+
+  const srRates   = ob.rates  || {};
+  const srUsage   = ob.usage  || {};
+  const aoRates   = ao.rates  || null;
+  const aoUsage   = ao.usage  || null;
+
+  el.innerHTML = `
+    <!-- Socials -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:12px">Social Platforms</div>
+      ${socials.length ? `<div style="display:flex;flex-direction:column;gap:8px">${
+        socials.map(s => `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--gray-50);border-radius:10px">
+          <span style="font-size:18px">${s.icon}</span>
+          <div>
+            <div style="font-size:13px;font-weight:600">${s.name}</div>
+            <a href="${s.url}" target="_blank" style="font-size:11px;color:var(--blue)">${s.url}</a>
+          </div>
+        </div>`).join('')
+      }</div>` : `<div style="font-size:12px;color:var(--gray-400)">No social links provided</div>`}
+    </div>
+
+    <!-- Stats row -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title">Stats</div>
+        <button class="btn btn-ghost btn-sm" onclick="openAdminStatsModal(${c.id})">✏️ Edit Admin Stats</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        ${[
+          ['Followers',   ao.followers  || ob.followers  || '—', !!ao.followers],
+          ['Eng. Rate',   (ao.engagementRate != null ? ao.engagementRate : (ob.engagementRate||'—'))+(ao.engagementRate||ob.engagementRate?'%':''), !!(ao.engagementRate!=null)],
+          ['Avg. Views',  ao.avgViews   || ob.avgViews   || '—', !!ao.avgViews],
+          ['Audience',    ao.audience   || ob.audience   || '—', !!ao.audience],
+        ].map(([label, val, isAdminSet]) => `
+          <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center;position:relative">
+            ${isAdminSet ? `<div style="position:absolute;top:6px;right:6px;font-size:9px;background:var(--blue);color:white;border-radius:4px;padding:1px 4px">admin</div>` : ''}
+            <div style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--blue)">${val}</div>
+            <div style="font-size:11px;color:var(--gray-400)">${label}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Self-reported rates + usage -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:4px">Self-Reported Rates</div>
+      <div style="font-size:11px;color:var(--gray-400);margin-bottom:12px">Submitted by creator during onboarding — read only</div>
+      ${rateGrid(srRates, 'rates', 'var(--gray-50)')}
+      ${Object.keys(srUsage).length ? `
+        <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin:14px 0 10px">Usage / Licensing (self-reported)</div>
+        ${rateGrid(srUsage, 'usage', 'var(--gray-50)')}
+      ` : `<div style="font-size:12px;color:var(--gray-400);margin-top:10px">No usage rates submitted</div>`}
+      ${ob.extraFees ? `<div style="margin-top:10px;font-size:12px;color:var(--gray-600)"><strong>Additional fees:</strong> ${ob.extraFees}</div>` : ''}
+    </div>
+
+    <!-- Admin override rates -->
+    <div class="card" style="margin-bottom:14px;border-left:3px solid var(--blue)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div class="card-title">BluStu Admin Rates</div>
+          <div style="font-size:11px;color:var(--gray-400)">Used in kits and rate cards — overrides self-reported</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openAdminRatesModal(${c.id})">✏️ Edit Admin Rates</button>
+      </div>
+      ${aoRates ? rateGrid(aoRates, 'admin rates', 'var(--blue-light)') : `<div style="font-size:12px;color:var(--gray-400)">No admin rates set — kits use self-reported values</div>`}
+      ${aoUsage ? `
+        <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin:14px 0 10px">Admin Usage / Licensing</div>
+        ${rateGrid(aoUsage, 'admin usage', 'var(--blue-light)')}
+      ` : (aoRates ? `<div style="font-size:12px;color:var(--gray-400);margin-top:10px">No admin usage rates set</div>` : '')}
+    </div>
+
+    <!-- Bio and restrictions -->
+    ${ob.bio ? `<div class="card" style="margin-bottom:14px"><div class="card-title" style="margin-bottom:6px">Bio</div><div style="font-size:13px;color:var(--gray-600)">${ob.bio}</div></div>` : ''}
+    ${ob.restrictions ? `<div class="card"><div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:4px">⚠️ Brand Restrictions</div><div style="font-size:12px;color:var(--gray-600)">${ob.restrictions}</div></div>` : ''}
+  `;
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── ADMIN RATES MODAL ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+function openAdminRatesModal(creatorId) {
+  const c = creators.find(x => x.id === creatorId);
+  if (!c) return;
+  currentCreatorId = creatorId;
+  const ao = adminOverrides[creatorId] || {};
+  const ob = c.onboarding || {};
+  const srRates = ob.rates || {};
+  const srUsage = ob.usage || {};
+  const aoRates = ao.rates || {};
+  const aoUsage = ao.usage || {};
+
+  const RATE_TYPES = ['TikTok Video','Instagram Reel','Instagram Story','YouTube','Long-form'];
+  const USAGE_TYPES = ['30 days','60 days','90 days','Perpetual'];
+
+  const modal = document.getElementById('adminRatesModal');
+  document.getElementById('adminRatesModalTitle').textContent = `Admin Rates — ${c.name}`;
+
+  document.getElementById('adminRatesBody').innerHTML = `
+    <div style="font-size:12px;color:var(--blue);background:var(--blue-light);border-radius:8px;padding:10px;margin-bottom:16px">
+      ℹ️ These values override self-reported rates in media kits and rate cards. Self-reported values remain unchanged.
+    </div>
+    <div style="font-weight:600;font-size:13px;margin-bottom:10px">Deliverable Rates</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+      ${RATE_TYPES.map(k => `
+        <div class="form-group">
+          <label class="form-label">${k}</label>
+          <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">Self-reported: ${srRates[k] ? '£'+srRates[k] : 'Not provided'}</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="color:var(--gray-400);font-size:13px">£</span>
+            <input class="form-input admin-rate-input" data-key="${k}" placeholder="${srRates[k]||'0'}" value="${aoRates[k]||''}" type="number" min="0">
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <div style="font-weight:600;font-size:13px;margin-bottom:10px">Usage / Licensing</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      ${USAGE_TYPES.map(k => `
+        <div class="form-group">
+          <label class="form-label">${k} usage</label>
+          <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">Self-reported: ${srUsage[k] ? '£'+srUsage[k] : 'Not provided'}</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="color:var(--gray-400);font-size:13px">£</span>
+            <input class="form-input admin-usage-input" data-key="${k}" placeholder="${srUsage[k]||'0'}" value="${aoUsage[k]||''}" type="number" min="0">
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  openModal('adminRatesModal');
+}
+
+async function saveAdminRates() {
+  const id = currentCreatorId;
+  if (!id) return;
+  if (!adminOverrides[id]) adminOverrides[id] = {};
+
+  const rates = {};
+  document.querySelectorAll('.admin-rate-input').forEach(el => {
+    if (el.value !== '') rates[el.dataset.key] = el.value;
+  });
+  const usage = {};
+  document.querySelectorAll('.admin-usage-input').forEach(el => {
+    if (el.value !== '') usage[el.dataset.key] = el.value;
+  });
+
+  adminOverrides[id].rates = Object.keys(rates).length ? rates : null;
+  adminOverrides[id].usage = Object.keys(usage).length ? usage : null;
+  adminOverrides[id].updatedBy = currentUser ? currentUser.name : 'admin';
+  adminOverrides[id].updatedAt = new Date().toISOString();
+
+  saveAdminOverrides();
+  closeModal('adminRatesModal');
+  showToast('✅ Admin rates saved!');
+  // Re-render socials tab
+  const c = creators.find(x => x.id === id);
+  if (c) renderProfileSocials(c);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── ADMIN STATS MODAL ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+function openAdminStatsModal(creatorId) {
+  const c = creators.find(x => x.id === creatorId);
+  if (!c) return;
+  currentCreatorId = creatorId;
+  const ao = adminOverrides[creatorId] || {};
+  const ob = c.onboarding || {};
+
+  document.getElementById('adminStatsModalTitle').textContent = `Admin Stats — ${c.name}`;
+  document.getElementById('adminStatsBody').innerHTML = `
+    <div style="font-size:12px;color:var(--blue);background:var(--blue-light);border-radius:8px;padding:10px;margin-bottom:16px">
+      ℹ️ Set verified stats for this creator. Used in media kits, rate cards, and campaign grid.
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Followers</label>
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">Self-reported: ${ob.followers||'Not provided'}</div>
+        <input class="form-input" id="as-followers" placeholder="e.g. 45.2K" value="${ao.followers||''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Avg. Views</label>
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">Self-reported: ${ob.avgViews||'Not provided'}</div>
+        <input class="form-input" id="as-avgviews" placeholder="e.g. 12K" value="${ao.avgViews||''}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Engagement Rate (%)</label>
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">Self-reported: ${ob.engagementRate!=null?ob.engagementRate+'%':'Not provided'}</div>
+        <input class="form-input" id="as-engrate" type="number" step="0.1" placeholder="e.g. 4.2" value="${ao.engagementRate!=null?ao.engagementRate:''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Audience</label>
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">Self-reported: ${ob.audience||'Not provided'}</div>
+        <input class="form-input" id="as-audience" placeholder="e.g. 18-24 UK Female" value="${ao.audience||''}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Niche override</label>
+      <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">Current: ${c.niche||'—'}</div>
+      <input class="form-input" id="as-niche" placeholder="Leave blank to use profile niche" value="${ao.niche||''}">
+    </div>
+  `;
+  openModal('adminStatsModal');
+}
+
+async function saveAdminStats() {
+  const id = currentCreatorId;
+  if (!id) return;
+  if (!adminOverrides[id]) adminOverrides[id] = {};
+
+  const ao = adminOverrides[id];
+  const followers = document.getElementById('as-followers').value.trim();
+  const avgViews  = document.getElementById('as-avgviews').value.trim();
+  const engRate   = document.getElementById('as-engrate').value;
+  const audience  = document.getElementById('as-audience').value.trim();
+  const niche     = document.getElementById('as-niche').value.trim();
+
+  if (followers) ao.followers = followers; else delete ao.followers;
+  if (avgViews)  ao.avgViews  = avgViews;  else delete ao.avgViews;
+  if (engRate !== '') ao.engagementRate = parseFloat(engRate); else delete ao.engagementRate;
+  if (audience)  ao.audience  = audience;  else delete ao.audience;
+  if (niche)     ao.niche     = niche;     else delete ao.niche;
+  ao.updatedBy = currentUser ? currentUser.name : 'admin';
+  ao.updatedAt = new Date().toISOString();
+
+  saveAdminOverrides();
+  closeModal('adminStatsModal');
+  showToast('✅ Admin stats saved!');
+  const c = creators.find(x => x.id === id);
+  if (c) renderProfileSocials(c);
+  updateDashStats();
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── MEDIA KIT: Tab switch + admin data + rate kit ─────────────
+// ══════════════════════════════════════════════════════════════
+
+function switchMKTab(name, btn) {
+  document.querySelectorAll('[id^="mktab-"]').forEach(t => t.classList.remove('active'));
+  const el = document.getElementById('mktab-'+name);
+  if (el) el.classList.add('active');
+  const tabBar = document.querySelector('.profile-tabs');
+  if (tabBar) tabBar.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (name === 'ratekit') populateRateKitSelector();
+}
+
+function updateKitPreview(){
+  const name  = document.getElementById('mk-name').textContent;
+  const c     = creators.find(x => x.name === name);
+  const bio   = document.getElementById('mk-edit-bio').value;
+  const p1    = document.getElementById('mk-edit-p1').value;
+  const p2    = document.getElementById('mk-edit-p2').value;
+  const foll  = document.getElementById('mk-edit-followers').value;
+  const eng   = document.getElementById('mk-edit-eng').value;
+  const reach = document.getElementById('mk-edit-reach').value;
+  if (bio)   document.getElementById('mk-niche').textContent = bio;
+  const engEl    = document.getElementById('mk-stat-eng');
+  const reachEl  = document.getElementById('mk-stat-reach');
+  const stat1El  = document.getElementById('mk-stat1');
+  if (foll   && stat1El)  stat1El.textContent  = foll;
+  if (eng    && engEl)    engEl.textContent    = eng+'%';
+  if (reach  && reachEl)  reachEl.textContent  = reach;
+  document.getElementById('mk-platforms').innerHTML=[p1,p2].filter(Boolean).map(p=>`<div class="mk-platform">${p}</div>`).join('');
+}
+
+function saveKitAdminData() {
+  const name = document.getElementById('mk-name').textContent;
+  const c = creators.find(x => x.name === name);
+  if (!c) { showToast('Select a creator first'); return; }
+
+  if (!adminOverrides[c.id]) adminOverrides[c.id] = {};
+  const ao = adminOverrides[c.id];
+
+  const followers = document.getElementById('mk-edit-followers').value.trim();
+  const engRate   = document.getElementById('mk-edit-eng').value;
+  const avgViews  = document.getElementById('mk-edit-reach').value.trim();
+  const audience  = document.getElementById('mk-edit-audience').value.trim();
+
+  if (followers) ao.followers = followers; else delete ao.followers;
+  if (engRate !== '') ao.engagementRate = parseFloat(engRate); else delete ao.engagementRate;
+  if (avgViews)  ao.avgViews  = avgViews;  else delete ao.avgViews;
+  if (audience)  ao.audience  = audience;  else delete ao.audience;
+  ao.updatedBy = currentUser ? currentUser.name : 'admin';
+  ao.updatedAt = new Date().toISOString();
+
+  saveAdminOverrides();
+  showToast('✅ Admin kit data saved!');
+  updateDashStats();
+}
+
+function selectKitPreview(id){
+  const c=creators.find(x=>x.id===id);
+  if(!c) return;
+  onKitCreatorChange(c.name);
+  document.getElementById('mk-edit-bio').value = c.onboarding?.bio || c.niche || '';
+  // Pre-fill admin fields from resolved values
+  const r = resolveCreator(c);
+  document.getElementById('mk-edit-followers').value = r.followers || '';
+  document.getElementById('mk-edit-eng').value       = r.engRate   != null ? r.engRate : '';
+  document.getElementById('mk-edit-reach').value     = r.avgViews  || '';
+  const aoAud = (adminOverrides[id]||{}).audience || '';
+  document.getElementById('mk-edit-audience').value  = aoAud;
+  // Update preview stats
+  const stat1El = document.getElementById('mk-stat1');
+  const engEl   = document.getElementById('mk-stat-eng');
+  const reachEl = document.getElementById('mk-stat-reach');
+  if (stat1El)  stat1El.textContent  = r.followers || '—';
+  if (engEl)    engEl.textContent    = r.engRate   != null ? r.engRate+'%' : '—';
+  if (reachEl)  reachEl.textContent  = r.avgViews  || '—';
+  renderKitAnalytics(id);
+}
+
+function populateRateKitSelector() {
+  const sel = document.getElementById('rateKitSelector');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Select creator…</option>' +
+    creators.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+function renderRateKit(creatorIdStr) {
+  const id = parseInt(creatorIdStr);
+  const preview = document.getElementById('rateKitPreview');
+  const editBody = document.getElementById('rateKitEditBody');
+  if (!id || !preview) return;
+
+  const c = creators.find(x => x.id === id);
+  if (!c) return;
+
+  const r = resolveCreator(c);
+  const ao = adminOverrides[id] || {};
+  const ob = c.onboarding || {};
+
+  // Rate kit preview (brand-facing)
+  const RATE_TYPES  = ['TikTok Video','Instagram Reel','Instagram Story','YouTube','Long-form'];
+  const USAGE_TYPES = ['30 days','60 days','90 days','Perpetual'];
+
+  const filteredRates = RATE_TYPES.filter(k => r.rates[k]);
+  const filteredUsage = USAGE_TYPES.filter(k => r.usage[k]);
+
+  preview.innerHTML = `
+    <div style="border:1px solid var(--gray-100);border-radius:12px;overflow:hidden">
+      <div style="background:var(--blue);color:white;padding:16px 20px">
+        <div style="font-size:14px;font-weight:700">${c.name}</div>
+        <div style="font-size:11px;opacity:0.8">${r.niche} · ${c.location || '—'}</div>
+        <div style="display:flex;gap:16px;margin-top:10px">
+          ${r.followers ? `<div><div style="font-size:16px;font-weight:700">${r.followers}</div><div style="font-size:10px;opacity:0.7">Followers</div></div>` : ''}
+          ${r.engRate != null ? `<div><div style="font-size:16px;font-weight:700">${r.engRate}%</div><div style="font-size:10px;opacity:0.7">Engagement</div></div>` : ''}
+          ${r.audience ? `<div><div style="font-size:13px;font-weight:600">${r.audience}</div><div style="font-size:10px;opacity:0.7">Audience</div></div>` : ''}
+        </div>
+      </div>
+      ${filteredRates.length ? `
+        <div style="padding:16px 20px">
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Deliverable Rates</div>
+          ${filteredRates.map(k => `
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
+              <span style="color:var(--gray-600)">${k}</span>
+              <span style="font-weight:600">£${r.rates[k]}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div style="padding:16px 20px;font-size:12px;color:var(--gray-400)">No rates set — add admin rates to generate rate kit.</div>'}
+      ${filteredUsage.length ? `
+        <div style="padding:0 20px 16px">
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 10px">Usage / Licensing</div>
+          ${filteredUsage.map(k => `
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
+              <span style="color:var(--gray-600)">${k}</span>
+              <span style="font-weight:600">£${r.usage[k]}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${ao.updatedBy ? `<div style="padding:8px 20px 12px;font-size:11px;color:var(--gray-400)">Last updated by ${ao.updatedBy}</div>` : ''}
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--gray-400)">
+      ${ao.rates ? '✓ Using admin rates' : '⚠️ Using self-reported rates — admin rates not set for this creator'}
+    </div>
+  `;
+
+  // Edit panel (admin)
+  const RATE_TYPES_ALL  = ['TikTok Video','Instagram Reel','Instagram Story','YouTube','Long-form'];
+  const USAGE_TYPES_ALL = ['30 days','60 days','90 days','Perpetual'];
+  const aoRates = ao.rates || {};
+  const aoUsage = ao.usage || {};
+  const srRates = ob.rates || {};
+  const srUsage = ob.usage || {};
+
+  editBody.innerHTML = `
+    <div style="font-size:12px;color:var(--blue);background:var(--blue-light);border-radius:8px;padding:10px;margin-bottom:16px">
+      Admin rates appear on kits and rate cards. Self-reported values are never changed.
+    </div>
+    <div style="font-weight:600;font-size:13px;margin-bottom:10px">Deliverable Rates</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      ${RATE_TYPES_ALL.map(k => `
+        <div class="form-group">
+          <label class="form-label">${k}</label>
+          <div style="font-size:10px;color:var(--gray-400);margin-bottom:3px">SR: ${srRates[k]?'£'+srRates[k]:'—'}</div>
+          <div style="display:flex;gap:4px"><span style="color:var(--gray-400);font-size:13px;padding-top:8px">£</span>
+          <input class="form-input rk-rate-input" data-key="${k}" data-creator="${id}" value="${aoRates[k]||''}" placeholder="${srRates[k]||'0'}" type="number" min="0"></div>
+        </div>
+      `).join('')}
+    </div>
+    <div style="font-weight:600;font-size:13px;margin-bottom:10px">Usage / Licensing</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      ${USAGE_TYPES_ALL.map(k => `
+        <div class="form-group">
+          <label class="form-label">${k}</label>
+          <div style="font-size:10px;color:var(--gray-400);margin-bottom:3px">SR: ${srUsage[k]?'£'+srUsage[k]:'—'}</div>
+          <div style="display:flex;gap:4px"><span style="color:var(--gray-400);font-size:13px;padding-top:8px">£</span>
+          <input class="form-input rk-usage-input" data-key="${k}" data-creator="${id}" value="${aoUsage[k]||''}" placeholder="${srUsage[k]||'0'}" type="number" min="0"></div>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-primary" onclick="saveRateKitAdmin(${id})">💾 Save Rate Kit</button>
+  `;
+}
+
+function saveRateKitAdmin(id) {
+  if (!adminOverrides[id]) adminOverrides[id] = {};
+  const rates = {};
+  document.querySelectorAll('.rk-rate-input').forEach(el => { if (el.value !== '') rates[el.dataset.key] = el.value; });
+  const usage = {};
+  document.querySelectorAll('.rk-usage-input').forEach(el => { if (el.value !== '') usage[el.dataset.key] = el.value; });
+  adminOverrides[id].rates = Object.keys(rates).length ? rates : null;
+  adminOverrides[id].usage = Object.keys(usage).length ? usage : null;
+  adminOverrides[id].updatedBy = currentUser ? currentUser.name : 'admin';
+  adminOverrides[id].updatedAt = new Date().toISOString();
+  saveAdminOverrides();
+  showToast('✅ Rate kit saved!');
+  renderRateKit(String(id)); // refresh preview
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── CAMPAIGN INFLUENCER GRID ──────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+function openCreatorGrid(callbackFn) {
+  gridSelectionIds.clear();
+  gridCallbackFn = callbackFn || null;
+  // Populate niche filter
+  const niches = [...new Set(creators.map(c => resolveCreator(c).niche).filter(Boolean))].sort();
+  const nicheFilter = document.getElementById('gridNicheFilter');
+  if (nicheFilter) {
+    nicheFilter.innerHTML = '<option value="">All Niches</option>' + niches.map(n=>`<option>${n}</option>`).join('');
+  }
+  document.getElementById('gridSearch').value = '';
+  renderCreatorGrid(creators);
+  showPage('creatorgrid', null);
+  document.getElementById('topbarTitle').textContent = 'Select Creators';
+}
+
+function closeCreatorGrid() {
+  history.back();
+  showPage('campaigns', document.querySelector('[onclick*="campaigns"]'));
+}
+
+function filterCreatorGrid(q) {
+  const search = (document.getElementById('gridSearch').value || '').toLowerCase();
+  const niche  = document.getElementById('gridNicheFilter').value;
+  const follRange = document.getElementById('gridFollowerFilter').value;
+
+  let list = creators.filter(c => {
+    const r = resolveCreator(c);
+    const matchSearch = !search || c.name.toLowerCase().includes(search) || (r.niche||'').toLowerCase().includes(search);
+    const matchNiche  = !niche  || r.niche === niche;
+    let matchFoll = true;
+    if (follRange && r.followers) {
+      const numFoll = parseFollowers(r.followers);
+      if (follRange === '0-10k')    matchFoll = numFoll < 10000;
+      if (follRange === '10k-50k')  matchFoll = numFoll >= 10000 && numFoll < 50000;
+      if (follRange === '50k-100k') matchFoll = numFoll >= 50000 && numFoll < 100000;
+      if (follRange === '100k+')    matchFoll = numFoll >= 100000;
+    }
+    return matchSearch && matchNiche && matchFoll;
+  });
+  renderCreatorGrid(list);
+}
+
+function parseFollowers(str) {
+  if (!str) return 0;
+  const s = String(str).replace(/,/g,'').toLowerCase();
+  if (s.includes('m')) return parseFloat(s)*1000000;
+  if (s.includes('k')) return parseFloat(s)*1000;
+  return parseFloat(s)||0;
+}
+
+function renderCreatorGrid(list) {
+  const el = document.getElementById('creatorGridBody');
+  if (!el) return;
+  if (!list || !list.length) {
+    el.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--gray-400);padding:40px">No creators found</div>';
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const r = resolveCreator(c);
+    const pic = profilePics[c.id];
+    const avatarHtml = pic
+      ? `<img src="${pic}" style="width:56px;height:56px;border-radius:50%;object-fit:cover">`
+      : `<div style="width:56px;height:56px;border-radius:50%;background:${avatarColor(c.id)};display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:18px">${avatarLetter(c.name)}</div>`;
+    const isSelected = gridSelectionIds.has(c.id);
+    return `
+      <div class="creator-grid-card${isSelected?' selected':''}" onclick="toggleGridSelect(${c.id})" id="grid-card-${c.id}" style="background:var(--white);border:2px solid ${isSelected?'var(--blue)':'var(--gray-100)'};border-radius:14px;padding:16px;cursor:pointer;transition:all .15s;position:relative">
+        ${isSelected?`<div style="position:absolute;top:10px;right:10px;background:var(--blue);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">✓</div>`:''}
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px">
+          ${avatarHtml}
+          <div style="font-weight:600;font-size:14px">${c.name}</div>
+          <div style="font-size:11px;color:var(--blue);background:var(--blue-light);padding:3px 10px;border-radius:20px">${r.niche}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px">
+          <div style="background:var(--gray-50);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:14px;font-weight:700;color:var(--gray-900)">${r.followers||'—'}</div>
+            <div style="font-size:10px;color:var(--gray-400)">Followers</div>
+          </div>
+          <div style="background:var(--gray-50);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:14px;font-weight:700;color:var(--green)">${r.engRate!=null?r.engRate+'%':'—'}</div>
+            <div style="font-size:10px;color:var(--gray-400)">Engagement</div>
+          </div>
+          ${r.audience?`<div style="background:var(--gray-50);border-radius:8px;padding:8px;text-align:center;grid-column:1/-1">
+            <div style="font-size:12px;font-weight:600;color:var(--gray-900)">${r.audience}</div>
+            <div style="font-size:10px;color:var(--gray-400)">Audience</div>
+          </div>`:''}
+        </div>
+        ${c.onboarding?'':'<div style="margin-top:8px;font-size:10px;color:var(--amber);text-align:center">⚠️ No onboarding data</div>'}
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleGridSelect(creatorId) {
+  if (gridSelectionIds.has(creatorId)) {
+    gridSelectionIds.delete(creatorId);
+  } else {
+    gridSelectionIds.add(creatorId);
+  }
+  // Update card border
+  const card = document.getElementById('grid-card-'+creatorId);
+  const isNowSelected = gridSelectionIds.has(creatorId);
+  if (card) {
+    card.style.borderColor = isNowSelected ? 'var(--blue)' : 'var(--gray-100)';
+    card.innerHTML = card.innerHTML; // re-render via renderCreatorGrid
+  }
+  // Re-render to update checkmarks properly
+  const search = document.getElementById('gridSearch').value;
+  filterCreatorGrid(search);
+  // Update confirm button
+  const btn = document.getElementById('gridConfirmBtn');
+  if (btn) {
+    btn.disabled = gridSelectionIds.size === 0;
+    btn.textContent = gridSelectionIds.size > 0 ? `Add Selected (${gridSelectionIds.size})` : 'Add Selected (0)';
+  }
+}
+
+function confirmGridSelection() {
+  const selected = [...gridSelectionIds].map(id => creators.find(c => c.id === id)).filter(Boolean);
+  if (gridCallbackFn) gridCallbackFn(selected);
+  showToast(`${selected.length} creator${selected.length>1?'s':''} selected`);
+  showPage('campaigns', document.querySelector('[onclick*="campaigns"]'));
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── SAVE HELPER: adminOverrides to Supabase ───────────────────
+// ══════════════════════════════════════════════════════════════
+
+// Patch renderAll to also repopulate rate kit selector
+const _origRenderAll = renderAll;
+function renderAll() {
+  _origRenderAll();
+  populateRateKitSelector();
+}
+
+// Override generateKit to pre-fill admin fields
+const _origGenerateKit = generateKit;
+function generateKit() {
+  _origGenerateKit();
+  // After generating, pre-fill admin stats from overrides
+  const name = document.getElementById('kit-creator-select').value;
+  const c = creators.find(x => x.name === name);
+  if (c) selectKitPreview(c.id);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── ONBOARDING: Add stats step to portal ─────────────────────
+// ══════════════════════════════════════════════════════════════
+// NOTE: We add optional stat fields to collectPortalData so creators
+// can submit followers/eng rate directly (still self-reported).
+const _origCollectPortalData = collectPortalData;
+function collectPortalData() {
+  _origCollectPortalData();
+  // Capture optional analytics fields if present in portal
+  const flr = document.getElementById('ob-followers');
+  const eng = document.getElementById('ob-engrate');
+  const avg = document.getElementById('ob-avgviews');
+  const aud = document.getElementById('ob-audience');
+  if (flr) portalData.followers     = flr.value.trim();
+  if (eng) portalData.engagementRate = eng.value ? parseFloat(eng.value) : null;
+  if (avg) portalData.avgViews      = avg.value.trim();
+  if (aud) portalData.audience      = aud.value.trim();
+}
+
 </script>
+
+<!-- Admin Rates Modal -->
+<div class="modal-overlay" id="adminRatesModal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <div class="modal-title" id="adminRatesModalTitle">Admin Rates</div>
+      <button class="modal-close" onclick="closeModal('adminRatesModal')">✕</button>
+    </div>
+    <div class="modal-body" id="adminRatesBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('adminRatesModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAdminRates()">💾 Save Admin Rates</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Stats Modal -->
+<div class="modal-overlay" id="adminStatsModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="adminStatsModalTitle">Admin Stats</div>
+      <button class="modal-close" onclick="closeModal('adminStatsModal')">✕</button>
+    </div>
+    <div class="modal-body" id="adminStatsBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('adminStatsModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAdminStats()">💾 Save Stats</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
