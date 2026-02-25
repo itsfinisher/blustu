@@ -383,6 +383,7 @@ tr:hover td{background:var(--gray-50);}
 .confirm-icon{width:52px;height:52px;border-radius:50%;background:var(--red-light);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
 
 </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -558,6 +559,10 @@ tr:hover td{background:var(--gray-50);}
     <button class="nav-item" onclick="showPage('mediakit',this)">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       Media Kits
+    </button>
+    <button class="nav-item" onclick="showPage('ratekit',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Rate Kit
     </button>
     <div class="nav-section-label">Brand Deals</div>
     <button class="nav-item" onclick="showPage('campaigns',this)">
@@ -791,31 +796,60 @@ tr:hover td{background:var(--gray-50);}
         <div><h1>Creator Onboarding</h1><p>Invite creators and track their setup progress</p></div>
         <button class="btn btn-primary" onclick="openModal('inviteCreatorModal')">+ Invite Creator</button>
       </div>
-      <div class="grid-2">
-        <div>
-          <div class="card" style="margin-bottom:16px">
-            <div class="card-title" style="margin-bottom:14px">Onboarding Pipeline</div>
-            <div style="display:flex;gap:8px;margin-bottom:16px">
-              <div style="flex:1;background:var(--amber-light);border-radius:10px;padding:12px;text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--amber)" id="stat-invited">3</div><div style="font-size:11px;color:var(--amber)">Invited</div></div>
-              <div style="flex:1;background:var(--blue-light);border-radius:10px;padding:12px;text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--blue)" id="stat-onboarded">0</div><div style="font-size:11px;color:var(--blue)">Onboarded</div></div>
-              <div style="flex:1;background:var(--green-light);border-radius:10px;padding:12px;text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--green)" id="stat-active-ob">22</div><div style="font-size:11px;color:var(--green)">Active</div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title" style="margin-bottom:14px">Pending Invites</div>
-            <div id="onboarding-pending-list"></div>
-          </div>
-          <div class="card" style="margin-top:16px">
-            <div class="card-title" style="margin-bottom:14px">Completed Onboarding</div>
-            <div id="onboarding-done-list"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">No creators have completed onboarding yet.</div></div>
+
+      <!-- Stats pills -->
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px;background:var(--amber-light);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--amber)" id="stat-invited">0</div>
+          <div style="font-size:11px;color:var(--amber);font-weight:600">Invited</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--blue-light);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--blue)" id="stat-onboarded">0</div>
+          <div style="font-size:11px;color:var(--blue);font-weight:600">Submitted</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--green-light);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--green)" id="stat-active-ob">0</div>
+          <div style="font-size:11px;color:var(--green);font-weight:600">Active</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--gray-50);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--gray-600)" id="stat-total-ob">0</div>
+          <div style="font-size:11px;color:var(--gray-400);font-weight:600">Total Creators</div>
+        </div>
+      </div>
+
+      <!-- Full onboarding tracker table -->
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+        <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--gray-100)">
+          <div class="card-title" style="margin:0">All Creators — Onboarding Status</div>
+          <div class="crm-search" style="width:220px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B93A8" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" placeholder="Search…" oninput="filterOnboardingTracker(this.value)" id="obSearchInput">
           </div>
         </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Creator</th>
+              <th>Niche</th>
+              <th>Status</th>
+              <th>Submitted data</th>
+              <th>Action</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="onboarding-tracker-body"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gray-400)">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pending + Done collapsible lists (kept for quick view) -->
+      <div class="grid-2">
         <div class="card">
-          <div class="card-title" style="margin-bottom:14px">Onboarding Steps</div>
-          <div class="onboarding-step"><div class="step-num done">✓</div><div class="step-info"><h4>Creator Added to Roster</h4><p>Creator profile exists in the CRM</p></div></div>
-          <div class="onboarding-step"><div class="step-num">2</div><div class="step-info"><h4>Send Invite Link</h4><p>Manager sends creator their unique onboarding link. Creator completes the form themselves.</p><button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openModal('inviteCreatorModal')">Send Invite</button></div></div>
-          <div class="onboarding-step"><div class="step-num">3</div><div class="step-info"><h4>Creator Submits Onboarding</h4><p>Creator fills in: social links, rates, bio, brand restrictions. Data saves to their profile automatically.</p></div></div>
-          <div class="onboarding-step"><div class="step-num">4</div><div class="step-info"><h4>Profile Updates</h4><p>Manager can view submitted rates & socials in the creator's profile. Data is used when building deals.</p></div></div>
+          <div class="card-title" style="margin-bottom:12px">⏳ Pending Invites</div>
+          <div id="onboarding-pending-list"><div style="font-size:13px;color:var(--gray-400)">Loading…</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px">✅ Completed Onboarding</div>
+          <div id="onboarding-done-list"><div style="font-size:13px;color:var(--gray-400)">Loading…</div></div>
         </div>
       </div>
     </div>
@@ -827,11 +861,10 @@ tr:hover td{background:var(--gray-50);}
         <button class="btn btn-primary" onclick="openModal('genKitModal')">+ Generate Kit</button>
       </div>
 
-      <!-- Media Kit Tabs -->
+      <!-- Media Kit Tabs (Rate Kit is now a separate nav page) -->
       <div class="profile-tabs" style="margin-bottom:20px">
-        <button class="profile-tab active" onclick="switchMKTab('kit',this)">Media Kit</button>
-        <button class="profile-tab" onclick="switchMKTab('ratekit',this)">Rate Kit</button>
-        <button class="profile-tab" onclick="switchMKTab('analytics',this)">Analytics</button>
+        <button class="profile-tab active" id="mktab-btn-kit" onclick="switchMKTab('kit',this)">Media Kit</button>
+        <button class="profile-tab" id="mktab-btn-analytics" onclick="switchMKTab('analytics',this)">Analytics</button>
       </div>
 
       <!-- Tab: Media Kit -->
@@ -851,10 +884,12 @@ tr:hover td{background:var(--gray-50);}
               </div>
               <div style="position:relative;z-index:1"><div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:16px">Represented by blustu™ · <span id="mk-email">—</span></div></div>
             </div>
-            <div style="display:flex;gap:8px;margin-top:12px">
+            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
               <button class="btn btn-primary" style="flex:1" onclick="shareKit()">Share Link</button>
-              <button class="btn btn-ghost" onclick="showToast('PDF export coming soon')">Download PDF</button>
+              <button class="btn btn-ghost" onclick="exportKitAsPng('media-kit-export-target','MediaKit')">⬇ PNG</button>
             </div>
+            <!-- Clean export target (no buttons) -->
+            <div id="media-kit-export-target" style="display:none"></div>
           </div>
           <div>
             <div class="card" style="margin-bottom:14px">
@@ -877,36 +912,6 @@ tr:hover td{background:var(--gray-50);}
             <div style="margin-bottom:10px;font-size:13px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">All Media Kits</div>
             <div class="card" style="padding:0;overflow:hidden">
               <table><thead><tr><th>Creator</th><th>Eng. Rate</th><th>Updated</th><th></th></tr></thead><tbody id="mkListBody"></tbody></table>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab: Rate Kit -->
-      <div class="profile-tab-content" id="mktab-ratekit">
-        <div class="grid-2">
-          <div>
-            <div class="card">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-                <div class="card-title">Rate Card Preview</div>
-                <select class="form-select" style="width:180px" id="rateKitSelector" onchange="renderRateKit(this.value)">
-                  <option value="">Select creator…</option>
-                </select>
-              </div>
-              <div id="rateKitPreview">
-                <div style="font-size:13px;color:var(--gray-400)">Select a creator to view their rate card.</div>
-              </div>
-            </div>
-          </div>
-          <div>
-            <div class="card">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-                <div class="card-title">Edit Admin Rates</div>
-                <span style="font-size:11px;color:var(--gray-400)">Overrides self-reported</span>
-              </div>
-              <div id="rateKitEditBody">
-                <div style="font-size:13px;color:var(--gray-400)">Select a creator above to edit their rates.</div>
-              </div>
             </div>
           </div>
         </div>
@@ -935,10 +940,48 @@ tr:hover td{background:var(--gray-50);}
               <div id="ana-location-display"></div>
             </div>
             <button class="btn btn-ghost btn-sm" style="margin-top:12px;width:100%" onclick="openAnalyticsModal()">Edit Analytics Data</button>
+            <button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%" onclick="exportKitAsPng('analytics-export-target','AnalyticsKit')">⬇ Export PNG</button>
+            <div id="analytics-export-target" style="display:none"></div>
           </div>
         </div>
       </div>
 
+    </div>
+
+    <!-- ══ RATE KIT ══ -->
+    <div class="page" id="page-ratekit">
+      <div class="page-header">
+        <div><h1>Rate Kit</h1><p>Brand-ready rate cards for your creators</p></div>
+        <button class="btn btn-ghost" onclick="exportKitAsPng('rateKitExportTarget','RateKit')" id="btn-export-ratekit">⬇ Export PNG</button>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div class="card" style="margin-bottom:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+              <div class="card-title">Rate Card</div>
+              <select class="form-select" style="width:200px" id="rateKitSelector" onchange="renderRateKit(this.value)">
+                <option value="">Select creator…</option>
+              </select>
+            </div>
+            <div id="rateKitPreview">
+              <div style="font-size:13px;color:var(--gray-400)">Select a creator to view their rate card.</div>
+            </div>
+            <!-- Hidden export target (clean, no UI chrome) -->
+            <div id="rateKitExportTarget" style="display:none"></div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+              <div class="card-title">Edit Admin Rates</div>
+              <span style="font-size:11px;color:var(--gray-400)">Overrides self-reported</span>
+            </div>
+            <div id="rateKitEditBody">
+              <div style="font-size:13px;color:var(--gray-400)">Select a creator above to edit their rates.</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ══ CAMPAIGNS ══ -->
@@ -1009,11 +1052,11 @@ tr:hover td{background:var(--gray-50);}
         <p>Only the Owner or Admin can manage user accounts.</p>
       </div>
       <div id="users-content">
-        <div style="background:var(--blue-light);border:1px solid rgba(33,152,237,.2);border-radius:var(--radius);padding:16px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <div style="font-size:12px;color:var(--blue);line-height:1.6"><strong>Role system:</strong> Owner has full access. Admin can manage most things. Manager can edit creators &amp; deals. Team has read+edit on assigned data. Read Only can only view. Changes are saved automatically.</div>
-        </div>
         <div class="users-grid" id="usersGrid"></div>
+        <div style="background:var(--blue-light);border:1px solid rgba(33,152,237,.2);border-radius:var(--radius);padding:14px;margin-top:20px;display:flex;align-items:flex-start;gap:12px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div style="font-size:11px;color:var(--blue);line-height:1.6"><strong>Role system:</strong> Owner has full access. Admin can manage most things. Manager can edit creators &amp; deals. Team has read+edit on assigned data. Read Only can only view.</div>
+        </div>
       </div>
     </div>
 
@@ -2072,9 +2115,10 @@ function closeModal(id) {
 
 const pageTitles = {
   dashboard:'Dashboard', crm:'Creator CRM', creatorprofile:'Creator Profile',
-  onboarding:'Creator Onboarding', mediakit:'Media Kits', campaigns:'Campaigns',
-  pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline', inbox:'Inbox',
-  users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator'
+  onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit',
+  campaigns:'Campaigns', pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline',
+  inbox:'Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
+  creatorgrid:'Select Creators'
 };
 
 function showPage(id, btn) {
@@ -2108,6 +2152,21 @@ function showPage(id, btn) {
   const titleEl = document.getElementById('topbarTitle');
   if (titleEl) titleEl.textContent = pageTitles[id] || id;
   closeSidebar();
+
+  // ── Per-page re-render on navigation ──
+  // Guarantees each page shows current data on every visit.
+  if (id === 'crm')        { renderCRM(creators); }
+  if (id === 'onboarding') { renderOnboarding(); }
+  if (id === 'mediakit')   {
+    renderMediaKitList();
+    // Re-activate the first tab (Media Kit) since switchProfileTab may have cleared it
+    const firstMkTab = document.querySelector('#page-mediakit .profile-tab');
+    switchMKTab('kit', firstMkTab);
+  }
+  if (id === 'ratekit')    { populateRateKitSelector(); }
+  if (id === 'users')      { renderUsersPage(); }
+  if (id === 'pipeline')   { renderPipeline(); }
+  if (id === 'campaigns')  { renderCampaigns(currentCampaignFilter); }
 }
 
 function statusBadge(s){
@@ -2168,7 +2227,18 @@ function filterCRM(q){
   ));
 }
 function filterCRMStatus(v){
-  renderCRM(v?creators.filter(c=>c.status===v):creators);
+  if (!v) { renderCRM(creators); return; }
+  if (v === 'Onboarded') {
+    // Show creators who have submitted onboarding data (regardless of status label)
+    renderCRM(creators.filter(c => c.onboarding));
+    return;
+  }
+  if (v === 'Active') {
+    // Active = has no onboarding OR has onboarding, status is Active or Onboarded
+    renderCRM(creators.filter(c => c.status === 'Active' || c.status === 'Onboarded'));
+    return;
+  }
+  renderCRM(creators.filter(c => c.status === v));
 }
 
 // ── DELETE CREATOR ────────────────────────────────────────────
@@ -2404,8 +2474,11 @@ function openCreatorQuickView(id){
 }
 
 function switchProfileTab(id, btn) {
-  document.querySelectorAll('.profile-tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+  // SCOPED: only clear ptab-* tabs, NOT mktab-* or rtab-* or other tab groups
+  document.querySelectorAll('[id^="ptab-"]').forEach(t => t.classList.remove('active'));
+  // Only deactivate profile-tab buttons that are INSIDE the creator profile page
+  const profilePage = document.getElementById('page-creatorprofile');
+  if (profilePage) profilePage.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
   const el = document.getElementById('ptab-'+id);
   if (el) el.classList.add('active');
   if (btn) btn.classList.add('active');
@@ -2456,30 +2529,105 @@ function saveProfileNote(val){
 
 // ══ ONBOARDING PAGE ══
 function renderOnboarding(){
-  const invited=creators.filter(c=>c.status==='Invited');
-  const onboarded=creators.filter(c=>c.onboarding);
-  const active=creators.filter(c=>c.status==='Active');
-  document.getElementById('stat-invited').textContent=invited.length;
-  document.getElementById('stat-onboarded').textContent=onboarded.length;
-  document.getElementById('stat-active-ob').textContent=active.length;
+  const invited   = creators.filter(c => c.status === 'Invited');
+  const onboarded = creators.filter(c => c.onboarding);
+  const active    = creators.filter(c => c.status === 'Active' || c.status === 'Onboarded');
 
-  const pendList=document.getElementById('onboarding-pending-list');
-  pendList.innerHTML=invited.length?invited.map(c=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--gray-100);border-radius:10px;margin-bottom:8px">
-      <div class="creator-avatar" style="background:${avatarColor(c.id)};width:32px;height:32px;font-size:11px">${avatarLetter(c.name)}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:600">${c.name}</div><div style="font-size:11px;color:var(--gray-400)">${c.email}</div></div>
-      <span class="badge badge-amber">Invited</span>
-      <button class="btn btn-ghost btn-sm" onclick="copyInviteLinkFor(${c.id})">Copy Link</button>
-    </div>`).join(''):'<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No pending invites.</div>';
+  // Update stat pills
+  const statInv = document.getElementById('stat-invited');
+  const statOb  = document.getElementById('stat-onboarded');
+  const statAct = document.getElementById('stat-active-ob');
+  if (statInv) statInv.textContent = invited.length;
+  if (statOb)  statOb.textContent  = onboarded.length;
+  if (statAct) statAct.textContent = active.length;
 
-  const doneList=document.getElementById('onboarding-done-list');
-  doneList.innerHTML=onboarded.length?onboarded.map(c=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--green-light);border-radius:10px;margin-bottom:8px;background:var(--green-light)">
-      <div class="creator-avatar" style="background:${avatarColor(c.id)};width:32px;height:32px;font-size:11px">${avatarLetter(c.name)}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:600">${c.name}</div><div style="font-size:11px;color:var(--green)">Onboarding complete</div></div>
-      <span class="badge badge-green">✓ Done</span>
-      <button class="btn btn-ghost btn-sm" onclick="openCreatorProfile(${c.id})">View</button>
-    </div>`).join(''):'<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No creators have completed onboarding yet.</div>';
+  // ── Pending invites ──
+  const pendList = document.getElementById('onboarding-pending-list');
+  if (pendList) {
+    pendList.innerHTML = invited.length ? invited.map(c => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--gray-100);border-radius:10px;margin-bottom:8px">
+        <div class="creator-avatar" style="background:${avatarColor(c.id)};width:32px;height:32px;font-size:11px">${avatarLetter(c.name)}</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600">${c.name}</div><div style="font-size:11px;color:var(--gray-400)">${c.email}</div></div>
+        <span class="badge badge-amber">Invited</span>
+        <button class="btn btn-ghost btn-sm" onclick="copyInviteLinkFor(${c.id})">Copy Link</button>
+      </div>`).join('') : '<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No pending invites.</div>';
+  }
+
+  // ── Completed onboarding ──
+  const doneList = document.getElementById('onboarding-done-list');
+  if (doneList) {
+    doneList.innerHTML = onboarded.length ? onboarded.map(c => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--green-light);border-radius:10px;margin-bottom:8px;background:var(--green-light)">
+        <div class="creator-avatar" style="background:${avatarColor(c.id)};width:32px;height:32px;font-size:11px">${avatarLetter(c.name)}</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600">${c.name}</div><div style="font-size:11px;color:var(--green)">Onboarding complete</div></div>
+        <span class="badge badge-green">✓ Done</span>
+        <button class="btn btn-ghost btn-sm" onclick="openCreatorProfile(${c.id})">View</button>
+      </div>`).join('') : '<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No creators have completed onboarding yet.</div>';
+  }
+
+  // Update total count pill
+  const statTotal = document.getElementById('stat-total-ob');
+  if (statTotal) statTotal.textContent = creators.length;
+
+  // Full tracker delegates to shared renderer (also used by search filter)
+  _renderOnboardingTrackerRows(creators);
+}
+
+function filterOnboardingTracker(q) {
+  const s = (q||'').toLowerCase();
+  const filtered = s
+    ? creators.filter(c =>
+        (c.name||'').toLowerCase().includes(s) ||
+        (c.email||'').toLowerCase().includes(s) ||
+        (c.niche||'').toLowerCase().includes(s)
+      )
+    : creators;
+  _renderOnboardingTrackerRows(filtered);
+}
+
+function _renderOnboardingTrackerRows(list) {
+  const tracker = document.getElementById('onboarding-tracker-body');
+  if (!tracker) return;
+  if (!list || !list.length) {
+    tracker.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gray-400)">No creators found.</td></tr>';
+    return;
+  }
+  tracker.innerHTML = list.map(c => {
+    let statusLabel, statusClass, statusIcon;
+    if (c.onboarding) {
+      statusLabel = 'Submitted'; statusClass = 'badge-green'; statusIcon = '✓';
+    } else if (c.status === 'Invited') {
+      statusLabel = 'Invited'; statusClass = 'badge-amber'; statusIcon = '✉️';
+    } else {
+      statusLabel = 'Not started'; statusClass = 'badge-gray'; statusIcon = '—';
+    }
+    const ob = c.onboarding || {};
+    const hasRates   = ob.rates   && Object.values(ob.rates).some(v=>v);
+    const hasSocials = ob.tiktok  || ob.instagram || ob.youtube;
+    const hasBio     = !!ob.bio;
+    const pic = profilePics[c.id];
+    const avatarHtml = pic
+      ? `<div class="creator-avatar" style="overflow:hidden;width:28px;height:28px;font-size:10px"><img src="${pic}" class="avatar-img"></div>`
+      : `<div class="creator-avatar" style="background:${avatarColor(c.id)};width:28px;height:28px;font-size:10px">${avatarLetter(c.name)}</div>`;
+    return `<tr>
+      <td><div class="creator-cell">${avatarHtml}<div><div class="creator-name">${c.name}</div><div class="creator-handle">${c.email}</div></div></div></td>
+      <td style="font-size:12px;color:var(--gray-400)">${c.niche||'—'}</td>
+      <td><span class="badge ${statusClass}">${statusIcon} ${statusLabel}</span></td>
+      <td style="font-size:12px">
+        ${c.onboarding?`<div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${hasSocials?'<span class="badge badge-blue" style="font-size:10px">Socials</span>':''}
+          ${hasRates?'<span class="badge badge-green" style="font-size:10px">Rates</span>':''}
+          ${hasBio?'<span class="badge badge-gray" style="font-size:10px">Bio</span>':''}
+        </div>`:'<span style="color:var(--gray-300)">—</span>'}
+      </td>
+      <td style="font-size:11px">
+        ${c.status==='Invited'?`<button class="btn btn-ghost btn-sm" onclick="copyInviteLinkFor(${c.id})">Resend</button>`
+        :c.onboarding?''
+        :`<button class="btn btn-ghost btn-sm" onclick="openInviteFor(${c.id})">Invite</button>`}
+      </td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openCreatorProfile(${c.id})">View</button></td>
+    </tr>`;
+  }).join('');
 }
 
 function openInviteFor(id){
@@ -2626,7 +2774,7 @@ async function submitOnboarding(){
   }
 
   creator.onboarding = portalData;
-  creator.status = 'Active';
+  creator.status = 'Onboarded';  // Mark as Onboarded (was 'Active' — now correctly distinguished)
   if (portalData.niche) creator.niche = portalData.niche;
 
   console.log('[Onboarding] Saving creator:', creator.id, creator.name);
@@ -3613,6 +3761,7 @@ function renderAll() {
   renderOnboarding();
   updateDashStats();
   populateSelects();
+  populateRateKitSelector();
   renderUsersPage();
 }
 
@@ -4313,13 +4462,60 @@ async function saveAdminStats() {
 // ══════════════════════════════════════════════════════════════
 
 function switchMKTab(name, btn) {
-  document.querySelectorAll('[id^="mktab-"]').forEach(t => t.classList.remove('active'));
+  // Only target mktab-* divs inside the media kit page
+  const mkPage = document.getElementById('page-mediakit');
+  if (mkPage) mkPage.querySelectorAll('[id^="mktab-"]').forEach(t => t.classList.remove('active'));
   const el = document.getElementById('mktab-'+name);
   if (el) el.classList.add('active');
-  const tabBar = document.querySelector('.profile-tabs');
-  if (tabBar) tabBar.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+  // Only deactivate tabs inside media kit page
+  if (mkPage) mkPage.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  if (name === 'ratekit') populateRateKitSelector();
+}
+
+// ── Export Kit as PNG ────────────────────────────────────────
+async function exportKitAsPng(targetId, filename) {
+  if (typeof html2canvas === 'undefined') {
+    showToast('Export library loading, please wait and try again…');
+    return;
+  }
+
+  // Determine the source element to capture
+  // For media kit: capture the preview card itself
+  // For rate kit: capture the rateKitPreview element
+  // For analytics: capture the analytics card
+  let sourceEl;
+  if (targetId === 'media-kit-export-target') {
+    sourceEl = document.querySelector('.media-kit-preview');
+  } else if (targetId === 'rateKitExportTarget') {
+    sourceEl = document.getElementById('rateKitPreview');
+  } else if (targetId === 'analytics-export-target') {
+    sourceEl = document.getElementById('kit-analytics-display');
+  } else {
+    sourceEl = document.getElementById(targetId);
+  }
+
+  if (!sourceEl) { showToast('Nothing to export yet — generate a kit first'); return; }
+
+  showToast('Generating PNG…');
+  try {
+    const canvas = await html2canvas(sourceEl, {
+      scale: 2,           // 2× for retina/high-res
+      useCORS: true,      // allow cross-origin images (profile pics)
+      backgroundColor: null,
+      logging: false,
+    });
+    const dataUrl = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = (filename || 'blustu-kit') + '-' + new Date().toISOString().slice(0,10) + '.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('✅ PNG exported!');
+  } catch(e) {
+    console.error('Export error:', e);
+    showToast('Export failed — try again');
+  }
 }
 
 function updateKitPreview(){
@@ -4639,12 +4835,11 @@ function confirmGridSelection() {
 // ── SAVE HELPER: adminOverrides to Supabase ───────────────────
 // ══════════════════════════════════════════════════════════════
 
-// Patch renderAll to also repopulate rate kit selector
-const _origRenderAll = renderAll;
-function renderAll() {
-  _origRenderAll();
-  populateRateKitSelector();
-}
+// renderAll is already defined above — this hook ensures ratekit stays in sync.
+// Since JS function declarations hoist, the second definition wins.
+// We already call populateRateKitSelector() in the primary renderAll above,
+// so we just remove this duplicate wrapper to avoid infinite recursion.
+// (No-op: renderAll is the canonical definition in renderAll() above)
 
 // Override generateKit to pre-fill admin fields
 const _origGenerateKit = generateKit;
