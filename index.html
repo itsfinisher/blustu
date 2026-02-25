@@ -1712,6 +1712,28 @@ let notesSaveTimer = null;
 let currentCampaignFilter = 'all';
 
 // ── DATA — loaded from localStorage with defaults ──
+// ── normaliseCreator: fill in any missing fields from Supabase rows ──
+// Supabase returns null for columns that haven't been added yet.
+// This prevents crashes when rendering creators with incomplete data.
+function normaliseCreator(c) {
+  return {
+    ...c,
+    name:     c.name     || 'Unknown',
+    email:    c.email    || '',
+    role:     c.role     || 'Influencer',
+    location: c.location || '—',
+    niche:    c.niche    || 'General',
+    status:   c.status   || 'Active',
+    notes:    c.notes    || '',
+    onboarding: c.onboarding || null,
+    profile_image_url: c.profile_image_url || null,
+  };
+}
+
+function normaliseCreators(arr) {
+  return (arr || []).map(normaliseCreator);
+}
+
 const DEFAULT_CREATORS = [
   {id:1,name:'Muskan',email:'muskan@blustu.agency',role:'Influencer',location:'🇦🇺 Australia',niche:'Lifestyle / Fashion',status:'Active',notes:'',onboarding:null},
   {id:2,name:'Amazing (Imran)',email:'amazing@blustu.agency',role:'Influencer',location:'🇬🇧 UK',niche:'Fitness / Student',status:'Active',notes:'',onboarding:null},
@@ -1740,7 +1762,7 @@ const DEFAULT_CREATORS = [
   {id:25,name:'HoodsNews',email:'hoodsnews@blustu.agency',role:'Meme Page',location:'🌍 International',niche:'Meme / Entertainment',status:'Invited',notes:'',onboarding:null},
 ];
 
-let creators    = Storage.get('creators',    DEFAULT_CREATORS);
+let creators    = normaliseCreators(Storage.get('creators', DEFAULT_CREATORS));
 let campaigns   = Storage.get('campaigns',   []);
 let pitchDecks  = Storage.get('pitchDecks',  []);
 let deals       = Storage.get('deals',       []);
@@ -1757,7 +1779,7 @@ async function syncAllFromDB() {
       DB.select('staff_accounts'),
     ]);
 
-    if (dbC && dbC.length > 0) { creators = dbC; }
+    if (dbC && dbC.length > 0) { creators = normaliseCreators(dbC); }
     else { await DB.upsertMany('creators', DEFAULT_CREATORS); creators = DEFAULT_CREATORS; }
     Storage.set('creators', creators);
 
@@ -1796,7 +1818,7 @@ async function refetch(table) {
   if (rows === null) return false;
   switch(table) {
     case 'creators':
-      creators = rows; Storage.set('creators', rows);
+      creators = normaliseCreators(rows); Storage.set('creators', creators);
       renderCRM(creators); renderOnboarding();
       if (currentCreatorId) {
         renderCreatorDeals(currentCreatorId);
@@ -2136,8 +2158,14 @@ function renderCRM(list) {
 }
 
 function filterCRM(q){
-  const s=q.toLowerCase();
-  renderCRM(creators.filter(c=>c.name.toLowerCase().includes(s)||c.email.toLowerCase().includes(s)||c.location.toLowerCase().includes(s)||c.niche.toLowerCase().includes(s)));
+  const s=(q||'').toLowerCase();
+  if(!s){renderCRM(creators);return;}
+  renderCRM(creators.filter(c=>
+    (c.name||'').toLowerCase().includes(s)||
+    (c.email||'').toLowerCase().includes(s)||
+    (c.location||'').toLowerCase().includes(s)||
+    (c.niche||'').toLowerCase().includes(s)
+  ));
 }
 function filterCRMStatus(v){
   renderCRM(v?creators.filter(c=>c.status===v):creators);
@@ -3489,8 +3517,8 @@ function doGlobalSearch(q) {
 
   // Creators
   const cResults = creators.filter(c =>
-    c.name.toLowerCase().includes(s) || c.email.toLowerCase().includes(s) ||
-    c.niche.toLowerCase().includes(s) || c.location.toLowerCase().includes(s)
+    (c.name||'').toLowerCase().includes(s) || (c.email||'').toLowerCase().includes(s) ||
+    (c.niche||'').toLowerCase().includes(s) || (c.location||'').toLowerCase().includes(s)
   ).slice(0, 4);
   if (cResults.length) {
     html += `<div class="search-group-label">Creators</div>`;
