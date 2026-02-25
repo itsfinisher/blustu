@@ -33,7 +33,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--off-white);color:var(--gr
 .auth-error{background:var(--red-light);color:var(--red);font-size:12px;font-weight:600;padding:10px 14px;border-radius:8px;margin-bottom:16px;display:none;}
 
 /* ── ONBOARDING PORTAL ── */
-#onboardPortal{position:fixed;inset:0;background:var(--off-white);z-index:9998;display:none;overflow-y:auto;}
+#onboardPortal{position:fixed;inset:0;background:var(--off-white);z-index:9998;display:none;overflow-y:auto;pointer-events:none;}
+#onboardPortal.show{pointer-events:all;}
 #onboardPortal.show{display:block;}
 .portal-wrap{max-width:620px;margin:40px auto;padding:0 20px 60px;}
 .portal-header{background:var(--white);border-radius:var(--radius);padding:28px;margin-bottom:20px;border:1px solid var(--gray-100);}
@@ -184,6 +185,8 @@ tr:hover td{background:var(--gray-50);}
 /* ── MODAL ── */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,17,32,.5);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex;}
+/* Confirm/delete modal always appears above any other open modal */
+#confirmModal{z-index:1500;}
 .modal{background:var(--white);border-radius:16px;width:520px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .2s ease;}
 .modal-wide{width:700px;}
 @keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px);}to{opacity:1;transform:scale(1) translateY(0);}}
@@ -453,14 +456,17 @@ tr:hover td{background:var(--gray-50);}
     <div class="portal-step active" id="pstep-1">
       <div class="portal-section">
         <div class="portal-section-title"><span>1</span>Your Social Platforms</div>
-        <div class="form-group"><label class="form-label">TikTok Profile URL</label><input class="form-input" id="ob-tiktok" placeholder="https://tiktok.com/@yourhandle"><div class="form-hint">e.g. https://tiktok.com/@muskan</div></div>
+        <div class="form-group"><label class="form-label">TikTok Profile URL</label><input class="form-input" id="ob-tiktok" placeholder="https://tiktok.com/@yourhandle"><div class="form-hint">e.g. https://tiktok.com/@yourhandle</div></div>
         <div class="form-group"><label class="form-label">Instagram Profile URL</label><input class="form-input" id="ob-instagram" placeholder="https://instagram.com/yourhandle"></div>
         <div class="form-group"><label class="form-label">YouTube Channel URL</label><input class="form-input" id="ob-youtube" placeholder="https://youtube.com/@yourchannel"></div>
         <div class="form-group"><label class="form-label">Other Platform <span style="color:var(--gray-400);font-weight:400">(optional)</span></label><input class="form-input" id="ob-other" placeholder="e.g. https://twitter.com/yourhandle"></div>
       </div>
-      <div class="portal-section" style="margin-top:16px">
-        <div class="portal-section-title"><span>★</span>Your Stats <span style="font-size:12px;font-weight:400;color:var(--gray-400)">(optional — helps us pitch you better)</span></div>
-        <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px">Share your approximate numbers so we can build better brand pitches. These can always be updated later.</div>
+      <div style="margin-top:16px;padding:20px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-100)">
+        <div style="font-size:13px;font-weight:700;color:var(--gray-900);margin-bottom:4px;display:flex;align-items:center;gap:8px">
+          <span style="background:var(--amber);color:white;width:20px;height:20px;border-radius:50%;font-size:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">★</span>
+          Your Stats <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(optional)</span>
+        </div>
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px;margin-top:4px">Helps us build better brand pitches. Can be updated later.</div>
         <div class="rate-grid">
           <div class="form-group"><label class="form-label">Followers (any platform)</label><input class="form-input" id="ob-followers" placeholder="e.g. 45K or 45000"></div>
           <div class="form-group"><label class="form-label">Avg. Views per video</label><input class="form-input" id="ob-avgviews" placeholder="e.g. 12K"></div>
@@ -1255,7 +1261,7 @@ tr:hover td{background:var(--gray-50);}
   <div class="modal">
     <div class="modal-header"><div class="modal-title">Add Creator</div><button class="modal-close" onclick="closeModal('addCreatorModal')">✕</button></div>
     <div class="modal-body">
-      <div class="form-row"><div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="nc-name" placeholder="e.g. Muskan"></div><div class="form-group"><label class="form-label">Email</label><input class="form-input" id="nc-email" placeholder="name@blustu.agency"></div></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="nc-name" placeholder="e.g. Alex or Kim"></div><div class="form-group"><label class="form-label">Email</label><input class="form-input" id="nc-email" placeholder="name@blustu.agency"></div></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Niche</label><select class="form-select" id="nc-niche"><option>Lifestyle</option><option>Fashion</option><option>Fitness</option><option>Food</option><option>Tech</option><option>Travel</option><option>Entertainment</option></select></div><div class="form-group"><label class="form-label">Location</label><input class="form-input" id="nc-loc" placeholder="e.g. UK"></div></div>
       <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="nc-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
     </div>
@@ -2659,12 +2665,20 @@ function copyInviteLink(){
 async function sendInvite(){
   const name=document.getElementById('invite-creator-select').value;
   const c=creators.find(x=>x.name===name);
-  if(c&&c.status!=='Onboarded'){
+  if(c && c.status!=='Onboarded' && c.status!=='Invited'){
+    // Update local state immediately so the UI reflects change right away
     c.status='Invited';
-    await DB.upsertOne('creators', c);
-    await refetch('creators');
+    Storage.set('creators', creators);
+    // Persist to Supabase (non-blocking)
+    DB.upsertOne('creators', c).then(() => {
+      // Refetch silently to confirm, but don't block UI
+      refetch('creators');
+    });
   }
   closeModal('inviteCreatorModal');
+  // Re-render immediately so Pending Invites list updates now
+  renderOnboarding();
+  renderCRM(creators);
   addActivity(`Onboarding invite sent to <strong>${name}</strong>`);
   showToast(`Invite link ready for ${name}!`);
 }
@@ -2686,9 +2700,16 @@ function checkPortalParam(){
     // Pre-fill existing niche if available
     const c = creators.find(x => x.id === id);
     if (c && c.niche) document.getElementById('ob-niche').value = c.niche;
+    // Close any open modals that could sit above the portal
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
     showPortalStep(1);
     document.getElementById('onboardPortal').classList.add('show');
     document.getElementById('authScreen').classList.add('hidden');
+    // Ensure sidebar/topbar don't capture clicks on top of portal
+    const sidebar = document.querySelector('.sidebar');
+    const topbar  = document.querySelector('.topbar');
+    if (sidebar) sidebar.style.pointerEvents = 'none';
+    if (topbar)  topbar.style.pointerEvents  = 'none';
   } catch(e) {
     console.error('Portal decode error:', e);
   }
@@ -2797,7 +2818,7 @@ async function submitOnboarding(){
         },
         body: JSON.stringify({
           onboarding: portalData,
-          status: 'Active',
+          status: 'Onboarded',
           niche: creator.niche
         })
       });
@@ -2821,6 +2842,9 @@ async function submitOnboarding(){
   }
 
   Storage.set('creators', creators);
+  // Update any open CRM / onboarding views immediately
+  if (typeof renderCRM === 'function')       renderCRM(creators);
+  if (typeof renderOnboarding === 'function') renderOnboarding();
   showPortalStep(5);
 }
 
@@ -2914,8 +2938,9 @@ function deleteCampaign(){
   const id = parseInt(document.getElementById('edit-camp-id').value);
   const c = campaigns.find(x => x.id === id);
   if (!c) return;
+  // Close the edit modal FIRST so confirm appears on a clean layer
+  closeModal('editCampaignModal');
   showConfirm('Delete Campaign?', `Delete "${c.brand} × ${c.creator}"? Linked pipeline deals will also be removed.`, async () => {
-    closeModal('editCampaignModal');
     console.log('[DB] DELETE campaigns id=', id);
     const r = await DB.delete('campaigns', id);
     console.log('[DB] DELETE campaigns result:', r);
@@ -4498,12 +4523,21 @@ async function exportKitAsPng(targetId, filename) {
 
   showToast('Generating PNG…');
   try {
+    // Force white background on the element temporarily for clean export
+    const prevBg = sourceEl.style.backgroundColor;
+    sourceEl.style.backgroundColor = '#ffffff';
     const canvas = await html2canvas(sourceEl, {
-      scale: 2,           // 2× for retina/high-res
-      useCORS: true,      // allow cross-origin images (profile pics)
-      backgroundColor: null,
+      scale: 2,             // 2× for retina/high-res
+      useCORS: true,        // allow cross-origin images (profile pics)
+      backgroundColor: '#ffffff',  // solid white — no transparency
       logging: false,
+      onclone: (doc, clone) => {
+        // Ensure cloned element also has white background
+        clone.style.backgroundColor = '#ffffff';
+        clone.style.padding = clone.style.padding || '16px';
+      }
     });
+    sourceEl.style.backgroundColor = prevBg;
     const dataUrl = canvas.toDataURL('image/png');
     const a = document.createElement('a');
     a.href = dataUrl;
@@ -4841,10 +4875,15 @@ function confirmGridSelection() {
 // so we just remove this duplicate wrapper to avoid infinite recursion.
 // (No-op: renderAll is the canonical definition in renderAll() above)
 
-// Override generateKit to pre-fill admin fields
+// Override generateKit to pre-fill admin fields and ensure modal closes
 const _origGenerateKit = generateKit;
 function generateKit() {
+  const btn = document.querySelector('#genKitModal .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
   _origGenerateKit();
+  // Ensure modal is closed (belt + suspenders)
+  closeModal('genKitModal');
+  if (btn) { btn.disabled = false; btn.textContent = 'Generate Kit'; }
   // After generating, pre-fill admin stats from overrides
   const name = document.getElementById('kit-creator-select').value;
   const c = creators.find(x => x.name === name);
