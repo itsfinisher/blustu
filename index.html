@@ -590,6 +590,16 @@ tr:hover td{background:var(--gray-50);}
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
       Deal Pipeline
     </button>
+    <div class="nav-section-label">Finance & Team</div>
+    <button class="nav-item" onclick="showPage('earnings',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Earnings
+      <span class="nav-badge" id="earningsBadge" style="background:var(--green)">0</span>
+    </button>
+    <button class="nav-item" onclick="showPage('calendar',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Calendar
+    </button>
     <div class="nav-section-label">More</div>
     <button class="nav-item" onclick="showPage('inbox',this)">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -773,6 +783,10 @@ tr:hover td{background:var(--gray-50);}
         <div class="grid-2">
           <div class="card"><div class="card-title">Creator Info</div><div id="profile-info-body" style="margin-top:12px"></div></div>
           <div class="card"><div class="card-title">Onboarding Status</div><div id="profile-onboarding-body" style="margin-top:12px"></div></div>
+        </div>
+        <div class="card" style="margin-bottom:20px" id="profile-earnings-card">
+          <div class="card-title">💰 Earnings Summary</div>
+          <div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading earnings data…</div>
         </div>
       </div>
       <div class="profile-tab-content" id="ptab-socials">
@@ -1068,6 +1082,96 @@ tr:hover td{background:var(--gray-50);}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           <div style="font-size:11px;color:var(--blue);line-height:1.6"><strong>Role system:</strong> Owner has full access. Admin can manage most things. Manager can edit creators &amp; deals. Team has read+edit on assigned data. Read Only can only view.</div>
         </div>
+      </div>
+    </div>
+
+
+    <!-- ══ EARNINGS TRACKER PAGE ══ -->
+    <div class="page" id="page-earnings">
+      <div class="page-header">
+        <div><h1>Earnings Tracker</h1><p>Creator payouts, agency cuts and outstanding balances</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="exportEarningsCSV()">⬇ Export CSV</button>
+          <button class="btn btn-primary" id="btn-add-earning" onclick="openAddEarning()">+ Add Record</button>
+        </div>
+      </div>
+
+      <!-- Summary stats -->
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px" id="earningsStats">
+        <div class="stat-card"><div class="stat-label">Total Earned</div><div class="stat-value" id="earn-stat-total">£0</div><div class="stat-change neutral">Gross creator payout</div></div>
+        <div class="stat-card"><div class="stat-label">Total Paid</div><div class="stat-value" id="earn-stat-paid" style="color:var(--green)">£0</div><div class="stat-change up">Payments made</div></div>
+        <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" id="earn-stat-outstanding" style="color:var(--red)">£0</div><div class="stat-change neutral">Awaiting payment</div></div>
+        <div class="stat-card"><div class="stat-label">Agency Revenue</div><div class="stat-value" id="earn-stat-agency" style="color:var(--blue)">£0</div><div class="stat-change neutral">Total cuts taken</div></div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card" style="margin-bottom:16px;padding:14px 20px">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <input class="form-input" id="earn-filter-creator" placeholder="Filter by creator…" oninput="renderEarnings()" style="max-width:200px">
+          <select class="form-select" id="earn-filter-status" onchange="renderEarnings()" style="max-width:160px">
+            <option value="">All statuses</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="part_paid">Part Paid</option>
+            <option value="paid">Paid</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('earn-filter-creator').value='';document.getElementById('earn-filter-status').value='';renderEarnings()">Clear</button>
+          <span style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="earn-count-label">0 records</span>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table id="earningsTable">
+            <thead>
+              <tr>
+                <th>Creator</th>
+                <th>Brand / Campaign</th>
+                <th>Deal Value</th>
+                <th>Agency Cut</th>
+                <th>Creator Payout</th>
+                <th>Paid</th>
+                <th>Outstanding</th>
+                <th>Status</th>
+                <th>Paid Date</th>
+                <th>Created</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="earningsTableBody">
+              <tr><td colspan="11" style="text-align:center;padding:32px;color:var(--gray-400)">No earnings records yet. Add your first record above.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TEAM CALENDAR PAGE ══ -->
+    <div class="page" id="page-calendar">
+      <div class="page-header">
+        <div><h1>Team Calendar</h1><p>Meetings, bookings and team events</p></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" onclick="calNav(-1)">‹ Prev</button>
+          <button class="btn btn-ghost btn-sm" onclick="calNavToday()">Today</button>
+          <button class="btn btn-ghost btn-sm" onclick="calNav(1)">Next ›</button>
+          <div style="font-size:14px;font-weight:700;min-width:140px;text-align:center" id="calMonthLabel">Loading…</div>
+          <button class="btn btn-primary" id="btn-add-event" onclick="openAddEvent()">+ Add Event</button>
+        </div>
+      </div>
+
+      <!-- Calendar grid -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <!-- Day headers -->
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--gray-100)">
+          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Mon</div>
+          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Tue</div>
+          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Wed</div>
+          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Thu</div>
+          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Fri</div>
+          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Sat</div>
+          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Sun</div>
+        </div>
+        <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr)"></div>
       </div>
     </div>
 
@@ -1560,7 +1664,7 @@ tr:hover td{background:var(--gray-50);}
     <div class="modal-body">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
         <div class="user-avatar" style="width:48px;height:48px;font-size:18px" id="profile-modal-avatar">U</div>
-        <div><div style="font-size:16px;font-weight:600" id="profile-modal-name">Ubayy</div><div style="font-size:12px;color:var(--gray-400)" id="profile-modal-email">ubayy@blustu.agency</div></div>
+        <div><div style="font-size:16px;font-weight:600" id="profile-modal-name">Ubayy</div><div style="font-size:12px;color:var(--gray-400)" id="profile-modal-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="255047445c5c654749505651500b4442404b465c">[email&#160;protected]</a></div></div>
       </div>
       <div class="form-group"><label class="form-label">Display Name</label><input class="form-input" id="profile-modal-display" placeholder="Your name"></div>
     </div>
@@ -1568,7 +1672,7 @@ tr:hover td{background:var(--gray-50);}
   </div>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 /* ═══════════════════════════════════════════════════════════════
    blustu™ Internal Panel — v3.0
    Features: RBAC, persistence, global search, campaign-deal link,
@@ -1777,11 +1881,11 @@ const ROLE_LABELS = {owner:'Owner',admin:'Admin',manager:'Manager',team:'Team',r
 
 // Role capabilities — what each role can do
 const ROLE_CAPS = {
-  owner:    {addUser:true,  deleteUser:true, editUser:true, addCreator:true, editCreator:true, deleteCreator:true, viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true},
-  admin:    {addUser:true,  deleteUser:false,editUser:true, addCreator:true, editCreator:true, deleteCreator:true, viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true},
-  manager:  {addUser:false, deleteUser:false,editUser:false,addCreator:true, editCreator:true, deleteCreator:false,viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true},
-  team:     {addUser:false, deleteUser:false,editUser:false,addCreator:false,editCreator:false,deleteCreator:false,viewNotes:false,editNotes:false,addCampaign:false,editCampaign:false,addDeal:false,editDeal:false, addPitch:false,editPitch:false,viewInbox:true, viewPipeline:true},
-  readonly: {addUser:false, deleteUser:false,editUser:false,addCreator:false,editCreator:false,deleteCreator:false,viewNotes:false,editNotes:false,addCampaign:false,editCampaign:false,addDeal:false,editDeal:false, addPitch:false,editPitch:false,viewInbox:false,viewPipeline:true},
+  owner:    {addUser:true,  deleteUser:true, editUser:true, addCreator:true, editCreator:true, deleteCreator:true, viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true},
+  admin:    {addUser:true,  deleteUser:false,editUser:true, addCreator:true, editCreator:true, deleteCreator:true, viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true},
+  manager:  {addUser:false, deleteUser:false,editUser:false,addCreator:true, editCreator:true, deleteCreator:false,viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true},
+  team:     {addUser:false, deleteUser:false,editUser:false,addCreator:false,editCreator:false,deleteCreator:false,viewNotes:false,editNotes:false,addCampaign:false,editCampaign:false,addDeal:false,editDeal:false, addPitch:false,editPitch:false,viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true},
+  readonly: {addUser:false, deleteUser:false,editUser:false,addCreator:false,editCreator:false,deleteCreator:false,viewNotes:false,editNotes:false,addCampaign:false,editCampaign:false,addDeal:false,editDeal:false, addPitch:false,editPitch:false,viewInbox:false,viewPipeline:true, manageEarnings:false, manageCalendar:false},
 };
 
 // Check if current user has a capability
@@ -1912,6 +2016,9 @@ async function syncAllFromDB() {
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
   renderAll();
+  // Load new feature data
+  loadEarnings();
+  loadCalEvents();
 }
 
 // Fetch one table and re-render affected UI
@@ -1937,6 +2044,14 @@ async function refetch(table) {
     case 'inbox_messages': inboxMessages = rows; Storage.set('inboxMessages', rows); renderInbox(); break;
     case 'contracts':
       if (currentCreatorId) renderCreatorContracts(currentCreatorId);
+      break;
+    case 'creator_earnings':
+      earnings = rows; Storage.set('earnings', rows);
+      renderEarnings(); renderEarningsProfileCard();
+      break;
+    case 'calendar_events':
+      calEvents = rows; Storage.set('calEvents', rows);
+      renderCalendar();
       break;
   }
   updateDashStats(); populateSelects();
@@ -2180,7 +2295,7 @@ const pageTitles = {
   onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit',
   campaigns:'Campaigns', pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline',
   inbox:'Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
-  creatorgrid:'Select Creators'
+  creatorgrid:'Select Creators', earnings:'Earnings Tracker', calendar:'Team Calendar'
 };
 
 function showPage(id, btn) {
@@ -2229,6 +2344,8 @@ function showPage(id, btn) {
   if (id === 'users')      { renderUsersPage(); }
   if (id === 'pipeline')   { renderPipeline(); }
   if (id === 'campaigns')  { renderCampaigns(currentCampaignFilter); }
+  if (id === 'earnings')   { populateEarningSelects(); renderEarnings(); }
+  if (id === 'calendar')   { renderCalendar(); }
 }
 
 function statusBadge(s){
@@ -2431,6 +2548,8 @@ function openCreatorProfile(id){
   switchProfileTab('overview',document.querySelector('.profile-tab'));
   showPage('creatorprofile',null);
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  // Render earnings summary card for this creator
+  setTimeout(renderEarningsProfileCard, 50);
 }
 
 function triggerProfilePicUpload() {
@@ -2608,7 +2727,7 @@ function renderOnboarding(){
   if (pendList) {
     pendList.innerHTML = invited.length ? invited.map(c => `
       <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--gray-100);border-radius:10px;margin-bottom:8px">
-        <div class="creator-avatar" style="background:${avatarColor(c.id)};width:32px;height:32px;font-size:11px">${avatarLetter(c.name)}</div>
+        ${profilePics[c.id]?`<div class="creator-avatar" style="overflow:hidden;background:${avatarColor(c.id)};width:32px;height:32px"><img src="${profilePics[c.id]}" class="avatar-img"></div>`:`<div class="creator-avatar" style="background:${avatarColor(c.id)};width:32px;height:32px;font-size:11px">${avatarLetter(c.name)}</div>`}
         <div style="flex:1"><div style="font-size:13px;font-weight:600">${c.name}</div><div style="font-size:11px;color:var(--gray-400)">${c.email}</div></div>
         <span class="badge badge-amber">Invited</span>
         <button class="btn btn-ghost btn-sm" onclick="copyInviteLinkFor(${c.id})">Copy Link</button>
@@ -2620,7 +2739,7 @@ function renderOnboarding(){
   if (doneList) {
     doneList.innerHTML = onboarded.length ? onboarded.map(c => `
       <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--green-light);border-radius:10px;margin-bottom:8px;background:var(--green-light)">
-        <div class="creator-avatar" style="background:${avatarColor(c.id)};width:32px;height:32px;font-size:11px">${avatarLetter(c.name)}</div>
+        ${profilePics[c.id]?`<div class="creator-avatar" style="overflow:hidden;background:${avatarColor(c.id)};width:32px;height:32px"><img src="${profilePics[c.id]}" class="avatar-img"></div>`:`<div class="creator-avatar" style="background:${avatarColor(c.id)};width:32px;height:32px;font-size:11px">${avatarLetter(c.name)}</div>`}
         <div style="flex:1"><div style="font-size:13px;font-weight:600">${c.name}</div><div style="font-size:11px;color:var(--green)">Onboarding complete</div></div>
         <span class="badge badge-green">✓ Done</span>
         <button class="btn btn-ghost btn-sm" onclick="openCreatorProfile(${c.id})">View</button>
@@ -4385,7 +4504,138 @@ function exportInvoicePDF() {
     </style>
     </head><body>${preview.innerHTML}
     <script>window.onload=()=>{setTimeout(()=>window.print(),600)}<\/script>
-    </body></html>`);
+    
+<!-- ══ ADD / EDIT EARNING MODAL ══ -->
+<div class="modal-overlay" id="earningModal">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <div class="modal-title" id="earningModalTitle">Add Earnings Record</div>
+      <button class="modal-close" onclick="closeModal('earningModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="earn-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Creator *</label>
+          <select class="form-select" id="earn-creator-sel" onchange="prefillEarningFromCampaign()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Link to Campaign (optional)</label>
+          <select class="form-select" id="earn-campaign-sel" onchange="prefillEarningFromCampaign()">
+            <option value="">— No campaign —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Brand Name (optional)</label>
+        <input class="form-input" id="earn-brand" placeholder="e.g. Nike UK">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Deal Value (£) *</label>
+          <input class="form-input" id="earn-deal-value" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcEarning()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Agency Cut Type</label>
+          <select class="form-select" id="earn-cut-type" onchange="recalcEarning()">
+            <option value="percent">Percent (%)</option>
+            <option value="fixed">Fixed (£)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Agency Cut Value</label>
+          <input class="form-input" id="earn-cut-value" type="number" min="0" step="0.01" placeholder="0" oninput="recalcEarning()">
+          <div class="form-hint" id="earn-cut-hint">Enter % of deal value</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Creator Payout (£) *</label>
+          <input class="form-input" id="earn-payout" type="number" min="0" step="0.01" placeholder="Auto-calculated">
+          <div class="form-hint">Auto-calculated. Override if needed.</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Payment Status</label>
+          <select class="form-select" id="earn-status" onchange="togglePaidDate()">
+            <option value="unpaid">Unpaid</option>
+            <option value="part_paid">Part Paid</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount Paid (£)</label>
+          <input class="form-input" id="earn-amount-paid" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcOutstanding()">
+        </div>
+      </div>
+      <div class="form-group" id="earn-paid-date-wrap" style="display:none">
+        <label class="form-label">Paid Date</label>
+        <input class="form-input" id="earn-paid-date" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Outstanding</label>
+        <div id="earn-outstanding-display" style="padding:9px 12px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;font-size:13px;font-weight:600;color:var(--red)">£0.00</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" id="earn-notes" placeholder="Payment details, invoice number, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('earningModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEarning()">Save Record</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD / EDIT CALENDAR EVENT MODAL ══ -->
+<div class="modal-overlay" id="calEventModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="calEventModalTitle">Add Event</div>
+      <button class="modal-close" onclick="closeModal('calEventModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cal-event-id">
+      <div class="form-group">
+        <label class="form-label">Title *</label>
+        <input class="form-input" id="cal-title" placeholder="e.g. Brand call — Nike UK">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Start Date & Time *</label>
+          <input class="form-input" id="cal-start" type="datetime-local">
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Date & Time *</label>
+          <input class="form-input" id="cal-end" type="datetime-local">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="cal-allday" onchange="toggleCalAllDay()" style="width:16px;height:16px">
+          All-day event
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Location (optional)</label>
+        <input class="form-input" id="cal-location" placeholder="e.g. Zoom / Office / London">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" id="cal-notes" placeholder="Meeting agenda, links, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="cal-delete-btn" onclick="deleteCalEvent()" style="display:none">Delete</button>
+      <button class="btn btn-ghost" onclick="closeModal('calEventModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCalEvent()">Save Event</button>
+    </div>
+  </div>
+</div>
+
+</body></html>`);
   win.document.close();
 }
 
@@ -5067,6 +5317,591 @@ function confirmGridSelection() {
 // can submit followers/eng rate directly (still self-reported).
 // collectPortalData override removed in v11 — stats fields merged into main collectPortalData()
 
+
+// ══════════════════════════════════════════════════════════════
+// ── EARNINGS TRACKER ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+let earnings = Storage.get('earnings', []);
+
+// ── Load earnings on boot ──
+async function loadEarnings() {
+  const rows = await DB.select('creator_earnings', '?order=created_at.desc');
+  if (rows && rows.length !== undefined) {
+    earnings = rows;
+    Storage.set('earnings', earnings);
+  }
+  renderEarnings();
+  updateEarningsStats();
+  updateEarningsBadge();
+}
+
+function updateEarningsBadge() {
+  const unpaid = earnings.filter(e => e.payment_status !== 'paid').length;
+  const badge = document.getElementById('earningsBadge');
+  if (badge) badge.textContent = unpaid || earnings.length;
+}
+
+function updateEarningsStats() {
+  const filtered = getFilteredEarnings();
+  const totalEarned     = filtered.reduce((s,e) => s + Number(e.creator_payout||0), 0);
+  const totalPaid       = filtered.reduce((s,e) => s + Number(e.amount_paid||0), 0);
+  const totalOutstanding = totalEarned - totalPaid;
+  const agencyCut       = filtered.reduce((s,e) => {
+    const dv = Number(e.deal_value||0);
+    const payout = Number(e.creator_payout||0);
+    return s + Math.max(0, dv - payout);
+  }, 0);
+
+  const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=fmtMoneyFull(val); };
+  set('earn-stat-total',       totalEarned);
+  set('earn-stat-paid',        totalPaid);
+  set('earn-stat-outstanding', totalOutstanding);
+  set('earn-stat-agency',      agencyCut);
+}
+
+function fmtMoneyFull(v) {
+  const n = Number(v||0);
+  return '£' + n.toLocaleString('en-GB', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function getFilteredEarnings() {
+  const creatorQ = (document.getElementById('earn-filter-creator')?.value||'').toLowerCase();
+  const statusQ  = document.getElementById('earn-filter-status')?.value||'';
+  return earnings.filter(e => {
+    const matchCreator = !creatorQ || (e.creator_name||'').toLowerCase().includes(creatorQ);
+    const matchStatus  = !statusQ  || e.payment_status === statusQ;
+    return matchCreator && matchStatus;
+  });
+}
+
+function renderEarnings() {
+  const filtered = getFilteredEarnings();
+  const canManage = can('manageEarnings');
+  // Show/hide add button based on permission
+  const addBtn = document.getElementById('btn-add-earning');
+  if (addBtn) addBtn.style.display = canManage ? '' : 'none';
+  const tbody = document.getElementById('earningsTableBody');
+  if (!tbody) return;
+
+  const label = document.getElementById('earn-count-label');
+  if (label) label.textContent = filtered.length + ' record' + (filtered.length !== 1 ? 's' : '');
+
+  // Update stats based on current filter
+  updateEarningsStats();
+  updateEarningsBadge();
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--gray-400)">No records match your filter.</td></tr>';
+    return;
+  }
+
+  const STATUS_LABELS = { unpaid:'Unpaid', part_paid:'Part Paid', paid:'Paid' };
+  const STATUS_BADGE  = { unpaid:'badge-red', part_paid:'badge-amber', paid:'badge-green' };
+
+  tbody.innerHTML = filtered.map(e => {
+    const outstanding = Math.max(0, Number(e.creator_payout||0) - Number(e.amount_paid||0));
+    const agencyCutDisplay = e.agency_cut_type === 'percent'
+      ? `${e.agency_cut_value}% (${fmtMoneyFull(Number(e.deal_value||0)*Number(e.agency_cut_value||0)/100)})`
+      : fmtMoneyFull(e.agency_cut_value);
+    const paidDate = e.paid_at ? new Date(e.paid_at).toLocaleDateString('en-GB') : '—';
+    const createdDate = e.created_at ? new Date(e.created_at).toLocaleDateString('en-GB') : '—';
+    return `<tr>
+      <td><div class="creator-cell">
+        <div class="creator-avatar" style="background:${avatarColor(e.creator_id||1)};width:28px;height:28px;font-size:11px">${(e.creator_name||'?')[0].toUpperCase()}</div>
+        <div class="creator-name">${e.creator_name||'—'}</div>
+      </div></td>
+      <td>
+        <div style="font-size:13px;font-weight:500">${e.brand_name||'—'}</div>
+        ${e.campaign_brand ? `<div style="font-size:11px;color:var(--gray-400)">${e.campaign_brand}</div>` : ''}
+      </td>
+      <td style="font-weight:600">${fmtMoneyFull(e.deal_value)}</td>
+      <td style="font-size:12px;color:var(--gray-400)">${agencyCutDisplay}</td>
+      <td style="font-weight:600;color:var(--blue)">${fmtMoneyFull(e.creator_payout)}</td>
+      <td style="color:var(--green)">${fmtMoneyFull(e.amount_paid)}</td>
+      <td style="font-weight:600;color:${outstanding > 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoneyFull(outstanding)}</td>
+      <td><span class="badge ${STATUS_BADGE[e.payment_status]||'badge-gray'}">${STATUS_LABELS[e.payment_status]||e.payment_status}</span></td>
+      <td style="font-size:12px;color:var(--gray-400)">${paidDate}</td>
+      <td style="font-size:12px;color:var(--gray-400)">${createdDate}</td>
+      <td style="text-align:right">
+        ${canManage ? `<button class="btn btn-ghost btn-sm" onclick="openEditEarning('${e.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEarning('${e.id}')">Del</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function populateEarningSelects() {
+  const creatorSel = document.getElementById('earn-creator-sel');
+  const campSel    = document.getElementById('earn-campaign-sel');
+  if (!creatorSel || !campSel) return;
+
+  creatorSel.innerHTML = creators.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  campSel.innerHTML = '<option value="">— No campaign —</option>' +
+    campaigns.map(c => `<option value="${c.id}" data-brand="${c.brand||''}" data-value="${c.value||0}">${c.brand} × ${c.creator}</option>`).join('');
+}
+
+function openAddEarning() {
+  document.getElementById('earningModalTitle').textContent = 'Add Earnings Record';
+  document.getElementById('earn-id').value = '';
+  document.getElementById('earn-brand').value = '';
+  document.getElementById('earn-deal-value').value = '';
+  document.getElementById('earn-cut-type').value = 'percent';
+  document.getElementById('earn-cut-value').value = '20';
+  document.getElementById('earn-payout').value = '';
+  document.getElementById('earn-status').value = 'unpaid';
+  document.getElementById('earn-amount-paid').value = '0';
+  document.getElementById('earn-paid-date').value = '';
+  document.getElementById('earn-notes').value = '';
+  document.getElementById('earn-paid-date-wrap').style.display = 'none';
+  document.getElementById('earn-outstanding-display').textContent = '£0.00';
+  populateEarningSelects();
+  recalcEarning();
+  openModal('earningModal');
+}
+
+function openEditEarning(id) {
+  const e = earnings.find(x => String(x.id) === String(id));
+  if (!e) return;
+  document.getElementById('earningModalTitle').textContent = 'Edit Earnings Record';
+  document.getElementById('earn-id').value = e.id;
+  populateEarningSelects();
+  document.getElementById('earn-creator-sel').value = e.creator_id;
+  document.getElementById('earn-campaign-sel').value = e.campaign_id || '';
+  document.getElementById('earn-brand').value = e.brand_name || '';
+  document.getElementById('earn-deal-value').value = e.deal_value || '';
+  document.getElementById('earn-cut-type').value = e.agency_cut_type || 'percent';
+  document.getElementById('earn-cut-value').value = e.agency_cut_value || '0';
+  document.getElementById('earn-payout').value = e.creator_payout || '';
+  document.getElementById('earn-status').value = e.payment_status || 'unpaid';
+  document.getElementById('earn-amount-paid').value = e.amount_paid || '0';
+  document.getElementById('earn-paid-date').value = e.paid_at ? e.paid_at.slice(0,10) : '';
+  document.getElementById('earn-notes').value = e.notes || '';
+  togglePaidDate();
+  recalcOutstanding();
+  openModal('earningModal');
+}
+
+function prefillEarningFromCampaign() {
+  const campSel = document.getElementById('earn-campaign-sel');
+  const selected = campSel.options[campSel.selectedIndex];
+  if (!selected || !selected.value) return;
+  const val = selected.getAttribute('data-value');
+  const brand = selected.getAttribute('data-brand');
+  if (val && Number(val) > 0) {
+    document.getElementById('earn-deal-value').value = val;
+    if (brand) document.getElementById('earn-brand').value = brand;
+    recalcEarning();
+  }
+}
+
+function recalcEarning() {
+  const dv      = Number(document.getElementById('earn-deal-value').value) || 0;
+  const cutType = document.getElementById('earn-cut-type').value;
+  const cutVal  = Number(document.getElementById('earn-cut-value').value) || 0;
+  const hint    = document.getElementById('earn-cut-hint');
+
+  let agencyAmount = 0;
+  if (cutType === 'percent') {
+    agencyAmount = dv * cutVal / 100;
+    if (hint) hint.textContent = 'Enter % of deal value';
+  } else {
+    agencyAmount = cutVal;
+    if (hint) hint.textContent = 'Enter fixed £ amount';
+  }
+  const payout = Math.max(0, dv - agencyAmount);
+  document.getElementById('earn-payout').value = payout.toFixed(2);
+  recalcOutstanding();
+}
+
+function recalcOutstanding() {
+  const payout = Number(document.getElementById('earn-payout').value) || 0;
+  const paid   = Number(document.getElementById('earn-amount-paid').value) || 0;
+  const outstanding = Math.max(0, payout - paid);
+  const el = document.getElementById('earn-outstanding-display');
+  if (el) {
+    el.textContent = fmtMoneyFull(outstanding);
+    el.style.color = outstanding > 0 ? 'var(--red)' : 'var(--green)';
+  }
+}
+
+function togglePaidDate() {
+  const status = document.getElementById('earn-status').value;
+  const wrap   = document.getElementById('earn-paid-date-wrap');
+  if (wrap) wrap.style.display = (status === 'paid' || status === 'part_paid') ? '' : 'none';
+}
+
+async function saveEarning() {
+  const id         = document.getElementById('earn-id').value;
+  const creatorId  = Number(document.getElementById('earn-creator-sel').value);
+  const campaignId = document.getElementById('earn-campaign-sel').value || null;
+  const brand      = document.getElementById('earn-brand').value.trim();
+  const dealValue  = Number(document.getElementById('earn-deal-value').value);
+  const cutType    = document.getElementById('earn-cut-type').value;
+  const cutVal     = Number(document.getElementById('earn-cut-value').value) || 0;
+  const payout     = Number(document.getElementById('earn-payout').value);
+  const status     = document.getElementById('earn-status').value;
+  const amtPaid    = Number(document.getElementById('earn-amount-paid').value) || 0;
+  const paidDate   = document.getElementById('earn-paid-date').value || null;
+  const notes      = document.getElementById('earn-notes').value.trim();
+
+  // Validation
+  if (!creatorId) { showToast('Please select a creator'); return; }
+  if (!dealValue || dealValue <= 0) { showToast('Deal value must be positive'); return; }
+  if (cutType === 'percent' && (cutVal < 0 || cutVal > 100)) { showToast('Percent must be 0–100'); return; }
+  if (cutType === 'fixed' && cutVal > dealValue) { showToast('Fixed cut cannot exceed deal value'); return; }
+  if (amtPaid > payout) { showToast('Amount paid cannot exceed creator payout'); return; }
+
+  const creator = creators.find(c => c.id === creatorId);
+  const campaign = campaignId ? campaigns.find(c => String(c.id) === String(campaignId)) : null;
+
+  const row = {
+    creator_id:       creatorId,
+    creator_name:     creator ? creator.name : '',
+    campaign_id:      campaignId ? Number(campaignId) : null,
+    campaign_brand:   campaign ? (campaign.brand + ' × ' + campaign.creator) : null,
+    brand_name:       brand || null,
+    deal_value:       dealValue,
+    currency:         'GBP',
+    agency_cut_type:  cutType,
+    agency_cut_value: cutVal,
+    creator_payout:   payout,
+    payment_status:   status,
+    amount_paid:      amtPaid,
+    paid_at:          paidDate ? new Date(paidDate).toISOString() : null,
+    notes:            notes || null,
+    created_by:       currentUser ? currentUser.id : null,
+    updated_at:       new Date().toISOString(),
+  };
+
+  let result;
+  if (id) {
+    row.id = id;
+    result = await DB._req('PATCH', 'creator_earnings', row, `?id=eq.${id}`);
+  } else {
+    row.created_at = new Date().toISOString();
+    result = await DB._req('POST', 'creator_earnings', [row], '');
+  }
+
+  if (!result) { showToast('❌ Failed to save — check console'); return; }
+
+  closeModal('earningModal');
+  await loadEarnings();
+  renderEarningsProfileCard();
+  addActivity(`Earnings record ${id ? 'updated' : 'added'}: <strong>${creator?.name}</strong> — ${fmtMoneyFull(payout)}`);
+  showToast(id ? '✅ Earnings record updated!' : '✅ Earnings record added!');
+}
+
+async function deleteEarning(id) {
+  const e = earnings.find(x => String(x.id) === String(id));
+  if (!e) return;
+  showConfirm('Delete Earnings Record?',
+    `Delete the earnings record for ${e.creator_name} (${fmtMoneyFull(e.creator_payout)})? This cannot be undone.`,
+    async () => {
+      const result = await DB._req('DELETE', 'creator_earnings', null, `?id=eq.${id}`);
+      if (result === null) { showToast('❌ Delete failed'); return; }
+      await loadEarnings();
+      renderEarningsProfileCard();
+      showToast('Earnings record deleted');
+    }
+  );
+}
+
+function exportEarningsCSV() {
+  const filtered = getFilteredEarnings();
+  if (!filtered.length) { showToast('No records to export'); return; }
+  const STATUS_LABELS = { unpaid:'Unpaid', part_paid:'Part Paid', paid:'Paid' };
+  const headers = ['Creator','Brand/Campaign','Deal Value (£)','Agency Cut Type','Agency Cut Value','Creator Payout (£)','Amount Paid (£)','Outstanding (£)','Status','Paid Date','Notes','Created'];
+  const rows = filtered.map(e => {
+    const outstanding = Math.max(0, Number(e.creator_payout||0) - Number(e.amount_paid||0));
+    return [
+      e.creator_name||'',
+      e.brand_name||e.campaign_brand||'',
+      e.deal_value||0,
+      e.agency_cut_type||'',
+      e.agency_cut_value||0,
+      e.creator_payout||0,
+      e.amount_paid||0,
+      outstanding.toFixed(2),
+      STATUS_LABELS[e.payment_status]||e.payment_status||'',
+      e.paid_at ? new Date(e.paid_at).toLocaleDateString('en-GB') : '',
+      (e.notes||'').replace(/,/g,' '),
+      e.created_at ? new Date(e.created_at).toLocaleDateString('en-GB') : ''
+    ];
+  });
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'blustu-earnings-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showToast('CSV exported!');
+}
+
+// Creator profile earnings summary card
+function renderEarningsProfileCard() {
+  const el = document.getElementById('profile-earnings-card');
+  if (!el || !currentCreatorId) return;
+  const myEarnings = earnings.filter(e => Number(e.creator_id) === Number(currentCreatorId));
+  const totalEarned = myEarnings.reduce((s,e) => s + Number(e.creator_payout||0), 0);
+  const totalPaid   = myEarnings.reduce((s,e) => s + Number(e.amount_paid||0),    0);
+  const outstanding = totalEarned - totalPaid;
+  const lastPaid    = myEarnings.filter(e=>e.paid_at).sort((a,b)=>new Date(b.paid_at)-new Date(a.paid_at))[0];
+  const lastPaidStr = lastPaid ? new Date(lastPaid.paid_at).toLocaleDateString('en-GB') : 'Never';
+
+  el.innerHTML = `
+    <div class="card-title" style="margin-bottom:12px">💰 Earnings Summary
+      <button class="btn btn-ghost btn-sm" style="float:right" onclick="openEarningsForCreator(${currentCreatorId})">View all →</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--blue)">${fmtMoneyFull(totalEarned)}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">Total Earned</div>
+      </div>
+      <div style="background:var(--green-light);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--green)">${fmtMoneyFull(totalPaid)}</div>
+        <div style="font-size:11px;color:var(--green);margin-top:2px">Total Paid</div>
+      </div>
+      <div style="background:${outstanding > 0 ? 'var(--red-light)' : 'var(--green-light)'};border-radius:10px;padding:12px;text-align:center">
+        <div style="font-family:'DM Serif Display',serif;font-size:20px;color:${outstanding > 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoneyFull(outstanding)}</div>
+        <div style="font-size:11px;color:${outstanding > 0 ? 'var(--red)' : 'var(--green)'};margin-top:2px">Outstanding</div>
+      </div>
+      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:13px;font-weight:600;color:var(--gray-700)">${lastPaidStr}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">Last Paid</div>
+      </div>
+    </div>`;
+}
+
+function openEarningsForCreator(id) {
+  const c = creators.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('earn-filter-creator').value = c.name;
+  document.getElementById('earn-filter-status').value = '';
+  showPage('earnings', document.querySelector('[onclick*=earnings]'));
+  renderEarnings();
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── TEAM CALENDAR ────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+let calEvents = Storage.get('calEvents', []);
+let calYear   = new Date().getFullYear();
+let calMonth  = new Date().getMonth(); // 0-indexed
+
+const CAL_COLORS = ['#2198ED','#10B981','#F59E0B','#8B5CF6','#EC4899','#EF4444','#06B6D4','#84CC16'];
+
+async function loadCalEvents() {
+  const rows = await DB.select('calendar_events', '?order=start_at.asc');
+  if (rows && rows.length !== undefined) {
+    calEvents = rows;
+    Storage.set('calEvents', calEvents);
+  }
+  renderCalendar();
+}
+
+function calNav(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0;  calYear++; }
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function calNavToday() {
+  const now = new Date();
+  calYear  = now.getFullYear();
+  calMonth = now.getMonth();
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const addEventBtn = document.getElementById('btn-add-event');
+  if (addEventBtn) addEventBtn.style.display = can('manageCalendar') ? '' : 'none';
+  const label = document.getElementById('calMonthLabel');
+  if (!label) return;
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  label.textContent = monthNames[calMonth] + ' ' + calYear;
+
+  const grid = document.getElementById('calGrid');
+  if (!grid) return;
+
+  const firstDay  = new Date(calYear, calMonth, 1);
+  const lastDay   = new Date(calYear, calMonth + 1, 0);
+  const today     = new Date();
+  today.setHours(0,0,0,0);
+
+  // Monday-first: 0=Mon ... 6=Sun
+  let startOffset = firstDay.getDay() - 1;
+  if (startOffset < 0) startOffset = 6;
+
+  const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7;
+  const canManage  = can('manageCalendar');
+
+  let cells = '';
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum   = i - startOffset + 1;
+    const isValid  = dayNum >= 1 && dayNum <= lastDay.getDate();
+    const cellDate = isValid ? new Date(calYear, calMonth, dayNum) : null;
+    const isToday  = cellDate && cellDate.getTime() === today.getTime();
+    const isOtherMonth = !isValid;
+
+    let eventsHtml = '';
+    if (isValid && cellDate) {
+      const dayEvents = calEvents.filter(ev => {
+        const s = new Date(ev.start_at);
+        return s.getFullYear() === calYear && s.getMonth() === calMonth && s.getDate() === dayNum;
+      }).slice(0, 3);
+      eventsHtml = dayEvents.map((ev, idx) => {
+        const color = CAL_COLORS[idx % CAL_COLORS.length];
+        const timeStr = ev.all_day ? 'All day' : new Date(ev.start_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+        return `<div onclick="event.stopPropagation();openViewEvent('${ev.id}')" style="background:${color};color:white;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:600;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${ev.title}">${timeStr} ${ev.title}</div>`;
+      }).join('');
+      const extra = calEvents.filter(ev => {
+        const s = new Date(ev.start_at);
+        return s.getFullYear() === calYear && s.getMonth() === calMonth && s.getDate() === dayNum;
+      }).length - 3;
+      if (extra > 0) eventsHtml += `<div style="font-size:10px;color:var(--gray-400);padding:1px 4px">+${extra} more</div>`;
+    }
+
+    const clickHandler = isValid && canManage ? `onclick="openAddEventOnDate(${calYear},${calMonth},${dayNum})"` : '';
+
+    cells += `<div ${clickHandler} style="min-height:90px;border-right:1px solid var(--gray-100);border-bottom:1px solid var(--gray-100);padding:6px 8px;background:${isOtherMonth?'var(--gray-50)':isToday?'#EBF5FD':'white'};${canManage&&isValid?'cursor:pointer;':''}" ${canManage&&isValid?`onmouseenter="this.style.background='var(--blue-light)'" onmouseleave="this.style.background='${isToday?'#EBF5FD':'white'}'"`:''}>
+      <div style="font-size:12px;font-weight:${isToday?'800':'500'};color:${isToday?'var(--blue)':isOtherMonth?'var(--gray-200)':'var(--gray-600)'};margin-bottom:4px">${isValid?dayNum:''}</div>
+      ${eventsHtml}
+    </div>`;
+  }
+  grid.innerHTML = cells;
+}
+
+function openAddEvent() {
+  document.getElementById('calEventModalTitle').textContent = 'Add Event';
+  document.getElementById('cal-event-id').value = '';
+  document.getElementById('cal-title').value = '';
+  document.getElementById('cal-allday').checked = false;
+  document.getElementById('cal-location').value = '';
+  document.getElementById('cal-notes').value = '';
+  document.getElementById('cal-delete-btn').style.display = 'none';
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const dtStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
+  document.getElementById('cal-start').value = dtStr;
+  const endDt = new Date(now.getTime() + 60*60*1000);
+  document.getElementById('cal-end').value = `${endDt.getFullYear()}-${pad(endDt.getMonth()+1)}-${pad(endDt.getDate())}T${pad(endDt.getHours())}:00`;
+  openModal('calEventModal');
+}
+
+function openAddEventOnDate(yr, mo, day) {
+  openAddEvent();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('cal-start').value = `${yr}-${pad(mo+1)}-${pad(day)}T09:00`;
+  document.getElementById('cal-end').value   = `${yr}-${pad(mo+1)}-${pad(day)}T10:00`;
+}
+
+function openViewEvent(id) {
+  const ev = calEvents.find(e => String(e.id) === String(id));
+  if (!ev) return;
+  const canManage = can('manageCalendar');
+  document.getElementById('calEventModalTitle').textContent = 'View / Edit Event';
+  document.getElementById('cal-event-id').value = ev.id;
+  document.getElementById('cal-title').value    = ev.title;
+  const toLocal = dt => {
+    const d = new Date(dt);
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  document.getElementById('cal-start').value    = toLocal(ev.start_at);
+  document.getElementById('cal-end').value      = toLocal(ev.end_at);
+  document.getElementById('cal-allday').checked = ev.all_day || false;
+  document.getElementById('cal-location').value = ev.location || '';
+  document.getElementById('cal-notes').value    = ev.description || '';
+  document.getElementById('cal-delete-btn').style.display = canManage ? '' : 'none';
+
+  // Make fields readonly for read-only users
+  ['cal-title','cal-start','cal-end','cal-location','cal-notes'].forEach(fid => {
+    const el = document.getElementById(fid);
+    if (el) el.readOnly = !canManage;
+  });
+  document.getElementById('cal-allday').disabled = !canManage;
+  openModal('calEventModal');
+}
+
+function toggleCalAllDay() {
+  const allDay = document.getElementById('cal-allday').checked;
+  ['cal-start','cal-end'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (allDay) {
+      el.type = 'date';
+      if (el.value.includes('T')) el.value = el.value.split('T')[0];
+    } else {
+      el.type = 'datetime-local';
+    }
+  });
+}
+
+async function saveCalEvent() {
+  if (!can('manageCalendar')) { showToast('You do not have permission to manage events'); return; }
+  const id       = document.getElementById('cal-event-id').value;
+  const title    = document.getElementById('cal-title').value.trim();
+  const allDay   = document.getElementById('cal-allday').checked;
+  const startRaw = document.getElementById('cal-start').value;
+  const endRaw   = document.getElementById('cal-end').value;
+  const location = document.getElementById('cal-location').value.trim();
+  const notes    = document.getElementById('cal-notes').value.trim();
+
+  if (!title)    { showToast('Title is required'); return; }
+  if (!startRaw) { showToast('Start date/time is required'); return; }
+  if (!endRaw)   { showToast('End date/time is required'); return; }
+
+  const startAt = new Date(allDay ? startRaw + 'T00:00:00' : startRaw).toISOString();
+  const endAt   = new Date(allDay ? endRaw   + 'T23:59:59' : endRaw).toISOString();
+
+  if (new Date(startAt) >= new Date(endAt)) { showToast('End must be after start'); return; }
+
+  const row = {
+    title,
+    description: notes || null,
+    location:    location || null,
+    start_at:    startAt,
+    end_at:      endAt,
+    all_day:     allDay,
+    updated_at:  new Date().toISOString(),
+    created_by:  currentUser ? currentUser.id : null,
+  };
+
+  let result;
+  if (id) {
+    row.id = id;
+    result = await DB._req('PATCH', 'calendar_events', row, `?id=eq.${id}`);
+  } else {
+    row.created_at = new Date().toISOString();
+    result = await DB._req('POST', 'calendar_events', [row], '');
+  }
+
+  if (!result) { showToast('❌ Failed to save event — check console'); return; }
+
+  closeModal('calEventModal');
+  await loadCalEvents();
+  addActivity(`Calendar event ${id ? 'updated' : 'added'}: <strong>${title}</strong>`);
+  showToast(id ? '✅ Event updated!' : '✅ Event added!');
+}
+
+async function deleteCalEvent() {
+  if (!can('manageCalendar')) { showToast('You do not have permission'); return; }
+  const id = document.getElementById('cal-event-id').value;
+  if (!id) return;
+  const ev = calEvents.find(e => String(e.id) === String(id));
+  showConfirm('Delete Event?', `Delete "${ev?.title || 'this event'}"? This cannot be undone.`, async () => {
+    const result = await DB._req('DELETE', 'calendar_events', null, `?id=eq.${id}`);
+    if (result === null) { showToast('❌ Delete failed'); return; }
+    closeModal('calEventModal');
+    await loadCalEvents();
+    showToast('Event deleted');
+  });
+}
+
 </script>
 
 <!-- Admin Rates Modal -->
@@ -5092,12 +5927,4 @@ function confirmGridSelection() {
       <button class="modal-close" onclick="closeModal('adminStatsModal')">✕</button>
     </div>
     <div class="modal-body" id="adminStatsBody"></div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('adminStatsModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveAdminStats()">💾 Save Stats</button>
-    </div>
-  </div>
-</div>
-
-</body>
-</html>
+    <div class="modal-foote
