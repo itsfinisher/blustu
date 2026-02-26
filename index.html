@@ -1691,9 +1691,38 @@ const DB = {
     return this._req('DELETE', table, null, `?${field}=eq.${numVal}`);
   },
 
-  // Upsert a key-value pair in app_data
+  // Upsert a key-value pair in app_data.
+  // ROOT CAUSE FIX: _req base headers only send 'Prefer: return=representation'.
+  // Without 'resolution=merge-duplicates', Supabase rejects the POST on conflict
+  // (key already exists after the first save) with a 409 — every subsequent save
+  // fails. localStorage still updates so the UI looks fine, but Supabase never
+  // stores the new value. After logout, syncAllFromDB fetches the stale/missing
+  // Supabase row and overwrites localStorage — stats vanish.
+  // Fix: use the correct Prefer header, identical to upsertOne / upsertMany.
   async setAppData(key, value) {
-    return this._req('POST', 'app_data', [{key, value: JSON.stringify(value)}], '?on_conflict=key');
+    const url = `${SUPABASE_URL}/rest/v1/app_data?on_conflict=key`;
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation,resolution=merge-duplicates',
+        },
+        body: JSON.stringify([{key, value: JSON.stringify(value)}])
+      });
+      const text = await r.text();
+      if (!r.ok) {
+        console.error(`[DB] setAppData "${key}" failed (${r.status}):`, text);
+        showToast(`⚠️ Failed to save "${key}" to server — check console`);
+        return null;
+      }
+      return text ? JSON.parse(text) : [];
+    } catch(e) {
+      console.error(`[DB] setAppData "${key}" network error:`, e);
+      return null;
+    }
   },
 
   async getAppData(key) {
