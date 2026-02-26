@@ -785,8 +785,8 @@ tr:hover td{background:var(--gray-50);}
           <div class="card"><div class="card-title">Onboarding Status</div><div id="profile-onboarding-body" style="margin-top:12px"></div></div>
         </div>
         <div class="card" style="margin-bottom:20px" id="profile-earnings-card">
-          <div class="card-title">💰 Earnings Summary</div>
-          <div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading earnings data…</div>
+          <div class="card-title">Earnings Summary</div>
+          <div style="font-size:13px;color:var(--gray-400);padding:8px 0">No earnings data yet.</div>
         </div>
       </div>
       <div class="profile-tab-content" id="ptab-socials">
@@ -1095,16 +1095,12 @@ tr:hover td{background:var(--gray-50);}
           <button class="btn btn-primary" id="btn-add-earning" onclick="openAddEarning()">+ Add Record</button>
         </div>
       </div>
-
-      <!-- Summary stats -->
-      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px" id="earningsStats">
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
         <div class="stat-card"><div class="stat-label">Total Earned</div><div class="stat-value" id="earn-stat-total">£0</div><div class="stat-change neutral">Gross creator payout</div></div>
         <div class="stat-card"><div class="stat-label">Total Paid</div><div class="stat-value" id="earn-stat-paid" style="color:var(--green)">£0</div><div class="stat-change up">Payments made</div></div>
         <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" id="earn-stat-outstanding" style="color:var(--red)">£0</div><div class="stat-change neutral">Awaiting payment</div></div>
         <div class="stat-card"><div class="stat-label">Agency Revenue</div><div class="stat-value" id="earn-stat-agency" style="color:var(--blue)">£0</div><div class="stat-change neutral">Total cuts taken</div></div>
       </div>
-
-      <!-- Filters -->
       <div class="card" style="margin-bottom:16px;padding:14px 20px">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <input class="form-input" id="earn-filter-creator" placeholder="Filter by creator…" oninput="renderEarnings()" style="max-width:200px">
@@ -1118,8 +1114,6 @@ tr:hover td{background:var(--gray-50);}
           <span style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="earn-count-label">0 records</span>
         </div>
       </div>
-
-      <!-- Table -->
       <div class="card" style="padding:0">
         <div class="table-wrap">
           <table id="earningsTable">
@@ -1158,10 +1152,7 @@ tr:hover td{background:var(--gray-50);}
           <button class="btn btn-primary" id="btn-add-event" onclick="openAddEvent()">+ Add Event</button>
         </div>
       </div>
-
-      <!-- Calendar grid -->
       <div class="card" style="padding:0;overflow:hidden">
-        <!-- Day headers -->
         <div style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--gray-100)">
           <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Mon</div>
           <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Tue</div>
@@ -1664,7 +1655,7 @@ tr:hover td{background:var(--gray-50);}
     <div class="modal-body">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
         <div class="user-avatar" style="width:48px;height:48px;font-size:18px" id="profile-modal-avatar">U</div>
-        <div><div style="font-size:16px;font-weight:600" id="profile-modal-name">Ubayy</div><div style="font-size:12px;color:var(--gray-400)" id="profile-modal-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="255047445c5c654749505651500b4442404b465c">[email&#160;protected]</a></div></div>
+        <div><div style="font-size:16px;font-weight:600" id="profile-modal-name">Ubayy</div><div style="font-size:12px;color:var(--gray-400)" id="profile-modal-email">ubayy@blustu.agency</div></div>
       </div>
       <div class="form-group"><label class="form-label">Display Name</label><input class="form-input" id="profile-modal-display" placeholder="Your name"></div>
     </div>
@@ -1672,7 +1663,7 @@ tr:hover td{background:var(--gray-50);}
   </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 /* ═══════════════════════════════════════════════════════════════
    blustu™ Internal Panel — v3.0
    Features: RBAC, persistence, global search, campaign-deal link,
@@ -2016,7 +2007,6 @@ async function syncAllFromDB() {
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
   renderAll();
-  // Load new feature data
   loadEarnings();
   loadCalEvents();
 }
@@ -2548,7 +2538,6 @@ function openCreatorProfile(id){
   switchProfileTab('overview',document.querySelector('.profile-tab'));
   showPage('creatorprofile',null);
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  // Render earnings summary card for this creator
   setTimeout(renderEarningsProfileCard, 50);
 }
 
@@ -4505,7 +4494,6 @@ function exportInvoicePDF() {
     </head><body>${preview.innerHTML}
     <script>window.onload=()=>{setTimeout(()=>window.print(),600)}<\/script>
     
-<!-- ══ ADD / EDIT EARNING MODAL ══ -->
 <div class="modal-overlay" id="earningModal">
   <div class="modal modal-wide">
     <div class="modal-header">
@@ -4590,6 +4578,7 @@ function exportInvoicePDF() {
 </div>
 
 <!-- ══ ADD / EDIT CALENDAR EVENT MODAL ══ -->
+
 <div class="modal-overlay" id="calEventModal">
   <div class="modal">
     <div class="modal-header">
@@ -4633,8 +4622,7 @@ function exportInvoicePDF() {
       <button class="btn btn-primary" onclick="saveCalEvent()">Save Event</button>
     </div>
   </div>
-</div>
-
+</div
 </body></html>`);
   win.document.close();
 }
@@ -5318,13 +5306,6 @@ function confirmGridSelection() {
 // collectPortalData override removed in v11 — stats fields merged into main collectPortalData()
 
 
-// ══════════════════════════════════════════════════════════════
-// ── EARNINGS TRACKER ─────────────────────────────────────────
-// ══════════════════════════════════════════════════════════════
-
-let earnings = Storage.get('earnings', []);
-
-// ── Load earnings on boot ──
 async function loadEarnings() {
   const rows = await DB.select('creator_earnings', '?order=created_at.desc');
   if (rows && rows.length !== undefined) {
@@ -5902,6 +5883,7 @@ async function deleteCalEvent() {
   });
 }
 
+
 </script>
 
 <!-- Admin Rates Modal -->
@@ -5927,4 +5909,12 @@ async function deleteCalEvent() {
       <button class="modal-close" onclick="closeModal('adminStatsModal')">✕</button>
     </div>
     <div class="modal-body" id="adminStatsBody"></div>
-    <div class="modal-foote
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('adminStatsModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAdminStats()">💾 Save Stats</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
