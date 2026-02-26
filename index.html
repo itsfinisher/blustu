@@ -1350,7 +1350,14 @@ tr:hover td{background:var(--gray-50);}
     <div class="modal-header"><div class="modal-title">Edit Campaign</div><button class="modal-close" onclick="closeModal('editCampaignModal')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="edit-camp-id">
-      <div class="form-row"><div class="form-group"><label class="form-label">Brand</label><input class="form-input" id="edit-camp-brand"></div><div class="form-group"><label class="form-label">Creator</label><select class="form-select" id="edit-camp-creator"></select></div></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Brand</label><input class="form-input" id="edit-camp-brand"></div><div class="form-group"><label class="form-label">Creator(s)</label>
+        <!-- Hidden field holds the authoritative creator string (single or multi) -->
+        <input type="hidden" id="edit-camp-creator-original">
+        <!-- Shown for multi-creator campaigns: read-only, preserves all names -->
+        <div id="edit-camp-creator-multi" style="display:none;padding:8px 12px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:8px;font-size:13px;color:var(--gray-700);line-height:1.5"></div>
+        <!-- Dropdown for single-creator campaigns or reassignment -->
+        <select class="form-select" id="edit-camp-creator"></select>
+      </div></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Deal Value (£)</label><input class="form-input" id="edit-camp-value" type="number"></div><div class="form-group"><label class="form-label">Deadline</label><input class="form-input" id="edit-camp-deadline" type="date"></div></div>
       <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="edit-camp-status"><option>Negotiating</option><option>Live</option><option>Completed</option><option>Paused</option><option>Cancelled</option></select></div>
       <div class="form-group"><label class="form-label">Deliverables</label><input class="form-input" id="edit-camp-deliverables"></div>
@@ -3061,13 +3068,38 @@ function openEditCampaign(id){
   if(!c)return;
   document.getElementById('edit-camp-id').value=id;
   document.getElementById('edit-camp-brand').value=c.brand;
-  document.getElementById('edit-camp-creator').value=c.creator;
   document.getElementById('edit-camp-value').value=c.value;
   document.getElementById('edit-camp-deadline').value=c.deadline;
   document.getElementById('edit-camp-status').value=c.status;
   document.getElementById('edit-camp-deliverables').value=c.deliverables||'';
   document.getElementById('edit-camp-progress').value=c.progress||0;
   document.getElementById('edit-camp-notes').value=c.notes||'';
+
+  // BUG FIX: preserve creator string exactly as stored.
+  // Multi-creator campaigns store "Creator1, Creator2, Creator3" — a plain
+  // <select> cannot represent this and silently falls back to option[0],
+  // causing updateCampaign to overwrite the full list with a single wrong name.
+  const creatorStr = c.creator || '';
+  const isMulti = creatorStr.includes(',');
+  document.getElementById('edit-camp-creator-original').value = creatorStr;
+
+  const multiDisplay = document.getElementById('edit-camp-creator-multi');
+  const singleSelect = document.getElementById('edit-camp-creator');
+
+  if (isMulti) {
+    // Show read-only chip list for multi-creator campaigns
+    multiDisplay.style.display = 'block';
+    multiDisplay.innerHTML = creatorStr.split(',').map(n =>
+      `<span style="display:inline-block;background:var(--blue-light);color:var(--blue);border:1px solid rgba(33,152,237,.2);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;margin:2px">${n.trim()}</span>`
+    ).join('');
+    singleSelect.style.display = 'none';
+  } else {
+    // Single creator — use dropdown normally
+    multiDisplay.style.display = 'none';
+    singleSelect.style.display = '';
+    singleSelect.value = creatorStr;
+  }
+
   openModal('editCampaignModal');
 }
 
@@ -3076,7 +3108,13 @@ async function updateCampaign(){
   const c=campaigns.find(x=>x.id===id);
   if(!c)return;
   c.brand=document.getElementById('edit-camp-brand').value.trim();
-  c.creator=document.getElementById('edit-camp-creator').value;
+  // BUG FIX: read creator from hidden field (authoritative, preserves multi-creator string).
+  // If the campaign is single-creator, the dropdown may have been changed by the user —
+  // in that case use the dropdown value. Detect by checking which input is visible.
+  const singleSelectEl = document.getElementById('edit-camp-creator');
+  const originalCreator = document.getElementById('edit-camp-creator-original').value;
+  const isMultiCreator   = originalCreator.includes(',');
+  c.creator = isMultiCreator ? originalCreator : (singleSelectEl.value || originalCreator);
   c.value=document.getElementById('edit-camp-value').value;
   c.deadline=document.getElementById('edit-camp-deadline').value;
   c.status=document.getElementById('edit-camp-status').value;
