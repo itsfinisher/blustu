@@ -1871,7 +1871,7 @@ async function syncAllFromDB() {
     ]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
-    if (ao) { adminOverrides = ao; Storage.set('adminOverrides', adminOverrides); }
+    if (ao) { adminOverrides = ao; Storage.set('adminOverrides', ao); } // BUG2 FIX: store fetched value 'ao', not stale local var
 
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
@@ -1942,9 +1942,12 @@ let portalData = {};
 // Admin override data — keyed by creator id (integer)
 // Shape per creator: { rates, usage, engagementRate, followers, avgViews, audience, niche, updatedBy, updatedAt }
 let adminOverrides = Storage.get('adminOverrides', {});
-function saveAdminOverrides() {
+async function saveAdminOverrides() {
   Storage.set('adminOverrides', adminOverrides);
-  DB.setAppData('adminOverrides', adminOverrides);
+  // BUG2 FIX: await the Supabase write. Previously fire-and-forget meant
+  // data was lost if the user logged out before the request completed.
+  const ok = await DB.setAppData('adminOverrides', adminOverrides);
+  if (!ok) console.warn('[adminOverrides] Supabase write failed — check RLS and app_data table');
 }
 
 // ── resolveCreator: merges admin overrides on top of self-reported for a creator ──
@@ -2893,6 +2896,19 @@ function renderCampaigns(filter){
   sub.textContent=`${campaigns.length} campaigns total`;
   document.getElementById('campaignsBadge').textContent=campaigns.filter(c=>c.status==='Live').length||campaigns.length;
 
+  // BUG1 FIX: update dashboard widget BEFORE any early return so
+  // deleted/filtered campaigns are always cleared from the dashboard.
+  const dashC=document.getElementById('dashCampaigns');
+  if(dashC){
+    const live=campaigns.filter(c=>c.status==='Live'||c.status==='Negotiating');
+    dashC.innerHTML=live.length?live.map(c=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--gray-100)">
+        <div><div style="font-size:13px;font-weight:600">${c.brand} × ${c.creator}</div><div style="font-size:11px;color:var(--gray-400)">${c.deliverables||'—'} · ${c.deadline||'TBD'}</div></div>
+        <div style="display:flex;align-items:center;gap:8px">${statusBadge(c.status)}<span style="font-size:13px;font-weight:600;color:var(--blue)">${fmtMoney(c.value)}</span></div>
+      </div>`).join(''):
+      `<div class="empty-state" style="padding:24px"><h3>No active campaigns</h3><p>Create a campaign to start tracking</p></div>`;
+  }
+
   if(!filtered.length){
     list.innerHTML=`<div class="empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><h3>${campaigns.length?'No campaigns in this category':'No campaigns yet'}</h3><p>${campaigns.length?'Try a different filter':'Create your first campaign to start tracking brand deals'}</p>${!campaigns.length?'<button class="btn btn-primary" style="margin-top:16px" onclick="openModal(\'addCampaignModal\')">+ New Campaign</button>':''}</div>`;
     return;
@@ -2914,15 +2930,6 @@ function renderCampaigns(filter){
       ${c.notes?`<div style="font-size:11px;color:var(--gray-400);margin-top:6px">${c.notes}</div>`:''}
     </div>`).join('');
 
-  // Also update dashboard
-  const dashC=document.getElementById('dashCampaigns');
-  const live=campaigns.filter(c=>c.status==='Live'||c.status==='Negotiating');
-  dashC.innerHTML=live.length?live.map(c=>`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--gray-100)">
-      <div><div style="font-size:13px;font-weight:600">${c.brand} × ${c.creator}</div><div style="font-size:11px;color:var(--gray-400)">${c.deliverables||'—'} · ${c.deadline||'TBD'}</div></div>
-      <div style="display:flex;align-items:center;gap:8px">${statusBadge(c.status)}<span style="font-size:13px;font-weight:600;color:var(--blue)">${fmtMoney(c.value)}</span></div>
-    </div>`).join(''):
-    `<div class="empty-state" style="padding:24px"><h3>No active campaigns</h3><p>Create a campaign to start tracking</p></div>`;
 }
 
 // ── Multi-creator grid integration for campaign modal ─────────
@@ -4505,7 +4512,7 @@ async function saveAdminRates() {
   adminOverrides[id].updatedBy = currentUser ? currentUser.name : 'admin';
   adminOverrides[id].updatedAt = new Date().toISOString();
 
-  saveAdminOverrides();
+  await saveAdminOverrides();
   closeModal('adminRatesModal');
   showToast('✅ Admin rates saved!');
   // Re-render socials tab
@@ -4582,7 +4589,7 @@ async function saveAdminStats() {
   ao.updatedBy = currentUser ? currentUser.name : 'admin';
   ao.updatedAt = new Date().toISOString();
 
-  saveAdminOverrides();
+  await saveAdminOverrides();
   closeModal('adminStatsModal');
   showToast('✅ Admin stats saved!');
   const c = creators.find(x => x.id === id);
