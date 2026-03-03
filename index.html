@@ -1697,7 +1697,14 @@ const DB = {
       const text = await r.text();
       if (!r.ok) {
         console.error(`DB ${method} ${table} failed (${r.status}):`, text);
-        showToast(`⚠️ Save failed: ${r.status}. Check console.`);
+        if (r.status === 401 || r.status === 403) {
+          showToast('🔒 Permission denied — run the SQL migration to set up RLS policies');
+        } else if (r.status === 404) {
+          showToast(`❌ Table "${table}" not found — run the SQL migration first`);
+        } else {
+          const detail = (() => { try { return JSON.parse(text).message || text; } catch(e) { return text; } })();
+          showToast(`❌ Save failed (${r.status}): ${detail.slice(0,120)}`);
+        }
         return null;
       }
       return text ? JSON.parse(text) : [];
@@ -3273,6 +3280,10 @@ async function updateCampaign(){
   updateDashStats();
   addActivity(`Campaign updated: <strong>${c.brand} × ${c.creator}</strong> → ${c.status}`);
   showToast('Campaign updated!');
+  // Auto-draft earnings when marked Completed
+  if (c.status === 'Completed') {
+    await autoDraftEarnings(c);
+  }
 }
 
 function filterCampaigns(filter,btn){
@@ -4482,148 +4493,49 @@ function exportInvoicePDF() {
   if (!preview) { showToast('No invoice to export'); return; }
   const win = window.open('', '_blank', 'width=800,height=1100');
   if (!win) { showToast('Allow popups to export PDF'); return; }
+
+  // Clone only the preview container contents
+  const clone = preview.cloneNode(true);
+  // Remove any action buttons that may be inside the preview
+  clone.querySelectorAll('button, .no-print').forEach(el => el.remove());
+  const html = clone.innerHTML;
+
   win.document.write(`<!DOCTYPE html><html><head>
     <meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
     <style>
       *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:'DM Sans',sans-serif;padding:48px;max-width:680px;margin:0 auto;font-size:13px;color:#0f1120;line-height:1.6}
+      body{
+        font-family:'DM Sans',sans-serif;
+        background:white;
+        color:#0f1120;
+        font-size:13px;
+        line-height:1.6;
+      }
+      .inv-wrap{
+        max-width:680px;
+        margin:0 auto;
+        padding:48px;
+        background:white;
+      }
       table{width:100%;border-collapse:collapse}
-      @media print{body{padding:28px}button{display:none!important}}
+      td,th{padding:8px 12px;font-size:12px}
+      th{background:#f8f9ff;font-weight:600;text-align:left;border-bottom:2px solid #e8eaf0}
+      tr:nth-child(even) td{background:#fafbff}
+      .inv-total-row td{font-weight:700;font-size:14px;border-top:2px solid #0f1120;padding-top:12px}
+      hr{border:none;border-top:1px solid #e8eaf0;margin:20px 0}
+      @media print{
+        body{padding:0}
+        .inv-wrap{padding:28px}
+        @page{margin:20mm}
+      }
     </style>
-    </head><body>${preview.innerHTML}
-    <script>window.onload=()=>{setTimeout(()=>window.print(),600)}<\/script>
-    
-<div class="modal-overlay" id="earningModal">
-  <div class="modal modal-wide">
-    <div class="modal-header">
-      <div class="modal-title" id="earningModalTitle">Add Earnings Record</div>
-      <button class="modal-close" onclick="closeModal('earningModal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="earn-id">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Creator *</label>
-          <select class="form-select" id="earn-creator-sel" onchange="prefillEarningFromCampaign()"></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Link to Campaign (optional)</label>
-          <select class="form-select" id="earn-campaign-sel" onchange="prefillEarningFromCampaign()">
-            <option value="">— No campaign —</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Brand Name (optional)</label>
-        <input class="form-input" id="earn-brand" placeholder="e.g. Nike UK">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Deal Value (£) *</label>
-          <input class="form-input" id="earn-deal-value" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcEarning()">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Agency Cut Type</label>
-          <select class="form-select" id="earn-cut-type" onchange="recalcEarning()">
-            <option value="percent">Percent (%)</option>
-            <option value="fixed">Fixed (£)</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Agency Cut Value</label>
-          <input class="form-input" id="earn-cut-value" type="number" min="0" step="0.01" placeholder="0" oninput="recalcEarning()">
-          <div class="form-hint" id="earn-cut-hint">Enter % of deal value</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Creator Payout (£) *</label>
-          <input class="form-input" id="earn-payout" type="number" min="0" step="0.01" placeholder="Auto-calculated">
-          <div class="form-hint">Auto-calculated. Override if needed.</div>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Payment Status</label>
-          <select class="form-select" id="earn-status" onchange="togglePaidDate()">
-            <option value="unpaid">Unpaid</option>
-            <option value="part_paid">Part Paid</option>
-            <option value="paid">Paid</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Amount Paid (£)</label>
-          <input class="form-input" id="earn-amount-paid" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcOutstanding()">
-        </div>
-      </div>
-      <div class="form-group" id="earn-paid-date-wrap" style="display:none">
-        <label class="form-label">Paid Date</label>
-        <input class="form-input" id="earn-paid-date" type="date">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Outstanding</label>
-        <div id="earn-outstanding-display" style="padding:9px 12px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;font-size:13px;font-weight:600;color:var(--red)">£0.00</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Notes (optional)</label>
-        <textarea class="form-textarea" id="earn-notes" placeholder="Payment details, invoice number, etc."></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('earningModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveEarning()">Save Record</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══ ADD / EDIT CALENDAR EVENT MODAL ══ -->
-
-<div class="modal-overlay" id="calEventModal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="calEventModalTitle">Add Event</div>
-      <button class="modal-close" onclick="closeModal('calEventModal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="cal-event-id">
-      <div class="form-group">
-        <label class="form-label">Title *</label>
-        <input class="form-input" id="cal-title" placeholder="e.g. Brand call — Nike UK">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Start Date & Time *</label>
-          <input class="form-input" id="cal-start" type="datetime-local">
-        </div>
-        <div class="form-group">
-          <label class="form-label">End Date & Time *</label>
-          <input class="form-input" id="cal-end" type="datetime-local">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="cal-allday" onchange="toggleCalAllDay()" style="width:16px;height:16px">
-          All-day event
-        </label>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Location (optional)</label>
-        <input class="form-input" id="cal-location" placeholder="e.g. Zoom / Office / London">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Notes (optional)</label>
-        <textarea class="form-textarea" id="cal-notes" placeholder="Meeting agenda, links, etc."></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-danger btn-sm" id="cal-delete-btn" onclick="deleteCalEvent()" style="display:none">Delete</button>
-      <button class="btn btn-ghost" onclick="closeModal('calEventModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveCalEvent()">Save Event</button>
-    </div>
-  </div>
-</div
-</body></html>`);
+    </head><body>
+    <div class="inv-wrap">${html}</div>
+    <script>
+      window.onload = () => { setTimeout(() => window.print(), 800); };
+    <\/script>
+    </body></html>`);
   win.document.close();
 }
 
@@ -5306,6 +5218,8 @@ function confirmGridSelection() {
 // collectPortalData override removed in v11 — stats fields merged into main collectPortalData()
 
 
+let earnings = Storage.get('earnings', []);
+
 async function loadEarnings() {
   const rows = await DB.select('creator_earnings', '?order=created_at.desc');
   if (rows && rows.length !== undefined) {
@@ -5423,19 +5337,24 @@ function populateEarningSelects() {
 }
 
 function openAddEarning() {
-  document.getElementById('earningModalTitle').textContent = 'Add Earnings Record';
-  document.getElementById('earn-id').value = '';
-  document.getElementById('earn-brand').value = '';
-  document.getElementById('earn-deal-value').value = '';
-  document.getElementById('earn-cut-type').value = 'percent';
-  document.getElementById('earn-cut-value').value = '20';
-  document.getElementById('earn-payout').value = '';
-  document.getElementById('earn-status').value = 'unpaid';
-  document.getElementById('earn-amount-paid').value = '0';
-  document.getElementById('earn-paid-date').value = '';
-  document.getElementById('earn-notes').value = '';
-  document.getElementById('earn-paid-date-wrap').style.display = 'none';
-  document.getElementById('earn-outstanding-display').textContent = '£0.00';
+  const modal = document.getElementById('earningModal');
+  if (!modal) { showToast('Earnings modal not found — please reload the page'); return; }
+  const set = (id, prop, val) => { const el = document.getElementById(id); if (el) el[prop] = val; };
+  set('earningModalTitle', 'textContent', 'Add Earnings Record');
+  set('earn-id', 'value', '');
+  set('earn-brand', 'value', '');
+  set('earn-deal-value', 'value', '');
+  set('earn-cut-type', 'value', 'percent');
+  set('earn-cut-value', 'value', '20');
+  set('earn-payout', 'value', '');
+  set('earn-status', 'value', 'unpaid');
+  set('earn-amount-paid', 'value', '0');
+  set('earn-paid-date', 'value', '');
+  set('earn-notes', 'value', '');
+  const wrap = document.getElementById('earn-paid-date-wrap');
+  if (wrap) wrap.style.display = 'none';
+  const outstanding = document.getElementById('earn-outstanding-display');
+  if (outstanding) outstanding.textContent = '£0.00';
   populateEarningSelects();
   recalcEarning();
   openModal('earningModal');
@@ -5513,7 +5432,26 @@ function togglePaidDate() {
 }
 
 async function saveEarning() {
-  const id         = document.getElementById('earn-id').value;
+  // ── Inline error helper ──
+  const showEarnErr = msg => {
+    let err = document.getElementById('earn-modal-error');
+    if (!err) {
+      err = document.createElement('div');
+      err.id = 'earn-modal-error';
+      err.style.cssText = 'background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500';
+      const body = document.querySelector('#earningModal .modal-body');
+      if (body) body.insertBefore(err, body.firstChild);
+    }
+    err.textContent = msg; err.style.display = 'block';
+  };
+  const clearEarnErr = () => { const e = document.getElementById('earn-modal-error'); if (e) e.style.display = 'none'; };
+  clearEarnErr();
+
+  // ── Auth guard ──
+  if (!currentUser) { showEarnErr('Not logged in — please refresh and sign in again.'); return; }
+
+  // ── Read fields ──
+  const id         = document.getElementById('earn-id').value.trim();
   const creatorId  = Number(document.getElementById('earn-creator-sel').value);
   const campaignId = document.getElementById('earn-campaign-sel').value || null;
   const brand      = document.getElementById('earn-brand').value.trim();
@@ -5526,21 +5464,22 @@ async function saveEarning() {
   const paidDate   = document.getElementById('earn-paid-date').value || null;
   const notes      = document.getElementById('earn-notes').value.trim();
 
-  // Validation
-  if (!creatorId) { showToast('Please select a creator'); return; }
-  if (!dealValue || dealValue <= 0) { showToast('Deal value must be positive'); return; }
-  if (cutType === 'percent' && (cutVal < 0 || cutVal > 100)) { showToast('Percent must be 0–100'); return; }
-  if (cutType === 'fixed' && cutVal > dealValue) { showToast('Fixed cut cannot exceed deal value'); return; }
-  if (amtPaid > payout) { showToast('Amount paid cannot exceed creator payout'); return; }
+  // ── Validate ──
+  if (!creatorId)  { showEarnErr('Please select a creator.'); return; }
+  if (!dealValue || dealValue <= 0) { showEarnErr('Deal value must be a positive number.'); return; }
+  if (cutType === 'percent' && (cutVal < 0 || cutVal > 100)) { showEarnErr('Percent cut must be between 0 and 100.'); return; }
+  if (cutType === 'fixed'   && cutVal > dealValue)           { showEarnErr('Fixed cut cannot exceed deal value.'); return; }
+  if (amtPaid > payout)    { showEarnErr('Amount paid cannot exceed creator payout.'); return; }
 
-  const creator = creators.find(c => c.id === creatorId);
+  const creator  = creators.find(c => c.id === creatorId);
   const campaign = campaignId ? campaigns.find(c => String(c.id) === String(campaignId)) : null;
 
+  // ── Build payload ──
   const row = {
     creator_id:       creatorId,
-    creator_name:     creator ? creator.name : '',
+    creator_name:     creator ? creator.name : String(creatorId),
     campaign_id:      campaignId ? Number(campaignId) : null,
-    campaign_brand:   campaign ? (campaign.brand + ' × ' + campaign.creator) : null,
+    campaign_brand:   campaign ? (campaign.brand + ' \u00d7 ' + campaign.creator) : null,
     brand_name:       brand || null,
     deal_value:       dealValue,
     currency:         'GBP',
@@ -5551,26 +5490,36 @@ async function saveEarning() {
     amount_paid:      amtPaid,
     paid_at:          paidDate ? new Date(paidDate).toISOString() : null,
     notes:            notes || null,
-    created_by:       currentUser ? currentUser.id : null,
+    created_by:       currentUser.id || null,
     updated_at:       new Date().toISOString(),
   };
 
+  // ── Save to Supabase ──
   let result;
-  if (id) {
-    row.id = id;
-    result = await DB._req('PATCH', 'creator_earnings', row, `?id=eq.${id}`);
-  } else {
-    row.created_at = new Date().toISOString();
-    result = await DB._req('POST', 'creator_earnings', [row], '');
+  try {
+    if (id) {
+      row.id = id;
+      result = await DB._req('PATCH', 'creator_earnings', row, '?id=eq.' + id);
+    } else {
+      row.created_at = new Date().toISOString();
+      result = await DB._req('POST', 'creator_earnings', [row], '');
+    }
+  } catch(e) {
+    console.error('[saveEarning] Exception:', e);
+    showEarnErr('Unexpected error: ' + e.message);
+    return;
   }
 
-  if (!result) { showToast('❌ Failed to save — check console'); return; }
+  if (result === null) {
+    showEarnErr('Save failed — check the browser console. If tables do not exist yet, run the SQL migration in Supabase.');
+    return;
+  }
 
   closeModal('earningModal');
   await loadEarnings();
   renderEarningsProfileCard();
-  addActivity(`Earnings record ${id ? 'updated' : 'added'}: <strong>${creator?.name}</strong> — ${fmtMoneyFull(payout)}`);
-  showToast(id ? '✅ Earnings record updated!' : '✅ Earnings record added!');
+  addActivity('Earnings record ' + (id ? 'updated' : 'added') + ': <strong>' + (creator ? creator.name : '') + '</strong> \u2014 ' + fmtMoneyFull(payout));
+  showToast(id ? '\u2705 Earnings record updated!' : '\u2705 Earnings record added!');
 }
 
 async function deleteEarning(id) {
@@ -5580,7 +5529,7 @@ async function deleteEarning(id) {
     `Delete the earnings record for ${e.creator_name} (${fmtMoneyFull(e.creator_payout)})? This cannot be undone.`,
     async () => {
       const result = await DB._req('DELETE', 'creator_earnings', null, `?id=eq.${id}`);
-      if (result === null) { showToast('❌ Delete failed'); return; }
+      if (result === null) { return; } // error already toasted
       await loadEarnings();
       renderEarningsProfileCard();
       showToast('Earnings record deleted');
@@ -5757,19 +5706,24 @@ function renderCalendar() {
 }
 
 function openAddEvent() {
-  document.getElementById('calEventModalTitle').textContent = 'Add Event';
-  document.getElementById('cal-event-id').value = '';
-  document.getElementById('cal-title').value = '';
-  document.getElementById('cal-allday').checked = false;
-  document.getElementById('cal-location').value = '';
-  document.getElementById('cal-notes').value = '';
-  document.getElementById('cal-delete-btn').style.display = 'none';
+  const modal = document.getElementById('calEventModal');
+  if (!modal) { showToast('Calendar modal not found — please reload the page'); return; }
+  const set = (id, prop, val) => { const el = document.getElementById(id); if (el) el[prop] = val; };
+  set('calEventModalTitle', 'textContent', 'Add Event');
+  set('cal-event-id', 'value', '');
+  set('cal-title', 'value', '');
+  const allday = document.getElementById('cal-allday');
+  if (allday) allday.checked = false;
+  set('cal-location', 'value', '');
+  set('cal-notes', 'value', '');
+  const delBtn = document.getElementById('cal-delete-btn');
+  if (delBtn) delBtn.style.display = 'none';
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const dtStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
-  document.getElementById('cal-start').value = dtStr;
+  set('cal-start', 'value', dtStr);
   const endDt = new Date(now.getTime() + 60*60*1000);
-  document.getElementById('cal-end').value = `${endDt.getFullYear()}-${pad(endDt.getMonth()+1)}-${pad(endDt.getDate())}T${pad(endDt.getHours())}:00`;
+  set('cal-end', 'value', `${endDt.getFullYear()}-${pad(endDt.getMonth()+1)}-${pad(endDt.getDate())}T${pad(endDt.getHours())}:00`);
   openModal('calEventModal');
 }
 
@@ -5823,8 +5777,27 @@ function toggleCalAllDay() {
 }
 
 async function saveCalEvent() {
-  if (!can('manageCalendar')) { showToast('You do not have permission to manage events'); return; }
-  const id       = document.getElementById('cal-event-id').value;
+  // Inline error helper — shows error INSIDE the modal, not just a toast
+  const showCalErr = msg => {
+    let err = document.getElementById('cal-modal-error');
+    if (!err) {
+      err = document.createElement('div');
+      err.id = 'cal-modal-error';
+      err.style.cssText = 'background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500';
+      const body = document.querySelector('#calEventModal .modal-body');
+      if (body) body.insertBefore(err, body.firstChild);
+    }
+    err.textContent = msg; err.style.display = 'block';
+  };
+  const clearCalErr = () => { const e = document.getElementById('cal-modal-error'); if (e) e.style.display = 'none'; };
+  clearCalErr();
+
+  // Auth guards
+  if (!currentUser) { showCalErr('Not logged in. Refresh and sign in again.'); return; }
+  if (!can('manageCalendar')) { showCalErr('Your role does not allow managing calendar events.'); return; }
+
+  // Read fields
+  const id       = (document.getElementById('cal-event-id').value || '').trim();
   const title    = document.getElementById('cal-title').value.trim();
   const allDay   = document.getElementById('cal-allday').checked;
   const startRaw = document.getElementById('cal-start').value;
@@ -5832,43 +5805,54 @@ async function saveCalEvent() {
   const location = document.getElementById('cal-location').value.trim();
   const notes    = document.getElementById('cal-notes').value.trim();
 
-  if (!title)    { showToast('Title is required'); return; }
-  if (!startRaw) { showToast('Start date/time is required'); return; }
-  if (!endRaw)   { showToast('End date/time is required'); return; }
+  // Validate
+  if (!title)    { showCalErr('Title is required.'); return; }
+  if (!startRaw) { showCalErr('Start date/time is required.'); return; }
+  if (!endRaw)   { showCalErr('End date/time is required.'); return; }
 
   const startAt = new Date(allDay ? startRaw + 'T00:00:00' : startRaw).toISOString();
   const endAt   = new Date(allDay ? endRaw   + 'T23:59:59' : endRaw).toISOString();
 
-  if (new Date(startAt) >= new Date(endAt)) { showToast('End must be after start'); return; }
+  if (new Date(startAt) >= new Date(endAt)) { showCalErr('End must be after start.'); return; }
 
+  // Build payload — every field explicit
   const row = {
-    title,
-    description: notes || null,
+    title:       title,
+    description: notes    || null,
     location:    location || null,
     start_at:    startAt,
     end_at:      endAt,
     all_day:     allDay,
     updated_at:  new Date().toISOString(),
-    created_by:  currentUser ? currentUser.id : null,
+    created_by:  currentUser.id || null,
   };
 
+  // Save
   let result;
-  if (id) {
-    row.id = id;
-    result = await DB._req('PATCH', 'calendar_events', row, `?id=eq.${id}`);
-  } else {
-    row.created_at = new Date().toISOString();
-    result = await DB._req('POST', 'calendar_events', [row], '');
+  try {
+    if (id) {
+      row.id = id;
+      result = await DB._req('PATCH', 'calendar_events', row, '?id=eq.' + id);
+    } else {
+      row.created_at = new Date().toISOString();
+      result = await DB._req('POST', 'calendar_events', [row], '');
+    }
+  } catch(e) {
+    console.error('[saveCalEvent] Exception:', e);
+    showCalErr('Unexpected error: ' + e.message);
+    return;
   }
 
-  if (!result) { showToast('❌ Failed to save event — check console'); return; }
+  if (result === null) {
+    showCalErr('Save failed. Check console. If the table does not exist yet, run the SQL migration in Supabase first.');
+    return;
+  }
 
   closeModal('calEventModal');
   await loadCalEvents();
-  addActivity(`Calendar event ${id ? 'updated' : 'added'}: <strong>${title}</strong>`);
-  showToast(id ? '✅ Event updated!' : '✅ Event added!');
+  addActivity('Calendar event ' + (id ? 'updated' : 'added') + ': <strong>' + title + '</strong>');
+  showToast(id ? '\u2705 Event updated!' : '\u2705 Event added!');
 }
-
 async function deleteCalEvent() {
   if (!can('manageCalendar')) { showToast('You do not have permission'); return; }
   const id = document.getElementById('cal-event-id').value;
@@ -5883,6 +5867,96 @@ async function deleteCalEvent() {
   });
 }
 
+
+
+// ── AUTO-DRAFT EARNINGS ON CAMPAIGN COMPLETION ───────────────
+// Called when a campaign status is changed to "Completed".
+// Creates one draft earnings row per creator if one doesn't already exist
+// for that campaign_id + creator_id combination.
+const DEFAULT_AGENCY_CUT_PCT = 20; // configurable default
+
+async function autoDraftEarnings(campaign) {
+  if (!campaign || campaign.status !== 'Completed') return;
+
+  // Resolve creator IDs — support multi-creator campaigns
+  let creatorIds = [];
+  if (Array.isArray(campaign.creatorIds) && campaign.creatorIds.length) {
+    creatorIds = campaign.creatorIds;
+  } else if (campaign.creatorId) {
+    creatorIds = [campaign.creatorId];
+  } else if (campaign.creator) {
+    // Fallback: match by name
+    const names = campaign.creator.split(',').map(s => s.trim());
+    names.forEach(name => {
+      const c = creators.find(x => x.name === name);
+      if (c) creatorIds.push(c.id);
+    });
+  }
+
+  if (!creatorIds.length) {
+    console.warn('[autoDraftEarnings] No creator IDs resolved for campaign', campaign.id);
+    return;
+  }
+
+  const dealValue   = Number(campaign.value) || 0;
+  const agencyCut   = DEFAULT_AGENCY_CUT_PCT;
+  const agencyAmt   = dealValue * agencyCut / 100;
+  const payout      = Math.max(0, dealValue - agencyAmt);
+  const now         = new Date().toISOString();
+  const createdBy   = currentUser ? currentUser.id : null;
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const creatorId of creatorIds) {
+    // Check for existing entry (dedup check)
+    const existing = earnings.find(e =>
+      String(e.campaign_id) === String(campaign.id) &&
+      String(e.creator_id)  === String(creatorId)
+    );
+    if (existing) { skipped++; continue; }
+
+    const creator = creators.find(c => c.id === creatorId);
+    const row = {
+      creator_id:       creatorId,
+      creator_name:     creator ? creator.name : String(creatorId),
+      campaign_id:      campaign.id,
+      campaign_brand:   campaign.brand + ' × ' + (creator ? creator.name : String(creatorId)),
+      brand_name:       campaign.brand || null,
+      deal_value:       dealValue,
+      currency:         'GBP',
+      agency_cut_type:  'percent',
+      agency_cut_value: agencyCut,
+      creator_payout:   payout,
+      payment_status:   'unpaid',
+      amount_paid:      0,
+      paid_at:          null,
+      notes:            `Auto-created when campaign marked Completed`,
+      created_by:       createdBy,
+      created_at:       now,
+      updated_at:       now,
+    };
+
+    const result = await DB._req('POST', 'creator_earnings', [row], '');
+    if (result && result !== null) {
+      created++;
+    } else {
+      console.error('[autoDraftEarnings] Failed to insert for creator', creatorId);
+    }
+  }
+
+  if (created > 0) {
+    await loadEarnings();
+    const msg = created === 1
+      ? `Draft earnings created for 1 creator — review in Earnings`
+      : `Draft earnings created for ${created} creators — review in Earnings`;
+    showToast('💰 ' + msg);
+    addActivity(`Auto-drafted ${created} earnings record(s) for <strong>${campaign.brand}</strong>`);
+  }
+  if (skipped > 0) {
+    console.log(`[autoDraftEarnings] Skipped ${skipped} (already exist)`);
+  }
+}
 
 </script>
 
@@ -5916,5 +5990,138 @@ async function deleteCalEvent() {
   </div>
 </div>
 
+
+
+<div class="modal-overlay" id="earningModal">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <div class="modal-title" id="earningModalTitle">Add Earnings Record</div>
+      <button class="modal-close" onclick="closeModal('earningModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="earn-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Creator *</label>
+          <select class="form-select" id="earn-creator-sel" onchange="prefillEarningFromCampaign()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Link to Campaign (optional)</label>
+          <select class="form-select" id="earn-campaign-sel" onchange="prefillEarningFromCampaign()">
+            <option value="">— No campaign —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Brand Name (optional)</label>
+        <input class="form-input" id="earn-brand" placeholder="e.g. Nike UK">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Deal Value (£) *</label>
+          <input class="form-input" id="earn-deal-value" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcEarning()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Agency Cut Type</label>
+          <select class="form-select" id="earn-cut-type" onchange="recalcEarning()">
+            <option value="percent">Percent (%)</option>
+            <option value="fixed">Fixed (£)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Agency Cut Value</label>
+          <input class="form-input" id="earn-cut-value" type="number" min="0" step="0.01" placeholder="0" oninput="recalcEarning()">
+          <div class="form-hint" id="earn-cut-hint">Enter % of deal value</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Creator Payout (£) *</label>
+          <input class="form-input" id="earn-payout" type="number" min="0" step="0.01" placeholder="Auto-calculated">
+          <div class="form-hint">Auto-calculated. Override if needed.</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Payment Status</label>
+          <select class="form-select" id="earn-status" onchange="togglePaidDate()">
+            <option value="unpaid">Unpaid</option>
+            <option value="part_paid">Part Paid</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount Paid (£)</label>
+          <input class="form-input" id="earn-amount-paid" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcOutstanding()">
+        </div>
+      </div>
+      <div class="form-group" id="earn-paid-date-wrap" style="display:none">
+        <label class="form-label">Paid Date</label>
+        <input class="form-input" id="earn-paid-date" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Outstanding</label>
+        <div id="earn-outstanding-display" style="padding:9px 12px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;font-size:13px;font-weight:600;color:var(--red)">£0.00</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" id="earn-notes" placeholder="Payment details, invoice number, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('earningModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEarning()">Save Record</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD / EDIT CALENDAR EVENT MODAL ══ -->
+
+
+
+<div class="modal-overlay" id="calEventModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="calEventModalTitle">Add Event</div>
+      <button class="modal-close" onclick="closeModal('calEventModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cal-event-id">
+      <div class="form-group">
+        <label class="form-label">Title *</label>
+        <input class="form-input" id="cal-title" placeholder="e.g. Brand call — Nike UK">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Start Date & Time *</label>
+          <input class="form-input" id="cal-start" type="datetime-local">
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Date & Time *</label>
+          <input class="form-input" id="cal-end" type="datetime-local">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="cal-allday" onchange="toggleCalAllDay()" style="width:16px;height:16px">
+          All-day event
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Location (optional)</label>
+        <input class="form-input" id="cal-location" placeholder="e.g. Zoom / Office / London">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" id="cal-notes" placeholder="Meeting agenda, links, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="cal-delete-btn" onclick="deleteCalEvent()" style="display:none">Delete</button>
+      <button class="btn btn-ghost" onclick="closeModal('calEventModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCalEvent()">Save Event</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
