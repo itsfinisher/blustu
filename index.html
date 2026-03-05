@@ -2174,14 +2174,16 @@ async function syncAllFromDB() {
       STAFF = seeded; Storage.set('staff', STAFF);
     }
 
-    const [pp, ia, ao] = await Promise.all([
+    const [pp, ia, ao, ps] = await Promise.all([
       DB.getAppData('profilePics'),
       DB.getAppData('kitAnalytics'),
       DB.getAppData('adminOverrides'),
+      DB.getAppData('pitchSubjects'),
     ]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
     if (ao) { adminOverrides = ao; Storage.set('adminOverrides', ao); } // BUG2 FIX: store fetched value 'ao', not stale local var
+    if (ps) { pitchSubjects = ps; Storage.set('pitchSubjects', pitchSubjects); }
 
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
@@ -2250,6 +2252,7 @@ const DEFAULT_INBOX = [
 let inboxMessages = Storage.get('inboxMessages', DEFAULT_INBOX);
 let kitAnalytics  = Storage.get('kitAnalytics',  {});
 let profilePics   = Storage.get('profilePics',   {});
+let pitchSubjects = Storage.get('pitchSubjects', {});  // pitch_id -> subject (stored in app_data, not pitch_decks table)
 function saveInbox()    { Storage.set('inboxMessages', inboxMessages); }
 function saveAnalyticsData() { Storage.set('kitAnalytics', kitAnalytics); }
 function saveProfilePics()   { Storage.set('profilePics', profilePics); }
@@ -3536,46 +3539,85 @@ async function savePitch(status){
       }
     } catch(e) {}
   }
-  const p={
-    id: Date.now() % 2147483647, brand,
+  // Read subject before clearing fields — subject is NOT a DB column, stored in app_data
+  const subjectVal = (document.getElementById('pitch-subject') || {}).value || '';
+  const newId = Date.now() % 2147483647;
+
+  // Only include columns that exist in the pitch_decks table
+  const p = {
+    id: newId, brand,
     creator: creatorField,
-    concept:document.getElementById('pitch-concept').value.trim(),
-    rate:document.getElementById('pitch-rate').value,
-    email:document.getElementById('pitch-email').value.trim(),
-    subject:document.getElementById('pitch-subject').value.trim(),
-    message:document.getElementById('pitch-message').value.trim(),
-    status:status==='Sent'?'Sent':overrideStatus
+    concept: document.getElementById('pitch-concept').value.trim(),
+    rate:    document.getElementById('pitch-rate').value,
+    email:   document.getElementById('pitch-email').value.trim(),
+    message: document.getElementById('pitch-message').value.trim(),
+    status:  status === 'Sent' ? 'Sent' : overrideStatus
   };
+
   closeModal('addPitchModal');
-  ['pitch-brand','pitch-concept','pitch-rate','pitch-email','pitch-subject','pitch-message'].forEach(id=>document.getElementById(id).value='');
-  if (mcIdsEl) mcIdsEl.value='';
+  ['pitch-brand','pitch-concept','pitch-rate','pitch-email','pitch-subject','pitch-message'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  if (mcIdsEl) mcIdsEl.value = '';
   const chipsEl = document.getElementById('pitch-mc-chips');
-  if (chipsEl) { chipsEl.innerHTML=''; chipsEl.style.display='none'; }
+  if (chipsEl) { chipsEl.innerHTML = ''; chipsEl.style.display = 'none'; }
+
   const result = await DB.upsertOne('pitch_decks', p);
-  if (!result) { showToast('❌ Pitch save failed'); return; }
+  if (!result) {
+    showToast('❌ Pitch save failed — see browser console for details');
+    return;
+  }
+
+  // Subject saved separately in app_data (not a pitch_decks column)
+  pitchSubjects[String(newId)] = subjectVal;
+  Storage.set('pitchSubjects', pitchSubjects);
+  DB.setAppData('pitchSubjects', pitchSubjects);
+
   await refetch('pitch_decks');
   addActivity(`Pitch deck created: <strong>${creatorField} × ${brand}</strong>`);
-  showToast(`Pitch deck ${p.status==='Sent'?'sent':'saved as draft'}!`);
+  showToast(`Pitch deck ${p.status === 'Sent' ? 'sent' : 'saved as draft'}!`);
 }
 
 async function updatePitch(){
   const id=parseInt(document.getElementById('edit-pitch-id').value);
   const p=pitchDecks.find(x=>x.id===id);
   if(!p)return;
-  p.brand=document.getElementById('edit-pitch-brand').value.trim();
-  p.creator=document.getElementById('edit-pitch-creator').value;
-  p.concept=document.getElementById('edit-pitch-concept').value.trim();
-  p.rate=document.getElementById('edit-pitch-rate').value;
-  p.email=document.getElementById('edit-pitch-email').value.trim();
-  p.subject=document.getElementById('edit-pitch-subject').value.trim();
-  p.message=document.getElementById('edit-pitch-message').value.trim();
-  p.status=document.getElementById('edit-pitch-status').value;
+  // Read subject before closing modal — NOT a DB column
+  const subjectVal = (document.getElementById('edit-pitch-subject') || {}).value || '';
+
+  // Update in-memory fields (only DB columns)
+  p.brand   = document.getElementById('edit-pitch-brand').value.trim();
+  p.creator = document.getElementById('edit-pitch-creator').value;
+  p.concept = document.getElementById('edit-pitch-concept').value.trim();
+  p.rate    = document.getElementById('edit-pitch-rate').value;
+  p.email   = document.getElementById('edit-pitch-email').value.trim();
+  p.message = document.getElementById('edit-pitch-message').value.trim();
+  p.status  = document.getElementById('edit-pitch-status').value;
+
   closeModal('editPitchModal');
-  await DB.upsertOne('pitch_decks', p);
+
+  // Build clean DB row — only columns that exist in pitch_decks table
+  const dbRow = {
+    id: p.id, brand: p.brand, creator: p.creator,
+    concept: p.concept, rate: p.rate, email: p.email,
+    message: p.message, status: p.status
+  };
+
+  const result = await DB.upsertOne('pitch_decks', dbRow);
+  if (!result) {
+    showToast('❌ Pitch update failed — see browser console for details');
+    return;
+  }
+
+  // Save subject in app_data
+  pitchSubjects[String(id)] = subjectVal;
+  Storage.set('pitchSubjects', pitchSubjects);
+  DB.setAppData('pitchSubjects', pitchSubjects);
+
   await refetch('pitch_decks');
   addActivity(`Pitch updated: <strong>${p.brand} × ${p.creator}</strong>`);
   showToast('Pitch deck updated!');
-  // Refresh viewer if this deck is open
+  // Refresh viewer if this deck is currently open
   if (typeof renderPitchViewer === 'function' && pitchDecks[_pdIdx] && pitchDecks[_pdIdx].id === id) renderPitchViewer();
 }
 
@@ -3588,7 +3630,7 @@ function openEditPitch(id){
   document.getElementById('edit-pitch-concept').value=p.concept||'';
   document.getElementById('edit-pitch-rate').value=p.rate||'';
   document.getElementById('edit-pitch-email').value=p.email||'';
-  document.getElementById('edit-pitch-subject').value=p.subject||'';
+  document.getElementById('edit-pitch-subject').value = p.subject || pitchSubjects[String(id)] || '';
   document.getElementById('edit-pitch-message').value=p.message||'';
   document.getElementById('edit-pitch-status').value=p.status;
   openModal('editPitchModal');
@@ -6345,8 +6387,7 @@ function renderPitchViewer() {
   const pitchSubEl = document.getElementById('pdPitchSubject');
   const pitchMsgEl = document.getElementById('pdPitchMessage');
   if (pitchSubEl) {
-    const subj = deck.subject || '';
-    pitchSubEl.textContent = subj || '';
+    const subj = pitchSubjects[String(deck.id)] || deck.subject || '';
     pitchSubEl.innerHTML = subj
       ? subj.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       : '<span class="pd-pitch-empty">No pitch subject set \u2014 click Edit to add one</span>';
@@ -6553,7 +6594,7 @@ function openGridForPitchModal() {
 function pdCopyField(field) {
   const deck = pitchDecks[_pdIdx];
   if (!deck) return;
-  const text = field === 'subject' ? (deck.subject || '') : (deck.message || '');
+  const text = field === 'subject' ? (pitchSubjects[String(deck.id)] || deck.subject || '') : (deck.message || '');
   const btnId = field === 'subject' ? 'pdCopySubjectBtn' : 'pdCopyMsgBtn';
   const btn = document.getElementById(btnId);
   if (!text) { showToast('No ' + field + ' to copy'); return; }
