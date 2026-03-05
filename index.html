@@ -2638,7 +2638,7 @@ function renderCRM(list) {
   const empty=document.getElementById('crm-empty');
   if(!list||!list.length){tbody.innerHTML='';if(empty)empty.style.display='block';renderCRMGrid([]);return;}
   if(empty)empty.style.display='none';
-  tbody.innerHTML=list.map(c=>{\
+  tbody.innerHTML=list.map(c=>{
     const pic=profilePics[c.id];
     const avatarHtml=pic
       ? `<div class="creator-avatar" style="background:${avatarColor(c.id)};overflow:hidden"><img src="${pic}" class="avatar-img" alt="${c.name}"></div>`
