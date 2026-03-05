@@ -1268,12 +1268,15 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <div style="display:flex;gap:8px;align-items:center">
           <button class="btn btn-ghost btn-sm" id="btn-export-pdf" style="display:none" onclick="exportPitchAsPDF()">&#11015; Export PDF</button>
           <button class="btn btn-ghost btn-sm" id="btn-export-png" style="display:none" onclick="exportPitchAsPNG()">&#11015; Export PNG</button>
+          <button class="btn btn-primary btn-sm" id="btn-export-card" style="display:none" onclick="exportAnalyticsCard()">&#11015; Analytics Card</button>
           <button class="btn btn-primary" onclick="openModal('addPitchModal')">+ New Pitch</button>
         </div>
       </div>
 
       <!-- Thumbnail grid: one card per pitch deck -->
       <div id="pitchGrid" class="pd-thumb-grid"></div>
+      <!-- Hidden analytics card export target (populated & captured by exportAnalyticsCard) -->
+      <div id="analyticsCardTarget" style="position:fixed;left:-9999px;top:0;width:720px;pointer-events:none;z-index:-1"></div>
 
       <!-- Premium viewer (hidden until a deck is opened) -->
       <div id="pitchViewerWrap" style="display:none;margin-top:0">
@@ -6766,10 +6769,12 @@ function openPitchViewer(idx) {
     vw.style.display = 'block';
     setTimeout(() => vw.scrollIntoView({ behavior: 'smooth', block: 'start' }), 40);
   }
-  const btnPDF = document.getElementById('btn-export-pdf');
-  const btnPNG = document.getElementById('btn-export-png');
-  if (btnPDF) btnPDF.style.display = '';
-  if (btnPNG) btnPNG.style.display = '';
+  const btnPDF  = document.getElementById('btn-export-pdf');
+  const btnPNG  = document.getElementById('btn-export-png');
+  const btnCard = document.getElementById('btn-export-card');
+  if (btnPDF)  btnPDF.style.display  = '';
+  if (btnPNG)  btnPNG.style.display  = '';
+  if (btnCard) btnCard.style.display = '';
 
   // Highlight active thumbnail
   document.querySelectorAll('.pd-thumb').forEach(el => el.classList.remove('pd-thumb-active'));
@@ -7113,6 +7118,293 @@ function exportPitchAsPDF() {
     <script>window.onload=()=>{setTimeout(()=>window.print(),800);}<\/script>
     </body></html>`);
   win.document.close();
+}
+
+
+// ── Export Analytics Card PNG ────────────────────────────────
+// Builds a self-contained BluStu-branded card for the ACTIVE creator,
+// renders it into a hidden off-screen div, captures with html2canvas.
+async function exportAnalyticsCard() {
+  if (typeof html2canvas === 'undefined') {
+    showToast('Export library loading — please try again in a moment');
+    return;
+  }
+  const deck = pitchDecks[_pdIdx];
+  if (!deck) { showToast('Open a pitch deck first'); return; }
+
+  // ── Resolve active creator (handles multi-creator decks) ──
+  const creatorNames = deck.creator
+    ? deck.creator.split(',').map(n => n.trim()).filter(Boolean)
+    : [deck.creator || ''];
+  const isMulti  = creatorNames.length > 1;
+  const mcIdx    = (isMulti && typeof window._pdMcIdx !== 'undefined') ? window._pdMcIdx : 0;
+  const activeName = isMulti ? (creatorNames[mcIdx] || creatorNames[0]) : deck.creator;
+
+  const c   = creators.find(x => x.name === activeName);
+  if (!c) { showToast('Creator data not found'); return; }
+
+  const r   = resolveCreator(c);
+  const ob  = c.onboarding || {};
+  const ao  = adminOverrides[c.id] || {};
+  const ana = kitAnalytics[c.id]   || {};
+  const pic = profilePics[c.id]    || null;
+
+  // ── Helpers ──
+  const d  = v => v || '—';                              // dash fallback
+  const fmtGbp = v => v ? '£' + v : '—';               // money format
+  const pct = v => (v != null && v !== '') ? v + '%' : '—';
+
+  // Resolved rates: admin override wins, falls back to self-reported
+  const rates = r.rates || {};
+  const usage = r.usage || {};
+  const RATE_ORDER  = ['TikTok Video','Instagram Reel','Instagram Story','YouTube','Long-form'];
+  const USAGE_ORDER = ['30 days','60 days','90 days','Perpetual'];
+
+  const rateRows = RATE_ORDER
+    .filter(k => rates[k])
+    .map(k => `<tr><td>${k}</td><td class="ac-val">${fmtGbp(rates[k])}</td></tr>`)
+    .join('');
+
+  const usageRows = USAGE_ORDER
+    .filter(k => usage[k])
+    .map(k => `<tr><td>${k} usage/licensing</td><td class="ac-val">${fmtGbp(usage[k])}</td></tr>`)
+    .join('');
+
+  // ── Audience breakdown from kitAnalytics ──
+  const ages   = ana.ages   || {};
+  const gender = ana.gender || {};
+  const locs   = (ana.locations || []).filter(Boolean).slice(0, 3);
+
+  const ageOrder = [['18–24','1824'],['25–34','2534'],['35–44','3544'],['13–17','1317'],['45–54','4554'],['55+','55']];
+  const topAge = ageOrder
+    .map(([label, key]) => ({ label, pct: ages[key] || 0 }))
+    .sort((a,b) => b.pct - a.pct)
+    .filter(x => x.pct > 0);
+
+  const genderMap = [['Female','f'],['Male','m'],['Other','o']];
+  const topGender = genderMap
+    .map(([label, key]) => ({ label, pct: gender[key] || 0 }))
+    .sort((a,b) => b.pct - a.pct)
+    .filter(x => x.pct > 0);
+
+  function barHtml(items, color) {
+    if (!items.length) return '<p class="ac-muted">No data available</p>';
+    return items.map(x => `
+      <div class="ac-bar-row">
+        <span class="ac-bar-label">${x.label}</span>
+        <div class="ac-bar-track"><div class="ac-bar-fill" style="width:${Math.min(x.pct,100)}%;background:${color}"></div></div>
+        <span class="ac-bar-pct">${x.pct}%</span>
+      </div>`).join('');
+  }
+
+  // Socials
+  const socialLinks = [
+    ob.tiktok    ? { name: 'TikTok',    url: ob.tiktok }    : null,
+    ob.instagram ? { name: 'Instagram', url: ob.instagram } : null,
+    ob.youtube   ? { name: 'YouTube',   url: ob.youtube }   : null,
+  ].filter(Boolean);
+
+  // Avatar HTML — use profile pic or coloured initial circle
+  const COLORS = ['#2F80ED','#1A6FD4','#0B5AC2','#1A4872','#2198ED','#0E6EBF'];
+  const bgColor = COLORS[(c.id - 1) % COLORS.length] || '#2198ED';
+  const avatarHtml = pic
+    ? `<div class="ac-avatar"><img src="${pic}" alt="${c.name}"></div>`
+    : `<div class="ac-avatar ac-avatar-letter" style="background:${bgColor}">${c.name.trim()[0].toUpperCase()}</div>`;
+
+  // Bio (from admin override niche or onboarding bio or niche)
+  const bio = ob.bio || r.niche || '—';
+
+  // Contact email
+  const email = c.email || ob.email || '—';
+
+  // Brand logo (if set)
+  const brandKey = (deck.brand || '').trim().toLowerCase();
+  const brandLogo = brandLogos[brandKey] || null;
+  const brandEl = brandLogo
+    ? `<img src="${brandLogo}" alt="${deck.brand}" style="height:28px;object-fit:contain;border-radius:6px">`
+    : `<span class="ac-brand-initial">${(deck.brand||'B').trim()[0].toUpperCase()}</span>`;
+
+  // ── Build the card HTML ──
+  const html = `
+<div id="ac-root" style="font-family:'DM Sans',sans-serif;background:#ffffff;width:720px;padding:0;border-radius:20px;overflow:hidden;box-shadow:0 12px 48px rgba(15,17,32,.14)">
+
+  <!-- HEADER STRIP -->
+  <div style="background:linear-gradient(135deg,#0b1f36 0%,#1a4872 60%,#2198ED 100%);padding:32px 36px;display:flex;align-items:center;gap:24px;position:relative;overflow:hidden">
+    <div style="position:absolute;bottom:-40px;right:-40px;width:180px;height:180px;border-radius:50%;background:rgba(33,152,237,.18)"></div>
+    <div style="position:absolute;top:-30px;left:200px;width:100px;height:100px;border-radius:50%;background:rgba(33,152,237,.09)"></div>
+    ${avatarHtml}
+    <div style="flex:1;min-width:0;position:relative;z-index:1">
+      <div style="font-family:'DM Serif Display',serif;font-size:28px;color:#ffffff;line-height:1.15;margin-bottom:4px">${d(c.name)}</div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.65);background:rgba(255,255,255,.12);display:inline-block;padding:3px 14px;border-radius:20px;margin-bottom:12px">${d(r.niche)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${[[d(r.followers),'Followers'],[pct(r.engRate),'Engagement'],[d(r.avgViews),'Avg Views'],[d(r.audience),'Audience']].map(([v,l])=>`
+          <div style="background:rgba(255,255,255,.13);border-radius:10px;padding:8px 14px;text-align:center;min-width:80px">
+            <div style="font-family:'DM Serif Display',serif;font-size:16px;color:#ffffff;line-height:1">${v}</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.6px;margin-top:3px">${l}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div style="text-align:right;position:relative;z-index:1;flex-shrink:0">
+      ${deck.brand ? `<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:6px">${brandEl}<span style="font-size:12px;color:rgba(255,255,255,.7);font-weight:600">${deck.brand}</span></div>` : ''}
+      <div style="font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.5px;text-transform:uppercase">blustu™ · creator analytics</div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div style="padding:28px 36px;background:#ffffff">
+
+    <!-- BIO row -->
+    ${bio && bio !== '—' ? `<div style="font-size:13px;color:#4a5168;line-height:1.7;padding:14px 16px;background:#f4f5f8;border-radius:10px;margin-bottom:22px">${bio}</div>` : ''}
+
+    <!-- TWO-COLUMN ROW: Analytics + Audience -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
+
+      <!-- Analytics tile -->
+      <div>
+        <div class="ac-section-label">Analytics</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${[
+            [pct(r.engRate), 'Engagement Rate'],
+            [d(r.avgViews),  'Avg Views'],
+            [d(r.followers), 'Followers'],
+            [d(r.audience),  'Audience'],
+          ].map(([v,l]) => `
+            <div style="background:#f4f5f8;border-radius:10px;padding:12px;text-align:center">
+              <div style="font-family:'DM Serif Display',serif;font-size:18px;color:#2198ED;line-height:1">${v}</div>
+              <div style="font-size:9px;color:#8b93a8;text-transform:uppercase;letter-spacing:.5px;margin-top:4px">${l}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Audience breakdown tile -->
+      <div>
+        <div class="ac-section-label">Audience Breakdown</div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:600;color:#8b93a8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Age</div>
+          ${topAge.length ? barHtml(topAge.slice(0,4), '#2198ED') : '<p class="ac-muted">No age data</p>'}
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:600;color:#8b93a8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Gender</div>
+          ${topGender.length ? barHtml(topGender, '#1a6fd4') : '<p class="ac-muted">No gender data</p>'}
+        </div>
+        ${locs.length ? `<div>
+          <div style="font-size:10px;font-weight:600;color:#8b93a8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Top Locations</div>
+          ${locs.map(l => `<div style="font-size:11px;color:#4a5168;padding:3px 0;border-bottom:1px solid #e8eaf0">${l}</div>`).join('')}
+        </div>` : ''}
+      </div>
+    </div>
+
+    <!-- TWO-COLUMN ROW: Media Kit fields + Rate Kit -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
+
+      <!-- Media Kit -->
+      <div>
+        <div class="ac-section-label">Media Kit</div>
+        <table class="ac-table" width="100%">
+          ${d(r.followers) !== '—'  ? `<tr><td>Followers</td><td class="ac-val">${d(r.followers)}</td></tr>` : ''}
+          ${pct(r.engRate) !== '—'  ? `<tr><td>Engagement Rate</td><td class="ac-val">${pct(r.engRate)}</td></tr>` : ''}
+          ${d(r.avgViews)  !== '—'  ? `<tr><td>Avg Views</td><td class="ac-val">${d(r.avgViews)}</td></tr>` : ''}
+          ${d(r.audience)  !== '—'  ? `<tr><td>Audience</td><td class="ac-val">${d(r.audience)}</td></tr>` : ''}
+          ${d(r.niche)     !== '—'  ? `<tr><td>Niche</td><td class="ac-val">${d(r.niche)}</td></tr>` : ''}
+          ${socialLinks.map(s => `<tr><td>${s.name}</td><td class="ac-val" style="word-break:break-all;font-size:10px">${s.url}</td></tr>`).join('')}
+          ${!rateRows && !usageRows ? '<tr><td colspan="2" style="color:#8b93a8;font-style:italic">No additional data</td></tr>' : ''}
+        </table>
+      </div>
+
+      <!-- Rate Kit -->
+      <div>
+        <div class="ac-section-label">Rate Card</div>
+        <table class="ac-table" width="100%">
+          ${rateRows  || '<tr><td colspan="2" style="color:#8b93a8;font-style:italic">No rates set</td></tr>'}
+          ${usageRows ? `<tr><td colspan="2" style="padding-top:10px;font-size:10px;font-weight:700;color:#8b93a8;text-transform:uppercase;letter-spacing:.5px">Usage / Licensing</td></tr>${usageRows}` : ''}
+        </table>
+        ${ob.extraFees ? `<div style="font-size:11px;color:#4a5168;margin-top:8px;padding:8px;background:#f4f5f8;border-radius:8px"><strong>Additional:</strong> ${ob.extraFees}</div>` : ''}
+      </div>
+    </div>
+
+    <!-- CONTACT + FOOTER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding-top:16px;border-top:1.5px solid #e8eaf0">
+      <div>
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#8b93a8">Contact</span>
+        <div style="font-size:13px;color:#2198ED;font-weight:600;margin-top:2px">${email}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:9px;color:#8b93a8;letter-spacing:.5px;text-transform:uppercase">Powered by</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:15px;color:#0b1f36;font-weight:700">blustu™</div>
+      </div>
+    </div>
+
+  </div><!-- /body -->
+
+</div><!-- /ac-root -->
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
+  .ac-section-label{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8b93a8;margin-bottom:10px;padding-bottom:5px;border-bottom:1.5px solid #e8eaf0;}
+  .ac-avatar{width:86px;height:86px;border-radius:50%;border:3px solid rgba(255,255,255,.25);overflow:hidden;flex-shrink:0;position:relative;z-index:1;}
+  .ac-avatar img{width:100%;height:100%;object-fit:cover;}
+  .ac-avatar-letter{display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:32px;font-weight:700;color:white;}
+  .ac-brand-initial{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.15);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;font-family:'DM Serif Display',serif;}
+  .ac-table{border-collapse:collapse;width:100%;}
+  .ac-table td{padding:7px 0;font-size:11px;color:#4a5168;border-bottom:1px solid #f4f5f8;vertical-align:top;line-height:1.4;}
+  .ac-table td:first-child{color:#8b93a8;width:50%;padding-right:8px;}
+  .ac-val{font-weight:600;color:#0f1120;text-align:right;}
+  .ac-bar-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+  .ac-bar-label{font-size:10px;color:#4a5168;width:40px;flex-shrink:0;}
+  .ac-bar-track{flex:1;height:6px;background:#e8eaf0;border-radius:3px;overflow:hidden;}
+  .ac-bar-fill{height:100%;border-radius:3px;transition:width .3s;}
+  .ac-bar-pct{font-size:9px;color:#8b93a8;width:28px;text-align:right;flex-shrink:0;}
+  .ac-muted{font-size:11px;color:#8b93a8;font-style:italic;margin:0;padding:4px 0;}
+</style>`;
+
+  // Render into hidden target
+  const target = document.getElementById('analyticsCardTarget');
+  if (!target) { showToast('Export container missing — please reload'); return; }
+  target.innerHTML = html;
+
+  const root = target.querySelector('#ac-root');
+  if (!root) { showToast('Card render failed'); return; }
+
+  showToast('Building Analytics Card…');
+
+  // Small delay to let fonts/images settle before capture
+  await new Promise(r => setTimeout(r, 350));
+
+  try {
+    const canvas = await html2canvas(root, {
+      scale: 2.5,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: '#ffffff',
+      logging: false,
+      width: 720,
+      windowWidth: 720,
+      onclone: (doc, clone) => {
+        clone.style.borderRadius = '0';
+        // Ensure font is loaded in cloned doc
+        const link = doc.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap';
+        doc.head.appendChild(link);
+      }
+    });
+
+    const safeName = activeName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `analytics-card-${safeName}-${new Date().toISOString().slice(0,10)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Clear target to free memory
+    setTimeout(() => { target.innerHTML = ''; }, 1000);
+    showToast('✅ Analytics Card exported!');
+  } catch(e) {
+    console.error('Analytics card export failed:', e);
+    target.innerHTML = '';
+    showToast('❌ Export failed — check console');
+  }
 }
 
 // ── Export PNG (uses html2canvas already loaded) ──────────────
