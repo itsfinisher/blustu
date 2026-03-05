@@ -478,6 +478,11 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
 /* ── ABOUT – clickable link styling ── */
 .pd-link{color:var(--blue);text-decoration:underline;text-decoration-color:rgba(33,152,237,.35);word-break:break-all;}
 .pd-link:hover{text-decoration-color:var(--blue);}
+/* ── Social platform icon links ── */
+.pd-social-icons{display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap;}
+.pd-social-icon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:var(--gray-50);border:1px solid var(--gray-100);color:var(--gray-600);text-decoration:none;transition:all .15s;flex-shrink:0;}
+.pd-social-icon:hover{background:var(--blue-light);border-color:var(--blue);color:var(--blue);transform:translateY(-1px);}
+.pd-social-icon svg{display:block;}
 /* ── MULTI-CREATOR pitch deck ── */
 .pd-mc-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-100);}
 .pd-mc-chip{display:flex;align-items:center;gap:7px;padding:5px 10px;background:white;border:1px solid var(--gray-100);border-radius:20px;cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-700);transition:all .13s;}
@@ -1750,7 +1755,15 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
   <div class="modal">
     <div class="modal-header"><div class="modal-title">Generate Media Kit</div><button class="modal-close" onclick="closeModal('genKitModal')">✕</button></div>
     <div class="modal-body">
-      <div class="form-group"><label class="form-label">Creator</label><select class="form-select" id="kit-creator-select" onchange="onKitCreatorChange(this.value)"></select></div>
+      <div class="form-group">
+        <label class="form-label">Primary Creator</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select class="form-select" id="kit-creator-select" onchange="onKitCreatorChange(this.value)" style="flex:1"></select>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="openGridForKitModal()" title="Add extra creators">+&#x1F464;</button>
+        </div>
+        <div id="kit-extra-chips" style="display:none;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+        <input type="hidden" id="kit-extra-creator-ids" value="">
+      </div>
       <div class="form-group"><label class="form-label">Target Brand / Campaign</label><input class="form-input" id="kit-brand" placeholder="e.g. GymShark Fitness Campaign"></div>
       <div class="form-group"><label class="form-label">Highlight <span style="color:var(--gray-400);font-weight:400">(optional)</span></label><textarea class="form-textarea" id="kit-highlight" placeholder="What should this kit emphasise?"></textarea></div>
     </div>
@@ -2226,16 +2239,18 @@ async function syncAllFromDB() {
       STAFF = seeded; Storage.set('staff', STAFF);
     }
 
-    const [pp, ia, ao, ps] = await Promise.all([
+    const [pp, ia, ao, ps, ke] = await Promise.all([
       DB.getAppData('profilePics'),
       DB.getAppData('kitAnalytics'),
       DB.getAppData('adminOverrides'),
       DB.getAppData('pitchSubjects'),
+      DB.getAppData('kitExtraCreators'),
     ]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
     if (ao) { adminOverrides = ao; Storage.set('adminOverrides', ao); } // BUG2 FIX: store fetched value 'ao', not stale local var
     if (ps) { pitchSubjects = ps; Storage.set('pitchSubjects', pitchSubjects); }
+    if (ke) { kitExtraCreators = ke; Storage.set('kitExtraCreators', kitExtraCreators); }
 
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
@@ -2302,7 +2317,8 @@ const DEFAULT_INBOX = [
 ];
 
 let inboxMessages = Storage.get('inboxMessages', DEFAULT_INBOX);
-let kitAnalytics  = Storage.get('kitAnalytics',  {});
+let kitAnalytics    = Storage.get('kitAnalytics',    {});
+let kitExtraCreators = Storage.get('kitExtraCreators', {});  // primaryCreatorId -> [extraId, ...]
 let profilePics   = Storage.get('profilePics',   {});
 let pitchSubjects = Storage.get('pitchSubjects', {});  // pitch_id -> subject (stored in app_data, not pitch_decks table)
 function saveInbox()    { Storage.set('inboxMessages', inboxMessages); }
@@ -2359,7 +2375,8 @@ function resolveCreator(c) {
 
 // ── Grid state ──
 let gridSelectionIds = new Set();
-let gridCallbackFn = null;   // called with array of selected creator ids when confirmed
+let gridCallbackFn   = null;   // called with array of selected creator ids when confirmed
+let _gridReturnPage  = 'campaigns'; // page to return to after grid selection/close
 
 // ── prefetchStaff: load staff from Supabase BEFORE login prompt ──
 // This is what makes cross-device auth work for ALL staff accounts.
@@ -4144,6 +4161,57 @@ function confirmDeleteKit(creatorId) {
   });
 }
 
+// ── Media Kit extra creators helpers ────────────────────────
+function _saveKitExtraCreators() {
+  Storage.set('kitExtraCreators', kitExtraCreators);
+  DB.setAppData('kitExtraCreators', kitExtraCreators);
+}
+
+function _renderKitExtraChips(extraIds) {
+  const chipsEl = document.getElementById('kit-extra-chips');
+  const hiddenEl = document.getElementById('kit-extra-creator-ids');
+  if (!chipsEl) return;
+  if (!extraIds || !extraIds.length) {
+    chipsEl.style.display = 'none'; chipsEl.innerHTML = ''; if (hiddenEl) hiddenEl.value = ''; return;
+  }
+  if (hiddenEl) hiddenEl.value = JSON.stringify(extraIds);
+  chipsEl.style.display = 'flex';
+  chipsEl.innerHTML = extraIds.map(id => {
+    const c = creators.find(x => x.id === id);
+    if (!c) return '';
+    return `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--blue-light);color:var(--blue);border-radius:20px;padding:3px 10px 3px 8px;font-size:12px;font-weight:600">
+      ${c.name}
+      <button onclick="_removeKitExtraCreator(${id})" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:14px;line-height:1;padding:0;margin-left:2px">×</button>
+    </span>`;
+  }).filter(Boolean).join('');
+}
+
+function _removeKitExtraCreator(id) {
+  const el = document.getElementById('kit-extra-creator-ids');
+  if (!el) return;
+  try {
+    const ids = JSON.parse(el.value || '[]').filter(x => x !== id);
+    _renderKitExtraChips(ids);
+  } catch(e) {}
+}
+
+function openGridForKitModal() {
+  const primaryName = document.getElementById('kit-creator-select')?.value;
+  const primaryCreator = creators.find(c => c.name === primaryName);
+  // Pre-select already chosen extras
+  const existing = (() => { try { return JSON.parse(document.getElementById('kit-extra-creator-ids')?.value || '[]'); } catch(e){ return []; } })();
+  closeModal('genKitModal');
+  _gridReturnPage = 'mediakit';
+  gridSelectionIds.clear();
+  existing.forEach(id => gridSelectionIds.add(id));
+  openCreatorGrid(function(sel) {
+    // Filter out primary creator from extra list
+    const extras = sel.filter(c => !primaryCreator || c.id !== primaryCreator.id).map(c => c.id);
+    _renderKitExtraChips(extras);
+    openModal('genKitModal');
+  }, 'mediakit');
+}
+
 function onKitCreatorChange(val){
   const c=creators.find(x=>x.name===val);
   if(c){
@@ -4165,10 +4233,28 @@ function generateKit(){
   const genBtn = document.querySelector('#genKitModal .btn-primary');
   if (genBtn) { genBtn.disabled = false; genBtn.textContent = 'Generate Kit'; }
 
+  // Read extra creator IDs before closing modal
+  const extraIdsRaw = document.getElementById('kit-extra-creator-ids')?.value || '';
+  const extraIds = (() => { try { return JSON.parse(extraIdsRaw); } catch(e){ return []; } })();
+
   // Add or update kit record
   if (!mediaKits.find(k => k.creatorId === c.id)) {
     mediaKits.push({creatorId:c.id, creatorName:c.name, initial:avatarLetter(c.name), updated:'Just now', views:0});
   }
+
+  // Persist extra creators to app_data
+  if (extraIds.length) {
+    kitExtraCreators[String(c.id)] = extraIds;
+  } else {
+    delete kitExtraCreators[String(c.id)];
+  }
+  _saveKitExtraCreators();
+
+  // Clear the extra chips for next time
+  const chipsEl = document.getElementById('kit-extra-chips');
+  const hiddenEl = document.getElementById('kit-extra-creator-ids');
+  if (chipsEl) { chipsEl.innerHTML = ''; chipsEl.style.display = 'none'; }
+  if (hiddenEl) hiddenEl.value = '';
 
   onKitCreatorChange(name);
   renderMediaKitList();
@@ -4182,11 +4268,14 @@ function generateKit(){
 }
 
 function selectKitPreview(id){
-  const c=creators.find(x=>x.id===id);
-  if(c){
+  const c = creators.find(x => x.id === id);
+  if (c) {
     onKitCreatorChange(c.name);
-    document.getElementById('mk-edit-bio').value=c.niche||'';
+    document.getElementById('mk-edit-bio').value = c.niche || '';
     renderKitAnalytics(id);
+    // Restore extra creator chips in the generate modal (for when it re-opens for editing)
+    const extras = kitExtraCreators[String(id)] || [];
+    _renderKitExtraChips(extras);
   }
 }
 
@@ -5578,9 +5667,10 @@ function saveRateKitAdmin(id) {
 // ── CAMPAIGN INFLUENCER GRID ──────────────────────────────────
 // ══════════════════════════════════════════════════════════════
 
-function openCreatorGrid(callbackFn) {
+function openCreatorGrid(callbackFn, returnPage) {
   gridSelectionIds.clear();
-  gridCallbackFn = callbackFn || null;
+  gridCallbackFn  = callbackFn || null;
+  _gridReturnPage = returnPage || 'campaigns';
   // Populate niche filter
   const niches = [...new Set(creators.map(c => resolveCreator(c).niche).filter(Boolean))].sort();
   const nicheFilter = document.getElementById('gridNicheFilter');
@@ -5594,8 +5684,10 @@ function openCreatorGrid(callbackFn) {
 }
 
 function closeCreatorGrid() {
-  history.back();
-  showPage('campaigns', document.querySelector('[onclick*="campaigns"]'));
+  const navSel = _gridReturnPage === 'pitchdecks'
+    ? '[onclick*="pitchdecks"]'
+    : '[onclick*="' + _gridReturnPage + '"]';
+  showPage(_gridReturnPage, document.querySelector(navSel));
 }
 
 function filterCreatorGrid(q) {
@@ -5697,8 +5789,11 @@ function toggleGridSelect(creatorId) {
 function confirmGridSelection() {
   const selected = [...gridSelectionIds].map(id => creators.find(c => c.id === id)).filter(Boolean);
   if (gridCallbackFn) gridCallbackFn(selected);
-  showToast(`${selected.length} creator${selected.length>1?'s':''} selected`);
-  showPage('campaigns', document.querySelector('[onclick*="campaigns"]'));
+  showToast(`${selected.length} creator${selected.length > 1 ? 's' : ''} selected`);
+  const navSel = _gridReturnPage === 'pitchdecks'
+    ? '[onclick*="pitchdecks"]'
+    : '[onclick*="' + _gridReturnPage + '"]';
+  showPage(_gridReturnPage, document.querySelector(navSel));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -6575,9 +6670,7 @@ function renderPitchViewer() {
     if (activeR.avgViews)        pills.push({ v: activeR.avgViews,         l: 'Avg Views' });
     if (activeR.audience)        pills.push({ v: activeR.audience,         l: 'Audience' });
     if (deck.rate)               pills.push({ v: '\u00a3' + deck.rate,     l: 'Rate' });
-    if (activeOb.tiktok)         pills.push({ v: activeOb.tiktok,          l: 'TikTok' });
-    if (activeOb.instagram)      pills.push({ v: activeOb.instagram,       l: 'Instagram' });
-    if (activeOb.youtube)        pills.push({ v: activeOb.youtube,         l: 'YouTube' });
+    // Social links shown as icons below bio — not as stat pills
     pillsEl.innerHTML = pills.length
       ? pills.map(p => `<div class="pd-pill"><div class="pd-pill-val">${p.v}</div><div class="pd-pill-lbl">${p.l}</div></div>`).join('')
       : '<div style="font-size:12px;color:var(--gray-400)">Complete creator onboarding to populate stats.</div>';
@@ -6590,20 +6683,23 @@ function renderPitchViewer() {
     bioEl.innerHTML = _linkify(raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
   }
 
-  // ── Socials line (linkified)
+  // ── Socials: icon buttons (TikTok / Instagram / YouTube)
   const socEl = document.getElementById('pdSocialsLine');
   if (socEl) {
+    const TIKTOK_SVG    = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.87a8.18 8.18 0 004.78 1.52V7.02a4.85 4.85 0 01-1.01-.33z"/></svg>`;
+    const INSTAGRAM_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>`;
+    const YOUTUBE_SVG   = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 00-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 00.5 6.19 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.81 3.02 3.02 0 002.12 2.14C4.5 20.5 12 20.5 12 20.5s7.5 0 9.38-.55a3.02 3.02 0 002.12-2.14A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.81zM9.75 15.5v-7l6.5 3.5-6.5 3.5z"/></svg>`;
     const plats = [];
-    if (activeOb.tiktok)    plats.push({ name: 'TikTok',    url: activeOb.tiktok });
-    if (activeOb.instagram) plats.push({ name: 'Instagram', url: activeOb.instagram });
-    if (activeOb.youtube)   plats.push({ name: 'YouTube',   url: activeOb.youtube });
+    if (activeOb.tiktok)    plats.push({ icon: TIKTOK_SVG,    label: 'TikTok',    url: activeOb.tiktok });
+    if (activeOb.instagram) plats.push({ icon: INSTAGRAM_SVG, label: 'Instagram', url: activeOb.instagram });
+    if (activeOb.youtube)   plats.push({ icon: YOUTUBE_SVG,   label: 'YouTube',   url: activeOb.youtube });
     if (plats.length) {
-      socEl.innerHTML = 'Platforms: ' + plats.map(p => {
+      socEl.innerHTML = '<div class="pd-social-icons">' + plats.map(p => {
         const href = p.url.startsWith('http') ? p.url : 'https://' + p.url;
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="pd-link">${p.name}</a>`;
-      }).join(' \u00b7 ');
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="pd-social-icon" title="${p.label}: ${p.url}">${p.icon}</a>`;
+      }).join('') + '</div>';
     } else {
-      socEl.textContent = '';
+      socEl.innerHTML = '';
     }
   }
 
@@ -6815,6 +6911,7 @@ async function exportPitchAsPNG() {
 // ── Multi-creator selection for pitch modal ──────────────────
 function openGridForPitchModal() {
   closeModal('addPitchModal');
+  _gridReturnPage = 'pitchdecks';
   openCreatorGrid(function(sel) {
     if (sel.length === 0) { openModal('addPitchModal'); return; }
     const names = sel.map(c => c.name);
