@@ -1704,7 +1704,18 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
     <div class="modal-header"><div class="modal-title">Edit Pitch Deck</div><button class="modal-close" onclick="closeModal('editPitchModal')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="edit-pitch-id">
-      <div class="form-row"><div class="form-group"><label class="form-label">Brand</label><input class="form-input" id="edit-pitch-brand"></div><div class="form-group"><label class="form-label">Creator</label><select class="form-select" id="edit-pitch-creator"></select></div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Brand</label><input class="form-input" id="edit-pitch-brand"></div>
+        <div class="form-group">
+          <label class="form-label">Creator(s)</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select class="form-select" id="edit-pitch-creator" style="flex:1"></select>
+            <button class="btn btn-ghost btn-sm" type="button" onclick="openGridForEditPitchModal()" title="Add / change creators">+&#x1F464;</button>
+          </div>
+          <input type="hidden" id="edit-pitch-creator-ids" value="">
+          <div id="edit-pitch-mc-chips" class="pitch-mc-chips" style="display:none"></div>
+        </div>
+      </div>
       <div class="form-group"><label class="form-label">Campaign Concept</label><input class="form-input" id="edit-pitch-concept"></div>
       <div class="form-group"><label class="form-label">Pitch Subject</label><input class="form-input" id="edit-pitch-subject" placeholder="e.g. Collaboration opportunity — Summer 2025"></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Proposed Rate (£)</label><input class="form-input" id="edit-pitch-rate" type="number"></div><div class="form-group"><label class="form-label">Brand Contact Email</label><input class="form-input" id="edit-pitch-email"></div></div>
@@ -2670,6 +2681,22 @@ function renderCRMGrid(list) {
         </div>
       </div>`;
   }).join('');
+  // Re-init Sortable every time the grid is rendered — the previous instance
+  // is stale because innerHTML replaced all the DOM nodes it was watching.
+  if (_crmView === 'grid' && can('reorderCreators') && typeof Sortable !== 'undefined') {
+    if (_crmGridSortable) { try { _crmGridSortable.destroy(); } catch(_) {} _crmGridSortable = null; }
+    _crmGridSortable = Sortable.create(el, {
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      onEnd(evt) {
+        if (evt.oldIndex === evt.newIndex) return;
+        const ids = [...el.querySelectorAll('[data-id]')].map(c => c.dataset.id);
+        clearTimeout(_reorderDebounce);
+        _reorderDebounce = setTimeout(() => _saveCreatorOrder(ids), 500);
+      },
+    });
+  }
 }
 
 function renderCRM(list) {
@@ -3848,9 +3875,23 @@ async function updatePitch(){
   // Read subject before closing modal — NOT a DB column
   const subjectVal = (document.getElementById('edit-pitch-subject') || {}).value || '';
 
+  // Resolve creator field — single name or comma-separated multi via hidden IDs field
+  let creatorField = document.getElementById('edit-pitch-creator').value;
+  const epMcIds = document.getElementById('edit-pitch-creator-ids');
+  if (epMcIds && epMcIds.value) {
+    try {
+      const ids = JSON.parse(epMcIds.value);
+      if (ids.length > 1) {
+        creatorField = ids
+          .map(cid => { const c = creators.find(x => x.id === cid); return c ? c.name : ''; })
+          .filter(Boolean).join(', ');
+      }
+    } catch(e) {}
+  }
+
   // Update in-memory fields (only DB columns)
   p.brand   = document.getElementById('edit-pitch-brand').value.trim();
-  p.creator = document.getElementById('edit-pitch-creator').value;
+  p.creator = creatorField;
   p.concept = document.getElementById('edit-pitch-concept').value.trim();
   p.rate    = document.getElementById('edit-pitch-rate').value;
   p.email   = document.getElementById('edit-pitch-email').value.trim();
@@ -3884,18 +3925,41 @@ async function updatePitch(){
   if (typeof renderPitchViewer === 'function' && pitchDecks[_pdIdx] && pitchDecks[_pdIdx].id === id) renderPitchViewer();
 }
 
-function openEditPitch(id){
-  const p=pitchDecks.find(x=>x.id===id);
-  if(!p)return;
-  document.getElementById('edit-pitch-id').value=id;
-  document.getElementById('edit-pitch-brand').value=p.brand;
-  document.getElementById('edit-pitch-creator').value=p.creator;
-  document.getElementById('edit-pitch-concept').value=p.concept||'';
-  document.getElementById('edit-pitch-rate').value=p.rate||'';
-  document.getElementById('edit-pitch-email').value=p.email||'';
+function openEditPitch(id) {
+  const p = pitchDecks.find(x => x.id === id);
+  if (!p) return;
+
+  document.getElementById('edit-pitch-id').value      = id;
+  document.getElementById('edit-pitch-brand').value   = p.brand;
+  document.getElementById('edit-pitch-concept').value = p.concept || '';
+  document.getElementById('edit-pitch-rate').value    = p.rate || '';
+  document.getElementById('edit-pitch-email').value   = p.email || '';
   document.getElementById('edit-pitch-subject').value = p.subject || pitchSubjects[String(id)] || '';
-  document.getElementById('edit-pitch-message').value=p.message||'';
-  document.getElementById('edit-pitch-status').value=p.status;
+  document.getElementById('edit-pitch-message').value = p.message || '';
+  document.getElementById('edit-pitch-status').value  = p.status;
+
+  // Restore creator selection — supports single ("Name") and multi ("A, B, C")
+  const chipsEl  = document.getElementById('edit-pitch-mc-chips');
+  const hiddenEl = document.getElementById('edit-pitch-creator-ids');
+  const names = (p.creator || '').split(',').map(n => n.trim()).filter(Boolean);
+
+  // Set primary select to first name
+  document.getElementById('edit-pitch-creator').value = names[0] || '';
+
+  if (names.length > 1) {
+    // Multi-creator: store all IDs in hidden field, show chips
+    const ids = names.map(n => { const c = creators.find(x => x.name === n); return c ? c.id : null; }).filter(Boolean);
+    if (hiddenEl) hiddenEl.value = JSON.stringify(ids);
+    if (chipsEl) {
+      chipsEl.style.display = 'flex';
+      chipsEl.innerHTML = names.map(n => `<span class="pitch-mc-chip">${n}</span>`).join('');
+    }
+  } else {
+    // Single creator — clear multi state
+    if (hiddenEl) hiddenEl.value = '';
+    if (chipsEl) { chipsEl.style.display = 'none'; chipsEl.innerHTML = ''; }
+  }
+
   openModal('editPitchModal');
 }
 
@@ -6909,6 +6973,45 @@ async function exportPitchAsPNG() {
 
 
 // ── Multi-creator selection for pitch modal ──────────────────
+// Opens the creator grid to add/change creators for an existing pitch being edited
+function openGridForEditPitchModal() {
+  // Seed pre-selection from already-stored IDs (or from the current single select)
+  const hiddenEl = document.getElementById('edit-pitch-creator-ids');
+  let preselect = [];
+  if (hiddenEl && hiddenEl.value) {
+    try { preselect = JSON.parse(hiddenEl.value); } catch(e) {}
+  }
+  if (!preselect.length) {
+    const selName = document.getElementById('edit-pitch-creator')?.value;
+    const c = creators.find(x => x.name === selName);
+    if (c) preselect = [c.id];
+  }
+
+  closeModal('editPitchModal');
+  _gridReturnPage = 'pitchdecks';
+  gridSelectionIds.clear();
+  preselect.forEach(id => gridSelectionIds.add(id));
+
+  openCreatorGrid(function(sel) {
+    if (sel.length === 0) { openModal('editPitchModal'); return; }
+    const names   = sel.map(c => c.name);
+    const ids     = sel.map(c => c.id);
+    const chipsEl  = document.getElementById('edit-pitch-mc-chips');
+    const hiddenEl = document.getElementById('edit-pitch-creator-ids');
+
+    document.getElementById('edit-pitch-creator').value = names[0];
+    if (hiddenEl) hiddenEl.value = JSON.stringify(ids);
+
+    if (sel.length > 1 && chipsEl) {
+      chipsEl.style.display = 'flex';
+      chipsEl.innerHTML = names.map(n => `<span class="pitch-mc-chip">${n}</span>`).join('');
+    } else if (chipsEl) {
+      chipsEl.style.display = 'none'; chipsEl.innerHTML = '';
+    }
+    openModal('editPitchModal');
+  }, 'pitchdecks');
+}
+
 function openGridForPitchModal() {
   closeModal('addPitchModal');
   _gridReturnPage = 'pitchdecks';
