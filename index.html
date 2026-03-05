@@ -390,6 +390,54 @@ tr:hover td{background:var(--gray-50);}
 .confirm-modal{max-width:400px;}
 .confirm-icon{width:52px;height:52px;border-radius:50%;background:var(--red-light);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
 
+/* ━━ PREMIUM PITCH DECK VIEWER ━━ */
+.pd-thumb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:20px;}
+.pd-thumb{background:white;border-radius:14px;border:1.5px solid var(--gray-100);overflow:hidden;box-shadow:var(--shadow-sm);cursor:pointer;transition:all .18s;}
+.pd-thumb:hover,.pd-thumb.pd-thumb-active{box-shadow:var(--shadow-md);border-color:var(--blue);transform:translateY(-2px);}
+.pd-thumb-active{border-width:2px;box-shadow:0 0 0 3px rgba(33,152,237,.15)!important;}
+.pd-thumb-hdr{background:linear-gradient(140deg,#0b1f36 0%,#1a4872 100%);padding:14px 16px;display:flex;align-items:center;gap:12px;}
+.pd-thumb-body{padding:12px 14px;}
+.pd-viewer{display:grid;grid-template-columns:280px 1fr;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(15,17,32,.10),0 2px 8px rgba(15,17,32,.06);background:white;}
+.pd-left{background:linear-gradient(155deg,#0b1f36 0%,#123356 50%,#1a4872 100%);padding:32px 24px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;}
+.pd-left::before{content:'';position:absolute;bottom:-50px;right:-50px;width:200px;height:200px;border-radius:50%;background:rgba(33,152,237,.16);pointer-events:none;}
+.pd-left::after{content:'';position:absolute;top:-30px;left:-30px;width:120px;height:120px;border-radius:50%;background:rgba(33,152,237,.08);pointer-events:none;}
+.pd-avatar-wrap{position:relative;z-index:1;margin-bottom:14px;}
+.pd-avatar{width:100px;height:100px;border-radius:50%;border:3px solid rgba(255,255,255,.22);box-shadow:0 8px 28px rgba(0,0,0,.28);overflow:hidden;display:flex;align-items:center;justify-content:center;color:white;font-family:'DM Serif Display',serif;font-size:36px;font-weight:700;}
+.pd-avatar img{width:100%;height:100%;object-fit:cover;}
+.pd-creator-name{font-family:'DM Serif Display',serif;font-size:21px;color:white;text-align:center;margin-bottom:6px;position:relative;z-index:1;line-height:1.2;}
+.pd-niche-tag{font-size:10px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:rgba(255,255,255,.62);background:rgba(255,255,255,.11);padding:4px 14px;border-radius:20px;position:relative;z-index:1;margin-bottom:auto;}
+.pd-left-actions{display:flex;flex-direction:column;gap:8px;width:100%;margin-top:20px;position:relative;z-index:1;}
+.pd-action-btn{display:block;width:100%;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;border:none;transition:all .15s;}
+.pd-action-primary{background:var(--blue);color:white;}
+.pd-action-primary:hover{background:var(--blue-dark);}
+.pd-action-ghost{background:rgba(255,255,255,.1);color:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.18);}
+.pd-action-ghost:hover{background:rgba(255,255,255,.2);}
+.pd-right{padding:26px 28px;display:flex;flex-direction:column;min-height:460px;}
+.pd-right-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;}
+.pd-brand-label{font-size:10px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--blue);margin-bottom:3px;}
+.pd-deck-title{font-family:'DM Serif Display',serif;font-size:19px;color:var(--gray-900);line-height:1.25;}
+.pd-tabs{display:flex;border-bottom:2px solid var(--gray-100);margin-bottom:16px;}
+.pd-tab{padding:7px 16px;font-size:13px;font-weight:600;color:var(--gray-400);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;}
+.pd-tab:hover{color:var(--gray-600);}
+.pd-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.pd-pane{display:none;flex:1;}
+.pd-pane.active{display:flex;flex-direction:column;}
+.pd-stat-pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.pd-pill{background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;padding:9px 13px;text-align:center;min-width:78px;}
+.pd-pill-val{font-weight:700;font-size:14px;color:var(--gray-900);font-family:'DM Serif Display',serif;line-height:1;}
+.pd-pill-lbl{font-size:9px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-top:3px;}
+.pd-bio{font-size:13px;color:var(--gray-600);line-height:1.75;}
+.pd-cs-placeholder{background:linear-gradient(135deg,var(--blue-light),white);border:1px solid var(--gray-100);border-radius:14px;padding:32px;text-align:center;margin:auto;}
+.pd-analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.pd-ana-tile{background:var(--gray-50);border-radius:10px;padding:14px;text-align:center;}
+.pd-ana-val{font-family:'DM Serif Display',serif;font-size:20px;font-weight:700;color:var(--blue);}
+.pd-ana-lbl{font-size:9px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-top:3px;}
+.pd-nav-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--gray-50);border:1px solid var(--gray-100);border-top:none;border-radius:0 0 18px 18px;}
+.pd-nav-arr{width:32px;height:32px;border-radius:8px;border:1px solid var(--gray-200);background:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--gray-600);transition:all .15s;line-height:1;}
+.pd-nav-arr:hover:not(:disabled){background:var(--blue);color:white;border-color:var(--blue);}
+.pd-nav-arr:disabled{opacity:.3;cursor:not-allowed;}
+.pd-nav-label{font-size:13px;font-weight:600;color:var(--gray-600);}
+
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 </head>
@@ -1029,10 +1077,77 @@ tr:hover td{background:var(--gray-50);}
     <!-- ══ PITCH DECKS ══ -->
     <div class="page" id="page-pitchdecks">
       <div class="page-header">
-        <div><h1>Pitch Decks</h1><p id="pitch-sub">Build and send brand-ready pitch decks</p></div>
-        <button class="btn btn-primary" onclick="openModal('addPitchModal')">+ New Pitch</button>
+        <div><h1>Pitch Decks</h1><p id="pitch-sub">Brand-ready creator decks</p></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" id="btn-export-pdf" style="display:none" onclick="exportPitchAsPDF()">&#11015; Export PDF</button>
+          <button class="btn btn-ghost btn-sm" id="btn-export-png" style="display:none" onclick="exportPitchAsPNG()">&#11015; Export PNG</button>
+          <button class="btn btn-primary" onclick="openModal('addPitchModal')">+ New Pitch</button>
+        </div>
       </div>
-      <div id="pitchGrid" class="grid-3"></div>
+
+      <!-- Thumbnail grid: one card per pitch deck -->
+      <div id="pitchGrid" class="pd-thumb-grid"></div>
+
+      <!-- Premium viewer (hidden until a deck is opened) -->
+      <div id="pitchViewerWrap" style="display:none;margin-top:0">
+        <div class="pd-viewer" id="pitchViewerCard">
+          <!-- LEFT COLUMN -->
+          <div class="pd-left" id="pdLeft">
+            <div class="pd-avatar-wrap">
+              <div class="pd-avatar" id="pdAvatar"></div>
+            </div>
+            <div class="pd-creator-name" id="pdCreatorName">Creator</div>
+            <div class="pd-niche-tag" id="pdNicheTag">—</div>
+            <div class="pd-left-actions">
+              <button class="pd-action-btn pd-action-primary" onclick="pdViewMediaKit()">View Media Kit</button>
+              <button class="pd-action-btn pd-action-ghost" onclick="pdContact()">Contact</button>
+            </div>
+          </div>
+          <!-- RIGHT COLUMN -->
+          <div class="pd-right">
+            <div class="pd-right-header">
+              <div>
+                <div class="pd-brand-label" id="pdBrandLabel">Brand Pitch</div>
+                <div class="pd-deck-title" id="pdDeckTitle">Creator &times; Brand</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0">
+                <button class="btn btn-ghost btn-sm" onclick="pdEditDeck()">Edit</button>
+                <button class="btn btn-primary btn-sm" id="pdSendBtn" onclick="pdSendDeck()">Send</button>
+              </div>
+            </div>
+            <!-- Tabs -->
+            <div class="pd-tabs">
+              <button class="pd-tab active" onclick="switchPdTab('about',this)">About</button>
+              <button class="pd-tab" onclick="switchPdTab('cases',this)">Case Studies</button>
+              <button class="pd-tab" onclick="switchPdTab('analytics',this)">Analytics</button>
+            </div>
+            <!-- About -->
+            <div class="pd-pane active" id="pdpane-about">
+              <div class="pd-stat-pills" id="pdStatPills"></div>
+              <div class="pd-bio" id="pdBio">No bio yet.</div>
+              <div id="pdSocialsLine" style="font-size:12px;color:var(--gray-400);margin-top:4px"></div>
+            </div>
+            <!-- Case Studies -->
+            <div class="pd-pane" id="pdpane-cases">
+              <div class="pd-cs-placeholder">
+                <div style="font-size:36px;margin-bottom:12px">&#128194;</div>
+                <div style="font-weight:700;font-size:15px;color:var(--gray-900);margin-bottom:8px">Case Studies Coming Soon</div>
+                <div style="font-size:13px;color:var(--gray-400);line-height:1.65">Upload brand campaign results via the creator profile to showcase real performance data here.</div>
+              </div>
+            </div>
+            <!-- Analytics -->
+            <div class="pd-pane" id="pdpane-analytics">
+              <div class="pd-analytics-grid" id="pdAnalyticsGrid"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Navigation bar -->
+        <div class="pd-nav-bar">
+          <button class="pd-nav-arr" id="pdNavPrev" onclick="pdNav(-1)">&#8592;</button>
+          <div class="pd-nav-label" id="pdNavLabel">1 / 1</div>
+          <button class="pd-nav-arr" id="pdNavNext" onclick="pdNav(1)">&#8594;</button>
+        </div>
+      </div>
     </div>
 
     <!-- ══ PIPELINE ══ -->
@@ -1655,7 +1770,7 @@ tr:hover td{background:var(--gray-50);}
     <div class="modal-body">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
         <div class="user-avatar" style="width:48px;height:48px;font-size:18px" id="profile-modal-avatar">U</div>
-        <div><div style="font-size:16px;font-weight:600" id="profile-modal-name">Ubayy</div><div style="font-size:12px;color:var(--gray-400)" id="profile-modal-email">ubayy@blustu.agency</div></div>
+        <div><div style="font-size:16px;font-weight:600" id="profile-modal-name">Ubayy</div><div style="font-size:12px;color:var(--gray-400)" id="profile-modal-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a5d0c7c4dcdce5c7c9d0d6d1d08bc4c2c0cbc6dc">[email&#160;protected]</a></div></div>
       </div>
       <div class="form-group"><label class="form-label">Display Name</label><input class="form-input" id="profile-modal-display" placeholder="Your name"></div>
     </div>
@@ -1663,7 +1778,7 @@ tr:hover td{background:var(--gray-50);}
   </div>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 /* ═══════════════════════════════════════════════════════════════
    blustu™ Internal Panel — v3.0
    Features: RBAC, persistence, global search, campaign-deal link,
@@ -3295,35 +3410,59 @@ function filterCampaigns(filter,btn){
 
 // ══ PITCH DECKS ══
 function renderPitchDecks(){
-  const grid=document.getElementById('pitchGrid');
-  document.getElementById('pitchBadge').textContent=pitchDecks.length||0;
-  document.getElementById('pitch-sub').textContent=`${pitchDecks.length} pitch deck${pitchDecks.length!==1?'s':''} total`;
+  document.getElementById('pitchBadge').textContent = pitchDecks.length || 0;
+  document.getElementById('pitch-sub').textContent =
+    pitchDecks.length + ' pitch deck' + (pitchDecks.length !== 1 ? 's' : '') + ' \u2014 click a card to preview';
 
-  const cards=pitchDecks.map(p=>`
-    <div class="card" style="padding:0;overflow:hidden">
-      <div class="deck-slide" style="border-radius:var(--radius) var(--radius) 0 0">
-        <div><div class="deck-slide-label">Brand Pitch</div><div class="deck-slide-title">${p.creator} × ${p.brand}<br><span style="font-size:14px;opacity:.7">${p.concept||''}</span></div></div>
-        <div class="deck-slide-footer"><div class="deck-logo">blustu™</div>${statusBadge(p.status)}</div>
-      </div>
-      <div style="padding:14px">
-        <div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">${p.email?'Contact: '+p.email:'No contact yet'} ${p.rate?'· £'+p.rate:''}</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openEditPitch(${p.id})">Edit</button>
-          <button class="btn btn-primary btn-sm" style="flex:1" onclick="sendPitch(${p.id})">${p.status==='Draft'?'Send':'Re-send'}</button>
+  const grid = document.getElementById('pitchGrid');
+  if (!grid) return;
+
+  // Build thumbnail cards
+  const thumbs = pitchDecks.map((p, idx) => {
+    const c   = creators.find(x => x.name === p.creator);
+    const pic = c ? profilePics[c.id] : null;
+    const r   = c ? resolveCreator(c) : {};
+    const av  = pic
+      ? `<img src="${pic}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.22)">`
+      : `<div style="width:40px;height:40px;border-radius:50%;background:${c ? avatarColor(c.id) : '#2198ED'};display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:15px;font-family:'DM Serif Display',serif;border:2px solid rgba(255,255,255,.22)">${c ? avatarLetter(c.name) : '?'}</div>`;
+    return `
+      <div class="pd-thumb" id="pdthumb-${idx}" onclick="openPitchViewer(${idx})">
+        <div class="pd-thumb-hdr">
+          ${av}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;color:white;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.creator}</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:.4px;text-transform:uppercase">${r.niche || '\u2014'}</div>
+          </div>
+          <div style="font-size:10px;font-weight:700;color:white;background:rgba(255,255,255,.14);border-radius:6px;padding:3px 8px;flex-shrink:0">${statusBadge(p.status)}</div>
         </div>
-      </div>
-    </div>`).join('');
+        <div class="pd-thumb-body">
+          <div style="font-size:12px;color:var(--gray-600);margin-bottom:8px">${p.brand ? '\u00d7 ' + p.brand : 'No brand'}</div>
+          <div style="font-size:11px;color:var(--blue);font-weight:600">Preview deck \u2192</div>
+        </div>
+      </div>`;
+  });
 
-  grid.innerHTML=cards+`
-    <div class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--gray-200);background:transparent;cursor:pointer;min-height:200px;gap:10px" onclick="openModal('addPitchModal')">
-      <div style="width:40px;height:40px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  const addCard = `
+    <div class="pd-thumb" onclick="openModal('addPitchModal')" style="border:2px dashed var(--gray-200);box-shadow:none;background:transparent">
+      <div style="padding:48px 20px;text-align:center">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;margin:0 auto 10px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600)">Create New Pitch</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:4px">Build a deck in minutes</div>
       </div>
-      <div style="font-size:13px;font-weight:600;color:var(--gray-600)">Create New Pitch</div>
-      <div style="font-size:11px;color:var(--gray-400)">Build a deck in minutes</div>
     </div>`;
-}
 
+  grid.innerHTML = thumbs.join('') + addCard;
+
+  // Hide viewer + export buttons if no decks
+  const vw = document.getElementById('pitchViewerWrap');
+  const btnPDF = document.getElementById('btn-export-pdf');
+  const btnPNG = document.getElementById('btn-export-png');
+  if (vw) vw.style.display = 'none';
+  if (btnPDF) btnPDF.style.display = 'none';
+  if (btnPNG) btnPNG.style.display = 'none';
+}
 async function savePitch(status){
   const brand=document.getElementById('pitch-brand').value.trim();
   const creator=document.getElementById('pitch-creator').value;
@@ -5958,6 +6097,256 @@ async function autoDraftEarnings(campaign) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ── PREMIUM PITCH DECK VIEWER ──────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+let _pdIdx = 0;          // index into pitchDecks[]
+let _pdCreatorId = null; // id of currently viewed creator
+
+function openPitchViewer(idx) {
+  _pdIdx = idx;
+  const vw = document.getElementById('pitchViewerWrap');
+  if (vw) {
+    vw.style.display = 'block';
+    setTimeout(() => vw.scrollIntoView({ behavior: 'smooth', block: 'start' }), 40);
+  }
+  const btnPDF = document.getElementById('btn-export-pdf');
+  const btnPNG = document.getElementById('btn-export-png');
+  if (btnPDF) btnPDF.style.display = '';
+  if (btnPNG) btnPNG.style.display = '';
+
+  // Highlight active thumbnail
+  document.querySelectorAll('.pd-thumb').forEach(el => el.classList.remove('pd-thumb-active'));
+  const active = document.getElementById('pdthumb-' + idx);
+  if (active) active.classList.add('pd-thumb-active');
+
+  renderPitchViewer();
+}
+
+function renderPitchViewer() {
+  const deck = pitchDecks[_pdIdx];
+  if (!deck) return;
+
+  const c   = creators.find(x => x.name === deck.creator);
+  _pdCreatorId = c ? c.id : null;
+  const r   = c ? resolveCreator(c) : {};
+  const ob  = (c && c.onboarding) ? c.onboarding : {};
+  const ana = c ? (kitAnalytics[c.id] || {}) : {};
+  const pic = c ? profilePics[c.id] : null;
+
+  // ── Avatar
+  const avEl = document.getElementById('pdAvatar');
+  if (avEl) {
+    avEl.style.background = c ? avatarColor(c.id) : '#2198ED';
+    avEl.innerHTML = pic
+      ? `<img src="${pic}" alt="${deck.creator}">`
+      : avatarLetter(deck.creator);
+  }
+
+  // ── Text fields
+  const _t = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  _t('pdCreatorName', deck.creator);
+  _t('pdNicheTag',    r.niche || '—');
+  _t('pdBrandLabel',  deck.brand ? 'Pitch \u2192 ' + deck.brand : 'Brand Pitch');
+  _t('pdDeckTitle',   deck.concept || (deck.creator + (deck.brand ? ' \u00d7 ' + deck.brand : '')));
+
+  const sb = document.getElementById('pdSendBtn');
+  if (sb) sb.textContent = deck.status === 'Sent' ? 'Re-send' : 'Send';
+
+  // ── Nav
+  _t('pdNavLabel', (_pdIdx + 1) + ' / ' + pitchDecks.length);
+  const pBtn = document.getElementById('pdNavPrev');
+  const nBtn = document.getElementById('pdNavNext');
+  if (pBtn) pBtn.disabled = _pdIdx === 0;
+  if (nBtn) nBtn.disabled = _pdIdx === pitchDecks.length - 1;
+
+  // ── Stat pills (About tab)
+  const pillsEl = document.getElementById('pdStatPills');
+  if (pillsEl) {
+    const pills = [];
+    if (r.followers)       pills.push({ v: r.followers,       l: 'Followers' });
+    if (r.engRate != null) pills.push({ v: r.engRate + '%',   l: 'Engagement' });
+    if (r.avgViews)        pills.push({ v: r.avgViews,        l: 'Avg Views' });
+    if (r.audience)        pills.push({ v: r.audience,        l: 'Audience' });
+    if (deck.rate)         pills.push({ v: '\u00a3' + deck.rate, l: 'Rate' });
+    if (ob.tiktok)         pills.push({ v: ob.tiktok,         l: 'TikTok' });
+    if (ob.instagram)      pills.push({ v: ob.instagram,      l: 'Instagram' });
+    if (ob.youtube)        pills.push({ v: ob.youtube,        l: 'YouTube' });
+    pillsEl.innerHTML = pills.length
+      ? pills.map(p => `<div class="pd-pill"><div class="pd-pill-val">${p.v}</div><div class="pd-pill-lbl">${p.l}</div></div>`).join('')
+      : '<div style="font-size:12px;color:var(--gray-400)">Complete creator onboarding to populate stats.</div>';
+  }
+
+  // ── Bio
+  const bioEl = document.getElementById('pdBio');
+  if (bioEl) bioEl.textContent = ob.bio || deck.message || c?.notes || 'No bio provided yet.';
+
+  // ── Socials line
+  const socEl = document.getElementById('pdSocialsLine');
+  if (socEl) {
+    const plats = [ob.tiktok && 'TikTok', ob.instagram && 'Instagram', ob.youtube && 'YouTube'].filter(Boolean);
+    socEl.textContent = plats.length ? 'Platforms: ' + plats.join(' \u00b7 ') : '';
+  }
+
+  // ── Analytics tiles
+  const anaEl = document.getElementById('pdAnalyticsGrid');
+  if (anaEl) {
+    const gender = ana.gender || {};
+    const ages   = ana.ages   || {};
+    const topGender = Object.entries(gender).sort((a, b) => b[1] - a[1])[0];
+    const topAge    = Object.entries(ages).sort((a, b) => b[1] - a[1])[0];
+    const gMap = { f: 'Female', m: 'Male', o: 'Other' };
+
+    const tiles = [
+      { v: r.engRate != null ? r.engRate + '%' : '\u2014', l: 'Engagement Rate' },
+      { v: r.avgViews || '\u2014',                         l: 'Avg Views' },
+      { v: r.followers || '\u2014',                        l: 'Total Followers' },
+      { v: topGender ? (gMap[topGender[0]] || topGender[0]) : '\u2014', l: 'Top Gender' },
+      { v: topAge ? topAge[0] : '\u2014',                  l: 'Top Age Group' },
+      { v: ana.locations?.[0] || r.audience || '\u2014',   l: 'Top Location' },
+    ];
+    anaEl.innerHTML = tiles.map(t =>
+      `<div class="pd-ana-tile"><div class="pd-ana-val">${t.v}</div><div class="pd-ana-lbl">${t.l}</div></div>`
+    ).join('');
+  }
+
+  // ── Reset to About tab when deck changes
+  switchPdTab('about', document.querySelector('.pd-tab'));
+}
+
+function switchPdTab(name, btn) {
+  document.querySelectorAll('.pd-tab').forEach(t  => t.classList.remove('active'));
+  document.querySelectorAll('.pd-pane').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const pane = document.getElementById('pdpane-' + name);
+  if (pane) pane.classList.add('active');
+}
+
+function pdNav(dir) {
+  _pdIdx = Math.max(0, Math.min(pitchDecks.length - 1, _pdIdx + dir));
+  // Update thumbnail highlight
+  document.querySelectorAll('.pd-thumb').forEach(el => el.classList.remove('pd-thumb-active'));
+  const active = document.getElementById('pdthumb-' + _pdIdx);
+  if (active) active.classList.add('pd-thumb-active');
+  renderPitchViewer();
+}
+
+function pdViewMediaKit() {
+  if (!_pdCreatorId) { showToast('No creator selected'); return; }
+  const c = creators.find(x => x.id === _pdCreatorId);
+  if (!c) return;
+  showPage('mediakit', document.querySelector('[onclick*="mediakit"]'));
+  setTimeout(() => {
+    const sel = document.getElementById('kit-creator-select');
+    if (sel) { sel.value = c.name; if (typeof onKitCreatorChange === 'function') onKitCreatorChange(c.name); }
+  }, 100);
+}
+
+function pdContact() {
+  const deck = pitchDecks[_pdIdx];
+  if (!deck) return;
+  const c  = creators.find(x => x.name === deck.creator);
+  const ob = c?.onboarding || {};
+  const lines = [
+    'Creator: ' + deck.creator,
+    'Email: '   + (c?.email || deck.email || '\u2014'),
+  ];
+  if (ob.tiktok)    lines.push('TikTok: '    + ob.tiktok);
+  if (ob.instagram) lines.push('Instagram: ' + ob.instagram);
+  if (ob.youtube)   lines.push('YouTube: '   + ob.youtube);
+  if (deck.email)   lines.push('Brand contact: ' + deck.email);
+  const text = lines.join('\n');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text)
+      .then(() => showToast('\u2705 Contact details copied!'))
+      .catch(() => prompt('Copy contact info:', text));
+  } else {
+    prompt('Copy contact info:', text);
+  }
+}
+
+function pdEditDeck() {
+  const deck = pitchDecks[_pdIdx];
+  if (deck) openEditPitch(deck.id);
+}
+
+function pdSendDeck() {
+  const deck = pitchDecks[_pdIdx];
+  if (!deck) return;
+  sendPitch(deck.id);
+  deck.status = 'Sent';
+  renderPitchViewer();
+}
+
+// ── Export PDF ────────────────────────────────────────────────
+function exportPitchAsPDF() {
+  const card = document.getElementById('pitchViewerCard');
+  if (!card) { showToast('Open a deck first'); return; }
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { showToast('Allow pop-ups to export PDF'); return; }
+
+  // Clone the hero card (not nav bar)
+  const clone = card.cloneNode(true);
+  clone.querySelectorAll('button').forEach(b => b.remove());
+
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'DM Sans',sans-serif;background:#f4f5f8;padding:32px;}
+      .pd-viewer{display:grid;grid-template-columns:260px 1fr;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(15,17,32,.12);background:white;min-height:440px;}
+      .pd-left{background:linear-gradient(155deg,#0b1f36 0%,#123356 50%,#1a4872 100%);padding:28px 22px;display:flex;flex-direction:column;align-items:center;}
+      .pd-avatar{width:88px;height:88px;border-radius:50%;border:3px solid rgba(255,255,255,.22);overflow:hidden;display:flex;align-items:center;justify-content:center;color:white;font-family:'DM Serif Display',serif;font-size:30px;font-weight:700;margin-bottom:12px;}
+      .pd-avatar img{width:100%;height:100%;object-fit:cover;}
+      .pd-creator-name{font-family:'DM Serif Display',serif;font-size:19px;color:white;text-align:center;margin-bottom:5px;}
+      .pd-niche-tag{font-size:9px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:rgba(255,255,255,.6);background:rgba(255,255,255,.1);padding:3px 12px;border-radius:20px;}
+      .pd-left-actions{display:none}
+      .pd-right{padding:22px 26px;}
+      .pd-brand-label{font-size:9px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:#2198ED;margin-bottom:3px;}
+      .pd-deck-title{font-family:'DM Serif Display',serif;font-size:18px;color:#0f1120;margin-bottom:14px;line-height:1.3;}
+      .pd-right-header button,.pd-tabs{display:none}
+      .pd-pane{display:flex!important;flex-direction:column;}
+      #pdpane-cases,#pdpane-analytics{display:none!important}
+      .pd-stat-pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;}
+      .pd-pill{background:#f4f5f8;border:1px solid #e8eaf0;border-radius:9px;padding:8px 11px;text-align:center;min-width:70px;}
+      .pd-pill-val{font-weight:700;font-size:13px;color:#0f1120;font-family:'DM Serif Display',serif;}
+      .pd-pill-lbl{font-size:8px;color:#8b93a8;text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
+      .pd-bio{font-size:12px;color:#4a5168;line-height:1.7;}
+      @media print{body{padding:0}@page{margin:8mm}}
+    </style>
+    </head><body>
+    <div class="pd-viewer">${clone.innerHTML}</div>
+    <script>window.onload=()=>{setTimeout(()=>window.print(),800);}<\/script>
+    </body></html>`);
+  win.document.close();
+}
+
+// ── Export PNG (uses html2canvas already loaded) ──────────────
+async function exportPitchAsPNG() {
+  const card = document.getElementById('pitchViewerCard');
+  if (!card) { showToast('Open a deck first'); return; }
+  if (typeof html2canvas === 'undefined') { showToast('Export library not ready, try again in a moment'); return; }
+  showToast('Generating PNG\u2026');
+  try {
+    const deck = pitchDecks[_pdIdx];
+    const canvas = await html2canvas(card, {
+      scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
+      onclone: (doc, clone) => { clone.style.borderRadius = '0'; }
+    });
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = 'pitch-' + (deck ? deck.creator.replace(/\s+/g, '-').toLowerCase() : 'deck') + '-' + new Date().toISOString().slice(0,10) + '.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    showToast('\u2705 PNG exported!');
+  } catch (e) {
+    console.error('PNG export error', e);
+    showToast('\u274c Export failed — check console');
+  }
+}
+
+
 </script>
 
 <!-- Admin Rates Modal -->
@@ -6117,11 +6506,4 @@ async function autoDraftEarnings(campaign) {
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-danger btn-sm" id="cal-delete-btn" onclick="deleteCalEvent()" style="display:none">Delete</button>
-      <button class="btn btn-ghost" onclick="closeModal('calEventModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveCalEvent()">Save Event</button>
-    </div>
-  </div>
-</div>
-</body>
-</html>
+      <button class="btn btn-danger btn-sm" id="cal-delete-btn" onclick="deleteCalEvent()" style="display:none">De
