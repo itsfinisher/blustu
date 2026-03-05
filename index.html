@@ -6466,23 +6466,21 @@ function pdViewMediaKit() {
 function pdContact() {
   const deck = pitchDecks[_pdIdx];
   if (!deck) return;
-  const c  = creators.find(x => x.name === deck.creator);
-  const ob = c?.onboarding || {};
-  const lines = [
-    'Creator: ' + deck.creator,
-    'Email: '   + (c?.email || deck.email || '\u2014'),
-  ];
-  if (ob.tiktok)    lines.push('TikTok: '    + ob.tiktok);
-  if (ob.instagram) lines.push('Instagram: ' + ob.instagram);
-  if (ob.youtube)   lines.push('YouTube: '   + ob.youtube);
-  if (deck.email)   lines.push('Brand contact: ' + deck.email);
-  const text = lines.join('\n');
+  const c     = creators.find(x => x.name === (typeof window._pdMcIdx !== 'undefined' && deck.creator.includes(',')
+    ? deck.creator.split(',').map(n => n.trim())[window._pdMcIdx || 0]
+    : deck.creator));
+  const email = c?.email || '';
+  if (!email) {
+    showToast('No email available');
+    return;
+  }
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(text)
-      .then(() => showToast('\u2705 Contact details copied!'))
-      .catch(() => prompt('Copy contact info:', text));
+    navigator.clipboard.writeText(email)
+      .then(() => showToast('\u2705 Email copied to clipboard'))
+      .catch(() => { prompt('Copy email:', email); });
   } else {
-    prompt('Copy contact info:', text);
+    prompt('Copy email:', email);
+    showToast('\u2705 Email copied to clipboard');
   }
 }
 
