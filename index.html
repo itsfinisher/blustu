@@ -290,6 +290,24 @@ tr:hover td{background:var(--gray-50);}
 .crm-search{flex:1;display:flex;align-items:center;gap:8px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;padding:8px 12px;}
 .crm-search input{border:none;background:none;outline:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--gray-900);width:100%;}
 .crm-search input::placeholder{color:var(--gray-400);}
+/* ── CRM VIEW TOGGLE ── */
+.crm-view-toggle{display:flex;border:1px solid var(--gray-100);border-radius:8px;overflow:hidden;flex-shrink:0;}
+.crm-view-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:white;border:none;cursor:pointer;color:var(--gray-400);transition:all .15s;}
+.crm-view-btn:hover{background:var(--gray-50);color:var(--gray-600);}
+.crm-view-btn.active{background:var(--blue);color:white;}
+/* ── CRM GRID LAYOUT ── */
+.crm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;}
+.crm-gc{background:white;border:1.5px solid var(--gray-100);border-radius:14px;padding:18px 14px;cursor:pointer;transition:all .18s;text-align:center;box-shadow:var(--shadow-sm);}
+.crm-gc:hover{border-color:var(--blue);box-shadow:var(--shadow-md);transform:translateY(-2px);}
+.crm-gc-av{width:64px;height:64px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:22px;font-weight:700;color:white;overflow:hidden;flex-shrink:0;}
+.crm-gc-av img{width:100%;height:100%;object-fit:cover;}
+.crm-gc-name{font-weight:700;font-size:14px;color:var(--gray-900);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.crm-gc-niche{display:inline-block;font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-light);padding:2px 10px;border-radius:20px;margin-bottom:10px;}
+.crm-gc-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.crm-gc-stat{background:var(--gray-50);border-radius:8px;padding:7px 6px;text-align:center;}
+.crm-gc-stat-val{font-size:13px;font-weight:700;color:var(--gray-900);}
+.crm-gc-stat-lbl{font-size:9px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.4px;margin-top:1px;}
+.crm-gc-stat.full{grid-column:1/-1;}
 
 /* ── NOTIF DOT ── */
 .notif-dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0;}
@@ -785,13 +803,25 @@ tr:hover td{background:var(--gray-50);}
           <option value="Invited">Invited</option>
           <option value="Onboarded">Onboarded</option>
         </select>
+        <div class="crm-view-toggle">
+          <button class="crm-view-btn active" id="crmBtnList" onclick="setCRMView('list')" title="List view">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <button class="crm-view-btn" id="crmBtnGrid" onclick="setCRMView('grid')" title="Grid view">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="card" style="padding:0;overflow:hidden">
+      <div class="card" id="crmListWrap" style="padding:0;overflow:hidden">
         <div class="table-wrap">
           <table><thead><tr><th>Creator</th><th>Role</th><th>Location</th><th>Onboarding</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="crmTableBody"></tbody></table>
         </div>
         <div id="crm-empty" class="empty-state" style="display:none"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4"/></svg><h3>No creators found</h3><p>Try a different search term</p></div>
+      </div>
+      <div id="crmGridWrap" style="display:none">
+        <div class="crm-grid" id="crmGridBody"></div>
+        <div id="crm-grid-empty" class="empty-state" style="display:none"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4"/></svg><h3>No creators found</h3><p>Try a different search term</p></div>
       </div>
     </div>
 
@@ -2539,12 +2569,76 @@ function addActivity(msg) {
 }
 
 // ── CRM ──────────────────────────────────────────────────────
+// ── CRM VIEW STATE ────────────────────────────────────────────
+let _crmView = localStorage.getItem('crmView') || 'list';
+let _crmLastList = null;  // last filtered list, so both views stay in sync
+
+function setCRMView(mode) {
+  _crmView = mode;
+  localStorage.setItem('crmView', mode);
+  const listWrap = document.getElementById('crmListWrap');
+  const gridWrap = document.getElementById('crmGridWrap');
+  const btnList  = document.getElementById('crmBtnList');
+  const btnGrid  = document.getElementById('crmBtnGrid');
+  if (!listWrap) return;
+  if (mode === 'grid') {
+    listWrap.style.display = 'none';
+    gridWrap.style.display = '';
+    if (btnList) btnList.classList.remove('active');
+    if (btnGrid) btnGrid.classList.add('active');
+    renderCRMGrid(_crmLastList || creators);
+  } else {
+    listWrap.style.display = '';
+    gridWrap.style.display = 'none';
+    if (btnList) btnList.classList.add('active');
+    if (btnGrid) btnGrid.classList.remove('active');
+  }
+}
+
+function renderCRMGrid(list) {
+  const el    = document.getElementById('crmGridBody');
+  const empty = document.getElementById('crm-grid-empty');
+  if (!el) return;
+  if (!list || !list.length) {
+    el.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  el.innerHTML = list.map(c => {
+    const r   = resolveCreator(c);
+    const pic = profilePics[c.id];
+    const avH = pic
+      ? `<img src="${pic}" alt="${c.name}">`
+      : avatarLetter(c.name);
+    const avStyle = pic ? '' : `background:${avatarColor(c.id)};`;
+    return `
+      <div class="crm-gc" onclick="openCreatorProfile(${c.id})">
+        <div class="crm-gc-av" style="${avStyle}">${avH}</div>
+        <div class="crm-gc-name">${c.name}</div>
+        <div class="crm-gc-niche">${r.niche || c.niche || '—'}</div>
+        <div class="crm-gc-stats">
+          <div class="crm-gc-stat">
+            <div class="crm-gc-stat-val">${r.followers || '—'}</div>
+            <div class="crm-gc-stat-lbl">Followers</div>
+          </div>
+          <div class="crm-gc-stat">
+            <div class="crm-gc-stat-val" style="color:var(--green)">${r.engRate != null ? r.engRate + '%' : '—'}</div>
+            <div class="crm-gc-stat-lbl">Engagement</div>
+          </div>
+          ${r.audience ? `<div class="crm-gc-stat full"><div class="crm-gc-stat-val">${r.audience}</div><div class="crm-gc-stat-lbl">Audience</div></div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
 function renderCRM(list) {
+  _crmLastList = list;  // keep reference for grid sync
   const tbody=document.getElementById('crmTableBody');
   const empty=document.getElementById('crm-empty');
-  if(!list||!list.length){tbody.innerHTML='';empty.style.display='block';return;}
-  empty.style.display='none';
-  tbody.innerHTML=list.map(c=>{
+  if(!list||!list.length){tbody.innerHTML='';if(empty)empty.style.display='block';renderCRMGrid([]);return;}
+  if(empty)empty.style.display='none';
+  tbody.innerHTML=list.map(c=>{\
     const pic=profilePics[c.id];
     const avatarHtml=pic
       ? `<div class="creator-avatar" style="background:${avatarColor(c.id)};overflow:hidden"><img src="${pic}" class="avatar-img" alt="${c.name}"></div>`
@@ -2565,7 +2659,14 @@ function renderCRM(list) {
   }).join('');
   document.getElementById('crm-count').textContent=list.length;
   document.getElementById('crmBadge').textContent=creators.length;
+  // Keep grid in sync if it's visible
+  if (_crmView === 'grid') renderCRMGrid(list);
 }
+
+// Restore saved view preference when CRM page loads
+document.addEventListener('DOMContentLoaded', () => {
+  if (localStorage.getItem('crmView') === 'grid') setCRMView('grid');
+});
 
 function filterCRM(q){
   const s=(q||'').toLowerCase();
