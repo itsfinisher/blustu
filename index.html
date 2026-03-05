@@ -308,6 +308,15 @@ tr:hover td{background:var(--gray-50);}
 .crm-gc-stat-val{font-size:13px;font-weight:700;color:var(--gray-900);}
 .crm-gc-stat-lbl{font-size:9px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.4px;margin-top:1px;}
 .crm-gc-stat.full{grid-column:1/-1;}
+/* ── CRM DRAG-TO-REORDER ── */
+.crm-drag-handle{width:28px;cursor:grab;color:var(--gray-200);display:flex;align-items:center;justify-content:center;transition:color .15s;flex-shrink:0;}
+.crm-drag-handle:hover{color:var(--gray-400);}
+tr:hover .crm-drag-handle{color:var(--gray-400);}
+.sortable-ghost{opacity:.35;background:var(--blue-light)!important;}
+.sortable-chosen{background:var(--gray-50);}
+.crm-gc.sortable-ghost{opacity:.35;border-color:var(--blue)!important;}
+.crm-gc[data-id]{cursor:default;}
+.crm-gc-drag-hint{cursor:grab;}
 
 /* ── NOTIF DOT ── */
 .notif-dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0;}
@@ -482,6 +491,7 @@ tr:hover td{background:var(--gray-50);}
 
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -814,7 +824,7 @@ tr:hover td{background:var(--gray-50);}
       </div>
       <div class="card" id="crmListWrap" style="padding:0;overflow:hidden">
         <div class="table-wrap">
-          <table><thead><tr><th>Creator</th><th>Role</th><th>Location</th><th>Onboarding</th><th>Status</th><th>Actions</th></tr></thead>
+          <table><thead><tr><th id="crmDragTh" style="width:32px;padding:4px 0"></th><th>Creator</th><th>Role</th><th>Location</th><th>Onboarding</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="crmTableBody"></tbody></table>
         </div>
         <div id="crm-empty" class="empty-state" style="display:none"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4"/></svg><h3>No creators found</h3><p>Try a different search term</p></div>
@@ -2081,11 +2091,11 @@ const ROLE_LABELS = {owner:'Owner',admin:'Admin',manager:'Manager',team:'Team',r
 
 // Role capabilities — what each role can do
 const ROLE_CAPS = {
-  owner:    {addUser:true,  deleteUser:true, editUser:true, addCreator:true, editCreator:true, deleteCreator:true, viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true},
-  admin:    {addUser:true,  deleteUser:false,editUser:true, addCreator:true, editCreator:true, deleteCreator:true, viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true},
-  manager:  {addUser:false, deleteUser:false,editUser:false,addCreator:true, editCreator:true, deleteCreator:false,viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true},
-  team:     {addUser:false, deleteUser:false,editUser:false,addCreator:false,editCreator:false,deleteCreator:false,viewNotes:false,editNotes:false,addCampaign:false,editCampaign:false,addDeal:false,editDeal:false, addPitch:false,editPitch:false,viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true},
-  readonly: {addUser:false, deleteUser:false,editUser:false,addCreator:false,editCreator:false,deleteCreator:false,viewNotes:false,editNotes:false,addCampaign:false,editCampaign:false,addDeal:false,editDeal:false, addPitch:false,editPitch:false,viewInbox:false,viewPipeline:true, manageEarnings:false, manageCalendar:false},
+  owner:    {addUser:true,  deleteUser:true, editUser:true, addCreator:true, editCreator:true, deleteCreator:true, viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true,  reorderCreators:true},
+  admin:    {addUser:true,  deleteUser:false,editUser:true, addCreator:true, editCreator:true, deleteCreator:true, viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true,  reorderCreators:true},
+  manager:  {addUser:false, deleteUser:false,editUser:false,addCreator:true, editCreator:true, deleteCreator:false,viewNotes:true, editNotes:true, addCampaign:true, editCampaign:true, addDeal:true, editDeal:true, addPitch:true, editPitch:true, viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true,  reorderCreators:true},
+  team:     {addUser:false, deleteUser:false,editUser:false,addCreator:false,editCreator:false,deleteCreator:false,viewNotes:false,editNotes:false,addCampaign:false,editCampaign:false,addDeal:false,editDeal:false, addPitch:false,editPitch:false,viewInbox:true, viewPipeline:true, manageEarnings:true,  manageCalendar:true,  reorderCreators:false},
+  readonly: {addUser:false, deleteUser:false,editUser:false,addCreator:false,editCreator:false,deleteCreator:false,viewNotes:false,editNotes:false,addCampaign:false,editCampaign:false,addDeal:false,editDeal:false, addPitch:false,editPitch:false,viewInbox:false,viewPipeline:true, manageEarnings:false, manageCalendar:false, reorderCreators:false},
 };
 
 // Check if current user has a capability
@@ -2133,11 +2143,23 @@ function normaliseCreator(c) {
     notes:    c.notes    || '',
     onboarding: c.onboarding || null,
     profile_image_url: c.profile_image_url || null,
+    sort_order: (c.sort_order != null) ? Number(c.sort_order) : null,
   };
 }
 
 function normaliseCreators(arr) {
   return (arr || []).map(normaliseCreator);
+}
+
+// Sort by sort_order ASC, nulls last, then by id as tiebreaker
+function sortCreators(arr) {
+  return [...arr].sort((a, b) => {
+    const aN = a.sort_order == null, bN = b.sort_order == null;
+    if (aN && bN) return a.id - b.id;
+    if (aN) return 1;
+    if (bN) return -1;
+    return a.sort_order - b.sort_order;
+  });
 }
 
 const DEFAULT_CREATORS = [
@@ -2180,12 +2202,12 @@ async function syncAllFromDB() {
   showSyncBanner(true);
   try {
     const [dbC, dbCa, dbP, dbD, dbMk, dbIm, dbSt] = await Promise.all([
-      DB.select('creators'), DB.select('campaigns'), DB.select('pitch_decks'),
+      DB.select('creators', '?order=sort_order.asc.nullslast,id.asc'), DB.select('campaigns'), DB.select('pitch_decks'),
       DB.select('deals'), DB.select('media_kits'), DB.select('inbox_messages'),
       DB.select('staff_accounts'),
     ]);
 
-    if (dbC && dbC.length > 0) { creators = normaliseCreators(dbC); }
+    if (dbC && dbC.length > 0) { creators = sortCreators(normaliseCreators(dbC)); }
     else { await DB.upsertMany('creators', DEFAULT_CREATORS); creators = DEFAULT_CREATORS; }
     Storage.set('creators', creators);
 
@@ -2228,7 +2250,7 @@ async function refetch(table) {
   if (rows === null) return false;
   switch(table) {
     case 'creators':
-      creators = normaliseCreators(rows); Storage.set('creators', creators);
+      creators = sortCreators(normaliseCreators(rows)); Storage.set('creators', creators);
       renderCRM(creators); renderOnboarding();
       if (currentCreatorId) {
         renderCreatorDeals(currentCreatorId);
@@ -2587,6 +2609,7 @@ function setCRMView(mode) {
     if (btnList) btnList.classList.remove('active');
     if (btnGrid) btnGrid.classList.add('active');
     renderCRMGrid(_crmLastList || creators);
+    if (can('reorderCreators') && (_crmLastList === creators || !_crmLastList)) _initCRMGridSortable();
   } else {
     listWrap.style.display = '';
     gridWrap.style.display = 'none';
@@ -2613,7 +2636,7 @@ function renderCRMGrid(list) {
       : avatarLetter(c.name);
     const avStyle = pic ? '' : `background:${avatarColor(c.id)};`;
     return `
-      <div class="crm-gc" onclick="openCreatorProfile(${c.id})">
+      <div class="crm-gc" data-id="${c.id}" onclick="openCreatorProfile(${c.id})">
         <div class="crm-gc-av" style="${avStyle}">${avH}</div>
         <div class="crm-gc-name">${c.name}</div>
         <div class="crm-gc-niche">${r.niche || c.niche || '—'}</div>
@@ -2634,21 +2657,39 @@ function renderCRMGrid(list) {
 
 function renderCRM(list) {
   _crmLastList = list;  // keep reference for grid sync
-  const tbody=document.getElementById('crmTableBody');
-  const empty=document.getElementById('crm-empty');
-  if(!list||!list.length){tbody.innerHTML='';if(empty)empty.style.display='block';renderCRMGrid([]);return;}
-  if(empty)empty.style.display='none';
-  tbody.innerHTML=list.map(c=>{
-    const pic=profilePics[c.id];
-    const avatarHtml=pic
+  const tbody = document.getElementById('crmTableBody');
+  const empty = document.getElementById('crm-empty');
+  if (!list || !list.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    renderCRMGrid([]);
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  // Only show drag handle on full unfiltered list from CRM page, for permitted roles
+  const isFullList  = (list === creators);
+  const canReorder  = can('reorderCreators') && isFullList;
+  const dragThEl    = document.getElementById('crmDragTh');
+  if (dragThEl) dragThEl.style.visibility = canReorder ? 'visible' : 'hidden';
+
+  const HANDLE_SVG = `<svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" opacity=".5"><circle cx="4" cy="3" r="1.3"/><circle cx="8" cy="3" r="1.3"/><circle cx="4" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="4" cy="13" r="1.3"/><circle cx="8" cy="13" r="1.3"/></svg>`;
+
+  tbody.innerHTML = list.map(c => {
+    const pic = profilePics[c.id];
+    const avatarHtml = pic
       ? `<div class="creator-avatar" style="background:${avatarColor(c.id)};overflow:hidden"><img src="${pic}" class="avatar-img" alt="${c.name}"></div>`
       : `<div class="creator-avatar" style="background:${avatarColor(c.id)}">${avatarLetter(c.name)}</div>`;
+    const handleTd = canReorder
+      ? `<td class="crm-drag-handle" title="Drag to reorder">${HANDLE_SVG}</td>`
+      : `<td style="width:32px;padding:0"></td>`;
     return `
-    <tr>
+    <tr data-id="${c.id}">
+      ${handleTd}
       <td><div class="creator-cell">${avatarHtml}<div><div class="creator-name">${c.name}</div><div class="creator-handle">${c.email}</div></div></div></td>
       <td style="font-size:12px;color:var(--gray-400)">${c.role}</td>
       <td style="font-size:12px">${c.location}</td>
-      <td>${c.onboarding?'<span class="badge badge-green">✓ Complete</span>':c.status==='Invited'?'<span class="badge badge-amber">Invited</span>':'<span class="badge badge-gray">Pending</span>'}</td>
+      <td>${c.onboarding ? '<span class="badge badge-green">✓ Complete</span>' : c.status === 'Invited' ? '<span class="badge badge-amber">Invited</span>' : '<span class="badge badge-gray">Pending</span>'}</td>
       <td>${statusBadge(c.status)}</td>
       <td style="display:flex;gap:6px">
         <button class="btn btn-ghost btn-sm" onclick="openCreatorProfile(${c.id})">Profile</button>
@@ -2657,10 +2698,114 @@ function renderCRM(list) {
       </td>
     </tr>`;
   }).join('');
-  document.getElementById('crm-count').textContent=list.length;
-  document.getElementById('crmBadge').textContent=creators.length;
-  // Keep grid in sync if it's visible
+
+  document.getElementById('crm-count').textContent = list.length;
+  document.getElementById('crmBadge').textContent   = creators.length;
+
   if (_crmView === 'grid') renderCRMGrid(list);
+
+  // Attach Sortable only on full list for permitted roles
+  if (canReorder) _initCRMListSortable();
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ── CREATOR DRAG-TO-REORDER ─────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+let _crmListSortable = null;
+let _crmGridSortable = null;
+let _reorderDebounce = null;
+
+// Called after a drag ends. newIds = array of creator id strings in new order.
+async function _saveCreatorOrder(newIds) {
+  const idList = newIds.map(id => parseInt(id, 10)).filter(Boolean);
+  if (!idList.length) return;
+
+  // 1. Assign new sort_order values in-memory
+  idList.forEach((id, i) => {
+    const c = creators.find(x => x.id === id);
+    if (c) c.sort_order = i + 1;
+  });
+
+  // 2. Re-sort the global creators array so every dropdown reflects new order
+  creators = sortCreators(creators);
+  Storage.set('creators', creators);
+
+  // 3. Refresh all dropdowns immediately
+  populateSelects();
+
+  // 4. Batch-upsert only {id, sort_order} rows to Supabase
+  //    Using merge-duplicates so only sort_order is updated — all other data preserved
+  const rows = idList.map((id, i) => ({ id, sort_order: i + 1 }));
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/creators`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal,resolution=merge-duplicates',
+      },
+      body: JSON.stringify(rows),
+    });
+    if (r.ok) {
+      console.log('[Reorder] sort_order saved for', rows.length, 'creators');
+    } else {
+      const t = await r.text();
+      console.error('[Reorder] save failed:', r.status, t);
+      if (r.status === 400 && t.includes('sort_order')) {
+        showToast('⚠️ Run the SQL migration first: ALTER TABLE creators ADD COLUMN sort_order integer;');
+      } else {
+        showToast('⚠️ Order saved locally but failed to sync — check console');
+      }
+    }
+  } catch(e) {
+    console.error('[Reorder] Network error:', e);
+    showToast('⚠️ Order saved locally but failed to sync — check connection');
+  }
+}
+
+function _initCRMListSortable() {
+  const tbody = document.getElementById('crmTableBody');
+  if (!tbody) return;
+  // Destroy stale instance
+  if (_crmListSortable) { try { _crmListSortable.destroy(); } catch(_){} _crmListSortable = null; }
+  if (typeof Sortable === 'undefined') {
+    console.warn('[Reorder] SortableJS not loaded yet');
+    return;
+  }
+  _crmListSortable = Sortable.create(tbody, {
+    animation: 150,
+    handle: '.crm-drag-handle',
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    onEnd(evt) {
+      if (evt.oldIndex === evt.newIndex) return;
+      const ids = [...tbody.querySelectorAll('tr[data-id]')].map(r => r.dataset.id);
+      clearTimeout(_reorderDebounce);
+      _reorderDebounce = setTimeout(() => _saveCreatorOrder(ids), 500);
+    },
+  });
+}
+
+function _initCRMGridSortable() {
+  const grid = document.getElementById('crmGridBody');
+  if (!grid) return;
+  if (_crmGridSortable) { try { _crmGridSortable.destroy(); } catch(_){} _crmGridSortable = null; }
+  if (typeof Sortable === 'undefined') return;
+  _crmGridSortable = Sortable.create(grid, {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    onEnd(evt) {
+      if (evt.oldIndex === evt.newIndex) return;
+      const ids = [...grid.querySelectorAll('[data-id]')].map(c => c.dataset.id);
+      clearTimeout(_reorderDebounce);
+      _reorderDebounce = setTimeout(() => _saveCreatorOrder(ids), 500);
+    },
+  });
 }
 
 // Restore saved view preference when CRM page loads
