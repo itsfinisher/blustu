@@ -438,6 +438,30 @@ tr:hover td{background:var(--gray-50);}
 .pd-nav-arr:disabled{opacity:.3;cursor:not-allowed;}
 .pd-nav-label{font-size:13px;font-weight:600;color:var(--gray-600);}
 
+/* ── PITCH TAB – subject/message copy panel ── */
+.pd-pitch-field{margin-bottom:14px;}
+.pd-pitch-label{font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--gray-400);margin-bottom:5px;}
+.pd-pitch-subject{font-size:14px;font-weight:600;color:var(--gray-900);padding:10px 12px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;line-height:1.4;}
+.pd-pitch-msg{font-size:13px;color:var(--gray-600);padding:12px 14px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;white-space:pre-wrap;line-height:1.75;max-height:220px;overflow-y:auto;}
+.pd-pitch-empty{font-size:12px;color:var(--gray-400);font-style:italic;padding:8px 0;}
+.pd-copy-row{display:flex;justify-content:flex-end;margin-top:5px;}
+.pd-copy-btn{font-size:11px;font-weight:600;color:var(--blue);background:var(--blue-light);border:1px solid rgba(33,152,237,.18);border-radius:7px;padding:4px 10px;cursor:pointer;transition:all .13s;}
+.pd-copy-btn:hover{background:rgba(33,152,237,.18);}
+.pd-copy-btn.copied{color:var(--green);background:var(--green-light);border-color:rgba(16,185,129,.2);}
+/* ── ABOUT – clickable link styling ── */
+.pd-link{color:var(--blue);text-decoration:underline;text-decoration-color:rgba(33,152,237,.35);word-break:break-all;}
+.pd-link:hover{text-decoration-color:var(--blue);}
+/* ── MULTI-CREATOR pitch deck ── */
+.pd-mc-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-100);}
+.pd-mc-chip{display:flex;align-items:center;gap:7px;padding:5px 10px;background:white;border:1px solid var(--gray-100);border-radius:20px;cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-700);transition:all .13s;}
+.pd-mc-chip:hover{border-color:var(--blue);color:var(--blue);}
+.pd-mc-chip.active{background:var(--blue);color:white;border-color:var(--blue);}
+.pd-mc-av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;flex-shrink:0;overflow:hidden;}
+.pd-mc-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+/* ── Add-multi-creator button in pitch modal ── */
+.pitch-mc-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+.pitch-mc-chip{background:var(--blue-light);color:var(--blue);border:1px solid rgba(33,152,237,.2);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;}
+
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 </head>
@@ -1090,6 +1114,8 @@ tr:hover td{background:var(--gray-50);}
 
       <!-- Premium viewer (hidden until a deck is opened) -->
       <div id="pitchViewerWrap" style="display:none;margin-top:0">
+        <!-- Multi-creator chip bar (visible when deck has multiple creators) -->
+        <div id="pdMcBar" class="pd-mc-bar" style="display:none"></div>
         <div class="pd-viewer" id="pitchViewerCard">
           <!-- LEFT COLUMN -->
           <div class="pd-left" id="pdLeft">
@@ -1120,6 +1146,7 @@ tr:hover td{background:var(--gray-50);}
               <button class="pd-tab active" onclick="switchPdTab('about',this)">About</button>
               <button class="pd-tab" onclick="switchPdTab('cases',this)">Case Studies</button>
               <button class="pd-tab" onclick="switchPdTab('analytics',this)">Analytics</button>
+              <button class="pd-tab" onclick="switchPdTab('pitch',this)">Pitch</button>
             </div>
             <!-- About -->
             <div class="pd-pane active" id="pdpane-about">
@@ -1138,6 +1165,23 @@ tr:hover td{background:var(--gray-50);}
             <!-- Analytics -->
             <div class="pd-pane" id="pdpane-analytics">
               <div class="pd-analytics-grid" id="pdAnalyticsGrid"></div>
+            </div>
+            <!-- Pitch -->
+            <div class="pd-pane" id="pdpane-pitch">
+              <div class="pd-pitch-field">
+                <div class="pd-pitch-label">Pitch Subject</div>
+                <div id="pdPitchSubject" class="pd-pitch-subject"></div>
+                <div class="pd-copy-row">
+                  <button class="pd-copy-btn" id="pdCopySubjectBtn" onclick="pdCopyField('subject')">Copy Subject</button>
+                </div>
+              </div>
+              <div class="pd-pitch-field">
+                <div class="pd-pitch-label">Pitch Message</div>
+                <div id="pdPitchMessage" class="pd-pitch-msg"></div>
+                <div class="pd-copy-row">
+                  <button class="pd-copy-btn" id="pdCopyMsgBtn" onclick="pdCopyField('message')">Copy Message</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1587,10 +1631,22 @@ tr:hover td{background:var(--gray-50);}
   <div class="modal">
     <div class="modal-header"><div class="modal-title">New Pitch Deck</div><button class="modal-close" onclick="closeModal('addPitchModal')">✕</button></div>
     <div class="modal-body">
-      <div class="form-row"><div class="form-group"><label class="form-label">Target Brand</label><input class="form-input" id="pitch-brand" placeholder="e.g. Nike"></div><div class="form-group"><label class="form-label">Creator</label><select class="form-select" id="pitch-creator"></select></div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Target Brand</label><input class="form-input" id="pitch-brand" placeholder="e.g. Nike"></div>
+        <div class="form-group">
+          <label class="form-label">Creator(s)</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select class="form-select" id="pitch-creator" style="flex:1"></select>
+            <button class="btn btn-ghost btn-sm" type="button" onclick="openGridForPitchModal()" title="Add multiple creators">+&#x1F464;</button>
+          </div>
+          <input type="hidden" id="pitch-creator-ids" value="">
+          <div id="pitch-mc-chips" class="pitch-mc-chips" style="display:none"></div>
+        </div>
+      </div>
       <div class="form-group"><label class="form-label">Campaign Concept</label><input class="form-input" id="pitch-concept" placeholder="e.g. Summer lookbook series"></div>
+      <div class="form-group"><label class="form-label">Pitch Subject</label><input class="form-input" id="pitch-subject" placeholder="e.g. Collaboration opportunity — Summer 2025"></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Proposed Rate (£)</label><input class="form-input" id="pitch-rate" type="number" placeholder="1000"></div><div class="form-group"><label class="form-label">Brand Contact Email</label><input class="form-input" id="pitch-email" placeholder="partnerships@brand.com"></div></div>
-      <div class="form-group"><label class="form-label">Pitch Message</label><textarea class="form-textarea" id="pitch-message" placeholder="Key selling points, why this creator is perfect..."></textarea></div>
+      <div class="form-group"><label class="form-label">Pitch Message</label><textarea class="form-textarea" id="pitch-message" placeholder="Key selling points, why this creator is perfect..." rows="4"></textarea></div>
       <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="pitch-status"><option value="Draft">Draft</option><option value="Sent">Sent</option></select></div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('addPitchModal')">Cancel</button><button class="btn btn-ghost" onclick="savePitch('Draft')">Save Draft</button><button class="btn btn-primary" onclick="savePitch('Sent')">Generate & Send</button></div>
@@ -1605,8 +1661,9 @@ tr:hover td{background:var(--gray-50);}
       <input type="hidden" id="edit-pitch-id">
       <div class="form-row"><div class="form-group"><label class="form-label">Brand</label><input class="form-input" id="edit-pitch-brand"></div><div class="form-group"><label class="form-label">Creator</label><select class="form-select" id="edit-pitch-creator"></select></div></div>
       <div class="form-group"><label class="form-label">Campaign Concept</label><input class="form-input" id="edit-pitch-concept"></div>
+      <div class="form-group"><label class="form-label">Pitch Subject</label><input class="form-input" id="edit-pitch-subject" placeholder="e.g. Collaboration opportunity — Summer 2025"></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Proposed Rate (£)</label><input class="form-input" id="edit-pitch-rate" type="number"></div><div class="form-group"><label class="form-label">Brand Contact Email</label><input class="form-input" id="edit-pitch-email"></div></div>
-      <div class="form-group"><label class="form-label">Pitch Message</label><textarea class="form-textarea" id="edit-pitch-message"></textarea></div>
+      <div class="form-group"><label class="form-label">Pitch Message</label><textarea class="form-textarea" id="edit-pitch-message" rows="4"></textarea></div>
       <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="edit-pitch-status"><option>Draft</option><option>Sent</option><option>Viewed</option><option>Interested</option><option>Declined</option></select></div>
     </div>
     <div class="modal-footer">
@@ -3468,20 +3525,36 @@ async function savePitch(status){
   const creator=document.getElementById('pitch-creator').value;
   if(!brand){showToast('Enter a brand name');return;}
   const overrideStatus=document.getElementById('pitch-status').value;
+  // Multi-creator: read IDs from hidden field
+  let creatorField = creator;
+  const mcIdsEl = document.getElementById('pitch-creator-ids');
+  if (mcIdsEl && mcIdsEl.value) {
+    try {
+      const ids = JSON.parse(mcIdsEl.value);
+      if (ids.length > 1) {
+        creatorField = ids.map(id => { const c = creators.find(x => x.id === id); return c ? c.name : ''; }).filter(Boolean).join(', ');
+      }
+    } catch(e) {}
+  }
   const p={
-    id: Date.now() % 2147483647, brand, creator,
+    id: Date.now() % 2147483647, brand,
+    creator: creatorField,
     concept:document.getElementById('pitch-concept').value.trim(),
     rate:document.getElementById('pitch-rate').value,
     email:document.getElementById('pitch-email').value.trim(),
+    subject:document.getElementById('pitch-subject').value.trim(),
     message:document.getElementById('pitch-message').value.trim(),
     status:status==='Sent'?'Sent':overrideStatus
   };
   closeModal('addPitchModal');
-  ['pitch-brand','pitch-concept','pitch-rate','pitch-email','pitch-message'].forEach(id=>document.getElementById(id).value='');
+  ['pitch-brand','pitch-concept','pitch-rate','pitch-email','pitch-subject','pitch-message'].forEach(id=>document.getElementById(id).value='');
+  if (mcIdsEl) mcIdsEl.value='';
+  const chipsEl = document.getElementById('pitch-mc-chips');
+  if (chipsEl) { chipsEl.innerHTML=''; chipsEl.style.display='none'; }
   const result = await DB.upsertOne('pitch_decks', p);
   if (!result) { showToast('❌ Pitch save failed'); return; }
   await refetch('pitch_decks');
-  addActivity(`Pitch deck created: <strong>${creator} × ${brand}</strong>`);
+  addActivity(`Pitch deck created: <strong>${creatorField} × ${brand}</strong>`);
   showToast(`Pitch deck ${p.status==='Sent'?'sent':'saved as draft'}!`);
 }
 
@@ -3494,6 +3567,7 @@ async function updatePitch(){
   p.concept=document.getElementById('edit-pitch-concept').value.trim();
   p.rate=document.getElementById('edit-pitch-rate').value;
   p.email=document.getElementById('edit-pitch-email').value.trim();
+  p.subject=document.getElementById('edit-pitch-subject').value.trim();
   p.message=document.getElementById('edit-pitch-message').value.trim();
   p.status=document.getElementById('edit-pitch-status').value;
   closeModal('editPitchModal');
@@ -3501,6 +3575,8 @@ async function updatePitch(){
   await refetch('pitch_decks');
   addActivity(`Pitch updated: <strong>${p.brand} × ${p.creator}</strong>`);
   showToast('Pitch deck updated!');
+  // Refresh viewer if this deck is open
+  if (typeof renderPitchViewer === 'function' && pitchDecks[_pdIdx] && pitchDecks[_pdIdx].id === id) renderPitchViewer();
 }
 
 function openEditPitch(id){
@@ -3512,6 +3588,7 @@ function openEditPitch(id){
   document.getElementById('edit-pitch-concept').value=p.concept||'';
   document.getElementById('edit-pitch-rate').value=p.rate||'';
   document.getElementById('edit-pitch-email').value=p.email||'';
+  document.getElementById('edit-pitch-subject').value=p.subject||'';
   document.getElementById('edit-pitch-message').value=p.message||'';
   document.getElementById('edit-pitch-status').value=p.status;
   openModal('editPitchModal');
@@ -6135,19 +6212,51 @@ function renderPitchViewer() {
   const ana = c ? (kitAnalytics[c.id] || {}) : {};
   const pic = c ? profilePics[c.id] : null;
 
-  // ── Avatar
+  // ── Multi-creator: detect comma-separated names
+  const creatorNames = deck.creator ? deck.creator.split(',').map(n => n.trim()).filter(Boolean) : [deck.creator || ''];
+  const isMulti = creatorNames.length > 1;
+  // For multi-creator: the _pdMcCreatorIdx tracks which creator is shown in the left panel
+  if (typeof window._pdMcIdx === 'undefined') window._pdMcIdx = 0;
+  if (window._pdMcLastDeckId !== deck.id) { window._pdMcIdx = 0; window._pdMcLastDeckId = deck.id; }
+  const activeName = isMulti ? (creatorNames[window._pdMcIdx] || creatorNames[0]) : deck.creator;
+  const activeCreator = creators.find(x => x.name === activeName);
+  const activeR   = activeCreator ? resolveCreator(activeCreator) : r;
+  const activeOb  = (activeCreator && activeCreator.onboarding) ? activeCreator.onboarding : ob;
+  const activeAna = activeCreator ? (kitAnalytics[activeCreator.id] || {}) : ana;
+  const activePic = activeCreator ? profilePics[activeCreator.id] : pic;
+  _pdCreatorId = activeCreator ? activeCreator.id : _pdCreatorId;
+
+  // ── Multi-creator chip bar
+  const mcBar = document.getElementById('pdMcBar');
+  if (mcBar) {
+    if (isMulti) {
+      mcBar.style.display = 'flex';
+      mcBar.innerHTML = creatorNames.map((name, idx) => {
+        const cc  = creators.find(x => x.name === name);
+        const cp  = cc ? profilePics[cc.id] : null;
+        const avH = cp
+          ? `<div class="pd-mc-av"><img src="${cp}" alt="${name}"></div>`
+          : `<div class="pd-mc-av" style="background:${cc ? avatarColor(cc.id) : '#2198ED'}">${avatarLetter(name)}</div>`;
+        return `<div class="pd-mc-chip ${idx === window._pdMcIdx ? 'active' : ''}" onclick="pdMcSwitch(${idx})">${avH} ${name}</div>`;
+      }).join('');
+    } else {
+      mcBar.style.display = 'none';
+    }
+  }
+
+  // ── Avatar (uses active creator)
   const avEl = document.getElementById('pdAvatar');
   if (avEl) {
-    avEl.style.background = c ? avatarColor(c.id) : '#2198ED';
-    avEl.innerHTML = pic
-      ? `<img src="${pic}" alt="${deck.creator}">`
-      : avatarLetter(deck.creator);
+    avEl.style.background = activeCreator ? avatarColor(activeCreator.id) : '#2198ED';
+    avEl.innerHTML = activePic
+      ? `<img src="${activePic}" alt="${activeName}">`
+      : avatarLetter(activeName);
   }
 
   // ── Text fields
   const _t = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
-  _t('pdCreatorName', deck.creator);
-  _t('pdNicheTag',    r.niche || '—');
+  _t('pdCreatorName', activeName);
+  _t('pdNicheTag',    activeR.niche || '—');
   _t('pdBrandLabel',  deck.brand ? 'Pitch \u2192 ' + deck.brand : 'Brand Pitch');
   _t('pdDeckTitle',   deck.concept || (deck.creator + (deck.brand ? ' \u00d7 ' + deck.brand : '')));
 
@@ -6161,58 +6270,108 @@ function renderPitchViewer() {
   if (pBtn) pBtn.disabled = _pdIdx === 0;
   if (nBtn) nBtn.disabled = _pdIdx === pitchDecks.length - 1;
 
-  // ── Stat pills (About tab)
+  // ── Stat pills (About tab) — helper to linkify text
+  function _linkify(text) {
+    if (!text) return '';
+    return text.replace(/(https?:\/\/[^\s<]+|www\.[^\s<]+)/g, url => {
+      const href = url.startsWith('http') ? url : 'https://' + url;
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="pd-link">${url}</a>`;
+    });
+  }
+
   const pillsEl = document.getElementById('pdStatPills');
   if (pillsEl) {
     const pills = [];
-    if (r.followers)       pills.push({ v: r.followers,       l: 'Followers' });
-    if (r.engRate != null) pills.push({ v: r.engRate + '%',   l: 'Engagement' });
-    if (r.avgViews)        pills.push({ v: r.avgViews,        l: 'Avg Views' });
-    if (r.audience)        pills.push({ v: r.audience,        l: 'Audience' });
-    if (deck.rate)         pills.push({ v: '\u00a3' + deck.rate, l: 'Rate' });
-    if (ob.tiktok)         pills.push({ v: ob.tiktok,         l: 'TikTok' });
-    if (ob.instagram)      pills.push({ v: ob.instagram,      l: 'Instagram' });
-    if (ob.youtube)        pills.push({ v: ob.youtube,        l: 'YouTube' });
+    if (activeR.followers)       pills.push({ v: activeR.followers,        l: 'Followers' });
+    if (activeR.engRate != null) pills.push({ v: activeR.engRate + '%',    l: 'Engagement' });
+    if (activeR.avgViews)        pills.push({ v: activeR.avgViews,         l: 'Avg Views' });
+    if (activeR.audience)        pills.push({ v: activeR.audience,         l: 'Audience' });
+    if (deck.rate)               pills.push({ v: '\u00a3' + deck.rate,     l: 'Rate' });
+    if (activeOb.tiktok)         pills.push({ v: activeOb.tiktok,          l: 'TikTok' });
+    if (activeOb.instagram)      pills.push({ v: activeOb.instagram,       l: 'Instagram' });
+    if (activeOb.youtube)        pills.push({ v: activeOb.youtube,         l: 'YouTube' });
     pillsEl.innerHTML = pills.length
       ? pills.map(p => `<div class="pd-pill"><div class="pd-pill-val">${p.v}</div><div class="pd-pill-lbl">${p.l}</div></div>`).join('')
       : '<div style="font-size:12px;color:var(--gray-400)">Complete creator onboarding to populate stats.</div>';
   }
 
-  // ── Bio
+  // ── Bio (linkified)
   const bioEl = document.getElementById('pdBio');
-  if (bioEl) bioEl.textContent = ob.bio || deck.message || c?.notes || 'No bio provided yet.';
-
-  // ── Socials line
-  const socEl = document.getElementById('pdSocialsLine');
-  if (socEl) {
-    const plats = [ob.tiktok && 'TikTok', ob.instagram && 'Instagram', ob.youtube && 'YouTube'].filter(Boolean);
-    socEl.textContent = plats.length ? 'Platforms: ' + plats.join(' \u00b7 ') : '';
+  if (bioEl) {
+    const raw = activeOb.bio || deck.message || activeCreator?.notes || 'No bio provided yet.';
+    bioEl.innerHTML = _linkify(raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
   }
 
-  // ── Analytics tiles
+  // ── Socials line (linkified)
+  const socEl = document.getElementById('pdSocialsLine');
+  if (socEl) {
+    const plats = [];
+    if (activeOb.tiktok)    plats.push({ name: 'TikTok',    url: activeOb.tiktok });
+    if (activeOb.instagram) plats.push({ name: 'Instagram', url: activeOb.instagram });
+    if (activeOb.youtube)   plats.push({ name: 'YouTube',   url: activeOb.youtube });
+    if (plats.length) {
+      socEl.innerHTML = 'Platforms: ' + plats.map(p => {
+        const href = p.url.startsWith('http') ? p.url : 'https://' + p.url;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="pd-link">${p.name}</a>`;
+      }).join(' \u00b7 ');
+    } else {
+      socEl.textContent = '';
+    }
+  }
+
+  // ── Analytics tiles (use active creator's analytics)
   const anaEl = document.getElementById('pdAnalyticsGrid');
   if (anaEl) {
-    const gender = ana.gender || {};
-    const ages   = ana.ages   || {};
+    const gender    = activeAna.gender || {};
+    const ages      = activeAna.ages   || {};
     const topGender = Object.entries(gender).sort((a, b) => b[1] - a[1])[0];
     const topAge    = Object.entries(ages).sort((a, b) => b[1] - a[1])[0];
-    const gMap = { f: 'Female', m: 'Male', o: 'Other' };
+    const gMap      = { f: 'Female', m: 'Male', o: 'Other' };
 
     const tiles = [
-      { v: r.engRate != null ? r.engRate + '%' : '\u2014', l: 'Engagement Rate' },
-      { v: r.avgViews || '\u2014',                         l: 'Avg Views' },
-      { v: r.followers || '\u2014',                        l: 'Total Followers' },
+      { v: activeR.engRate != null ? activeR.engRate + '%' : '\u2014', l: 'Engagement Rate' },
+      { v: activeR.avgViews || '\u2014',                               l: 'Avg Views' },
+      { v: activeR.followers || '\u2014',                              l: 'Total Followers' },
       { v: topGender ? (gMap[topGender[0]] || topGender[0]) : '\u2014', l: 'Top Gender' },
-      { v: topAge ? topAge[0] : '\u2014',                  l: 'Top Age Group' },
-      { v: ana.locations?.[0] || r.audience || '\u2014',   l: 'Top Location' },
+      { v: topAge ? topAge[0] : '\u2014',                              l: 'Top Age Group' },
+      { v: activeAna.locations?.[0] || activeR.audience || '\u2014',  l: 'Top Location' },
     ];
     anaEl.innerHTML = tiles.map(t =>
       `<div class="pd-ana-tile"><div class="pd-ana-val">${t.v}</div><div class="pd-ana-lbl">${t.l}</div></div>`
     ).join('');
   }
 
+  // ── Pitch tab: subject + message
+  const pitchSubEl = document.getElementById('pdPitchSubject');
+  const pitchMsgEl = document.getElementById('pdPitchMessage');
+  if (pitchSubEl) {
+    const subj = deck.subject || '';
+    pitchSubEl.textContent = subj || '';
+    pitchSubEl.innerHTML = subj
+      ? subj.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      : '<span class="pd-pitch-empty">No pitch subject set \u2014 click Edit to add one</span>';
+  }
+  if (pitchMsgEl) {
+    const msg = deck.message || '';
+    if (msg) {
+      pitchMsgEl.innerHTML = msg
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/\n/g,'<br>');
+    } else {
+      pitchMsgEl.innerHTML = '<span class="pd-pitch-empty">No pitch message set \u2014 click Edit to add one</span>';
+    }
+  }
+
   // ── Reset to About tab when deck changes
   switchPdTab('about', document.querySelector('.pd-tab'));
+}
+
+// Switch multi-creator chip in viewer
+function pdMcSwitch(idx) {
+  window._pdMcIdx = idx;
+  window._pdMcLastDeckId = (pitchDecks[_pdIdx] || {}).id;
+  renderPitchViewer();
+  // Keep same tab active
 }
 
 function switchPdTab(name, btn) {
@@ -6236,11 +6395,31 @@ function pdViewMediaKit() {
   if (!_pdCreatorId) { showToast('No creator selected'); return; }
   const c = creators.find(x => x.id === _pdCreatorId);
   if (!c) return;
+  // Navigate to media kit page first
   showPage('mediakit', document.querySelector('[onclick*="mediakit"]'));
   setTimeout(() => {
+    // Check if kit already exists
+    const kitExists = mediaKits && mediaKits.find(k => k.creatorId === c.id);
     const sel = document.getElementById('kit-creator-select');
-    if (sel) { sel.value = c.name; if (typeof onKitCreatorChange === 'function') onKitCreatorChange(c.name); }
-  }, 100);
+    if (sel) sel.value = c.name;
+    if (kitExists) {
+      // Kit exists — directly open it
+      if (typeof selectKitPreview === 'function') selectKitPreview(c.id);
+      if (typeof renderMediaKitList === 'function') renderMediaKitList();
+      showToast('ℹ️ Showing kit for ' + c.name);
+    } else {
+      // Kit doesn't exist — auto-generate it
+      if (!mediaKits.find(k => k.creatorId === c.id)) {
+        mediaKits.push({ creatorId: c.id, creatorName: c.name, initial: avatarLetter(c.name), updated: 'Just now', views: 0 });
+      }
+      if (typeof onKitCreatorChange === 'function') onKitCreatorChange(c.name);
+      if (typeof renderMediaKitList === 'function') renderMediaKitList();
+      if (typeof selectKitPreview === 'function') selectKitPreview(c.id);
+      if (typeof saveMediaKits === 'function') saveMediaKits();
+      addActivity('Media kit auto-generated for <strong>' + c.name + '</strong>');
+      showToast('✅ Media kit generated for ' + c.name + '!');
+    }
+  }, 120);
 }
 
 function pdContact() {
@@ -6308,7 +6487,8 @@ function exportPitchAsPDF() {
       .pd-deck-title{font-family:'DM Serif Display',serif;font-size:18px;color:#0f1120;margin-bottom:14px;line-height:1.3;}
       .pd-right-header button,.pd-tabs{display:none}
       .pd-pane{display:flex!important;flex-direction:column;}
-      #pdpane-cases,#pdpane-analytics{display:none!important}
+      #pdpane-cases,#pdpane-analytics,#pdpane-pitch{display:none!important}
+      .pd-mc-bar{display:none!important}
       .pd-stat-pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;}
       .pd-pill{background:#f4f5f8;border:1px solid #e8eaf0;border-radius:9px;padding:8px 11px;text-align:center;min-width:70px;}
       .pd-pill-val{font-weight:700;font-size:13px;color:#0f1120;font-family:'DM Serif Display',serif;}
@@ -6345,6 +6525,49 @@ async function exportPitchAsPNG() {
     showToast('\u274c Export failed — check console');
   }
 }
+
+
+// ── Multi-creator selection for pitch modal ──────────────────
+function openGridForPitchModal() {
+  closeModal('addPitchModal');
+  openCreatorGrid(function(sel) {
+    if (sel.length === 0) { openModal('addPitchModal'); return; }
+    const names = sel.map(c => c.name);
+    const ids   = sel.map(c => c.id);
+    document.getElementById('pitch-creator').value = names[0];
+    document.getElementById('pitch-creator-ids').value = JSON.stringify(ids);
+    const chipsEl = document.getElementById('pitch-mc-chips');
+    if (sel.length > 1 && chipsEl) {
+      chipsEl.style.display = 'flex';
+      chipsEl.innerHTML = names.map(n =>
+        `<span class="pitch-mc-chip">${n}</span>`
+      ).join('');
+    } else if (chipsEl) {
+      chipsEl.style.display = 'none'; chipsEl.innerHTML = '';
+    }
+    openModal('addPitchModal');
+  });
+}
+
+// ── Copy pitch subject / message to clipboard ─────────────────
+function pdCopyField(field) {
+  const deck = pitchDecks[_pdIdx];
+  if (!deck) return;
+  const text = field === 'subject' ? (deck.subject || '') : (deck.message || '');
+  const btnId = field === 'subject' ? 'pdCopySubjectBtn' : 'pdCopyMsgBtn';
+  const btn = document.getElementById(btnId);
+  if (!text) { showToast('No ' + field + ' to copy'); return; }
+  const copy = () => {
+    if (btn) { btn.textContent = '\u2713 Copied!'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy ' + (field === 'subject' ? 'Subject' : 'Message'); btn.classList.remove('copied'); }, 2000); }
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(copy).catch(() => { prompt('Copy ' + field + ':', text); });
+  } else {
+    prompt('Copy ' + field + ':', text);
+    copy();
+  }
+}
+
 
 
 </script>
