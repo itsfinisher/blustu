@@ -494,6 +494,124 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
 .pitch-mc-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
 .pitch-mc-chip{background:var(--blue-light);color:var(--blue);border:1px solid rgba(33,152,237,.2);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;}
 
+/* ── Brand logo in pitch deck header ── */
+.pd-brand-logo-wrap{width:44px;height:44px;border-radius:10px;border:1.5px dashed var(--gray-200);background:var(--gray-50);overflow:hidden;flex-shrink:0;cursor:pointer;transition:border-color .15s;display:flex;align-items:center;justify-content:center;}
+.pd-brand-logo-wrap:hover{border-color:var(--blue);background:var(--blue-light);}
+.pd-brand-logo{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--gray-400);font-family:'DM Serif Display',serif;}
+.pd-brand-logo img{width:100%;height:100%;object-fit:contain;padding:4px;}
+
+/* ── Avatar carousel arrows ── */
+.pd-avatar-wrap{position:relative;z-index:1;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.pd-av-arr{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:all .15s;line-height:1;padding:0;}
+.pd-av-arr:hover{background:rgba(255,255,255,.25);}
+.pd-av-arr:disabled{opacity:.25;cursor:not-allowed;}
+.pd-av-arr.visible{display:flex;}
+.pd-av-dots{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);display:flex;gap:4px;}
+.pd-av-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.35);transition:background .15s;}
+.pd-av-dot.active{background:white;}
+
+/* ══════════════════════════════════════════════
+   MOBILE PITCH DECK — max-width 768px
+   NO desktop styles are changed here.
+   ══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Stack the two-column layout vertically */
+  .pd-viewer {
+    grid-template-columns: 1fr !important;
+    border-radius: 14px;
+  }
+
+  /* Left panel: compact horizontal strip */
+  .pd-left {
+    padding: 20px 16px 16px !important;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Avatar: slightly smaller */
+  .pd-avatar {
+    width: 76px !important;
+    height: 76px !important;
+    font-size: 26px !important;
+  }
+
+  /* Creator name + niche */
+  .pd-creator-name { font-size: 17px !important; }
+  .pd-niche-tag    { margin-bottom: 12px; }
+
+  /* Action buttons: row on mobile */
+  .pd-left-actions {
+    flex-direction: row !important;
+    gap: 8px !important;
+    flex-wrap: wrap;
+  }
+  .pd-action-btn { flex: 1; min-width: 120px; }
+
+  /* Right panel */
+  .pd-right {
+    padding: 16px 14px !important;
+    min-height: unset !important;
+  }
+
+  /* Right header: stack brand logo + title, keep Edit/Send accessible */
+  .pd-right-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  /* Tabs: horizontal scroll row */
+  .pd-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  .pd-tabs::-webkit-scrollbar { display: none; }
+  .pd-tab { white-space: nowrap; padding: 7px 12px; font-size: 12px; }
+
+  /* Stat pills: wrap tighter */
+  .pd-stat-pills { gap: 6px; }
+  .pd-pill { min-width: 64px; padding: 7px 9px; }
+  .pd-pill-val { font-size: 13px; }
+
+  /* Analytics grid: single column */
+  .pd-analytics-grid { grid-template-columns: 1fr !important; }
+
+  /* Pitch copy fields: full width */
+  .pd-copy-row { justify-content: flex-start; }
+
+  /* Nav bar */
+  .pd-nav-bar { padding: 10px 14px; border-radius: 0 0 14px 14px; }
+
+  /* Multi-creator chip bar: horizontal scroll */
+  .pd-mc-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 8px 10px;
+  }
+  .pd-mc-bar::-webkit-scrollbar { display: none; }
+
+  /* Brand logo: slightly smaller on mobile */
+  .pd-brand-logo-wrap { width: 36px; height: 36px; border-radius: 8px; }
+  .pd-brand-logo      { font-size: 13px; }
+
+  /* Social icons: tighter gap */
+  .pd-social-icons { gap: 8px; margin-top: 8px; }
+  .pd-social-icon  { width: 30px; height: 30px; }
+
+  /* Pitch field message max-height */
+  .pd-pitch-msg { max-height: 160px; }
+
+  /* Pitch deck thumbnail grid: single column */
+  .pd-thumb-grid { grid-template-columns: 1fr !important; gap: 10px; }
+
+  /* Hide carousel arrows on mobile (swipe handled by touch) */
+  .pd-av-arr { display: none !important; }
+}
+
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" crossorigin="anonymous"></script>
@@ -1165,7 +1283,10 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
           <!-- LEFT COLUMN -->
           <div class="pd-left" id="pdLeft">
             <div class="pd-avatar-wrap">
+              <button class="pd-av-arr" id="pdAvPrev" onclick="pdAvatarNav(-1)">&#8592;</button>
               <div class="pd-avatar" id="pdAvatar"></div>
+              <button class="pd-av-arr" id="pdAvNext" onclick="pdAvatarNav(1)">&#8594;</button>
+              <div class="pd-av-dots" id="pdAvDots"></div>
             </div>
             <div class="pd-creator-name" id="pdCreatorName">Creator</div>
             <div class="pd-niche-tag" id="pdNicheTag">—</div>
@@ -1177,9 +1298,16 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
           <!-- RIGHT COLUMN -->
           <div class="pd-right">
             <div class="pd-right-header">
-              <div>
-                <div class="pd-brand-label" id="pdBrandLabel">Brand Pitch</div>
-                <div class="pd-deck-title" id="pdDeckTitle">Creator &times; Brand</div>
+              <div style="display:flex;align-items:center;gap:12px;min-width:0">
+                <!-- Brand logo -->
+                <div id="pdBrandLogoWrap" class="pd-brand-logo-wrap" title="Upload brand logo" onclick="triggerBrandLogoUpload()">
+                  <div id="pdBrandLogo" class="pd-brand-logo"></div>
+                  <input type="file" id="brandLogoFile" accept="image/*" style="display:none" onchange="handleBrandLogoUpload(event)">
+                </div>
+                <div style="min-width:0">
+                  <div class="pd-brand-label" id="pdBrandLabel">Brand Pitch</div>
+                  <div class="pd-deck-title" id="pdDeckTitle">Creator &times; Brand</div>
+                </div>
               </div>
               <div style="display:flex;gap:6px;flex-shrink:0">
                 <button class="btn btn-ghost btn-sm" onclick="pdEditDeck()">Edit</button>
@@ -2250,18 +2378,20 @@ async function syncAllFromDB() {
       STAFF = seeded; Storage.set('staff', STAFF);
     }
 
-    const [pp, ia, ao, ps, ke] = await Promise.all([
+    const [pp, ia, ao, ps, ke, bl] = await Promise.all([
       DB.getAppData('profilePics'),
       DB.getAppData('kitAnalytics'),
       DB.getAppData('adminOverrides'),
       DB.getAppData('pitchSubjects'),
       DB.getAppData('kitExtraCreators'),
+      DB.getAppData('brandLogos'),
     ]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
     if (ao) { adminOverrides = ao; Storage.set('adminOverrides', ao); } // BUG2 FIX: store fetched value 'ao', not stale local var
     if (ps) { pitchSubjects = ps; Storage.set('pitchSubjects', pitchSubjects); }
     if (ke) { kitExtraCreators = ke; Storage.set('kitExtraCreators', kitExtraCreators); }
+    if (bl) { brandLogos = bl; Storage.set('brandLogos', brandLogos); }
 
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
@@ -2332,6 +2462,7 @@ let kitAnalytics    = Storage.get('kitAnalytics',    {});
 let kitExtraCreators = Storage.get('kitExtraCreators', {});  // primaryCreatorId -> [extraId, ...]
 let profilePics   = Storage.get('profilePics',   {});
 let pitchSubjects = Storage.get('pitchSubjects', {});  // pitch_id -> subject (stored in app_data, not pitch_decks table)
+let brandLogos    = Storage.get('brandLogos',    {});  // brand name (lowercase) -> data URL or image URL
 function saveInbox()    { Storage.set('inboxMessages', inboxMessages); }
 function saveAnalyticsData() { Storage.set('kitAnalytics', kitAnalytics); }
 function saveProfilePics()   { Storage.set('profilePics', profilePics); }
@@ -6707,6 +6838,39 @@ function renderPitchViewer() {
   _t('pdBrandLabel',  deck.brand ? 'Pitch \u2192 ' + deck.brand : 'Brand Pitch');
   _t('pdDeckTitle',   deck.concept || (deck.creator + (deck.brand ? ' \u00d7 ' + deck.brand : '')));
 
+  // ── Brand logo
+  const blEl = document.getElementById('pdBrandLogo');
+  if (blEl && deck.brand) {
+    const key = deck.brand.trim().toLowerCase();
+    const logo = brandLogos[key];
+    if (logo) {
+      blEl.innerHTML = `<img src="${logo}" alt="${deck.brand}">`;
+    } else {
+      blEl.innerHTML = avatarLetter(deck.brand);
+      blEl.style.color = 'var(--gray-400)';
+    }
+  } else if (blEl) {
+    blEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 10h8M8 14h5"/></svg>';
+  }
+
+  // ── Avatar carousel (show arrows + dots for multi-creator)
+  const prevArr = document.getElementById('pdAvPrev');
+  const nextArr = document.getElementById('pdAvNext');
+  const dotsEl  = document.getElementById('pdAvDots');
+  if (isMulti) {
+    const idx = window._pdMcIdx || 0;
+    if (prevArr) { prevArr.classList.add('visible'); prevArr.disabled = idx === 0; }
+    if (nextArr) { nextArr.classList.add('visible'); nextArr.disabled = idx >= creatorNames.length - 1; }
+    if (dotsEl)  {
+      dotsEl.innerHTML = creatorNames.map((_, i) =>
+        `<div class="pd-av-dot${i === idx ? ' active' : ''}"></div>`).join('');
+    }
+  } else {
+    if (prevArr) prevArr.classList.remove('visible');
+    if (nextArr) nextArr.classList.remove('visible');
+    if (dotsEl)  dotsEl.innerHTML = '';
+  }
+
   const sb = document.getElementById('pdSendBtn');
   if (sb) sb.textContent = deck.status === 'Sent' ? 'Re-send' : 'Send';
 
@@ -6927,6 +7091,9 @@ function exportPitchAsPDF() {
       .pd-creator-name{font-family:'DM Serif Display',serif;font-size:19px;color:white;text-align:center;margin-bottom:5px;}
       .pd-niche-tag{font-size:9px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:rgba(255,255,255,.6);background:rgba(255,255,255,.1);padding:3px 12px;border-radius:20px;}
       .pd-left-actions{display:none}
+      .pd-brand-logo-wrap{cursor:default;border-style:solid;border-color:var(--gray-100);}
+      .pd-av-arr{display:none!important;}
+      .pd-av-dots{display:none!important;}
       .pd-right{padding:22px 26px;}
       .pd-brand-label{font-size:9px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:#2198ED;margin-bottom:3px;}
       .pd-deck-title{font-family:'DM Serif Display',serif;font-size:18px;color:#0f1120;margin-bottom:14px;line-height:1.3;}
@@ -7033,6 +7200,65 @@ function openGridForPitchModal() {
     openModal('addPitchModal');
   });
 }
+
+
+// ── Avatar carousel navigation (multi-creator left panel) ─────
+function pdAvatarNav(dir) {
+  const deck = pitchDecks[_pdIdx];
+  if (!deck) return;
+  const names = deck.creator ? deck.creator.split(',').map(n => n.trim()).filter(Boolean) : [];
+  if (names.length <= 1) return;
+  const cur = window._pdMcIdx || 0;
+  const next = Math.max(0, Math.min(names.length - 1, cur + dir));
+  if (next === cur) return;
+  window._pdMcIdx = next;
+  window._pdMcLastDeckId = deck.id;
+  renderPitchViewer();
+}
+
+// ── Brand logo upload ─────────────────────────────────────────
+function triggerBrandLogoUpload() {
+  const deck = pitchDecks[_pdIdx];
+  if (!deck || !deck.brand) { showToast('Open a pitch deck with a brand first'); return; }
+  const input = document.getElementById('brandLogoFile');
+  if (input) input.click();
+}
+
+async function handleBrandLogoUpload(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const deck = pitchDecks[_pdIdx];
+  if (!deck || !deck.brand) return;
+  const key = deck.brand.trim().toLowerCase();
+  showToast('Saving brand logo…');
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    brandLogos[key] = e.target.result;
+    Storage.set('brandLogos', brandLogos);
+    await DB.setAppData('brandLogos', brandLogos);
+    renderPitchViewer();
+    showToast('✅ Brand logo saved!');
+  };
+  reader.readAsDataURL(file);
+  // Reset so same file can be re-selected
+  evt.target.value = '';
+}
+
+// Add touch swipe support for avatar carousel (mobile)
+(function() {
+  let _swipeStartX = 0;
+  document.addEventListener('touchstart', function(e) {
+    const av = e.target.closest('.pd-avatar-wrap');
+    if (av) _swipeStartX = e.touches[0].clientX;
+  }, { passive: true });
+  document.addEventListener('touchend', function(e) {
+    const av = e.target.closest('.pd-avatar-wrap');
+    if (!av || !_swipeStartX) return;
+    const diff = _swipeStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 35) pdAvatarNav(diff > 0 ? 1 : -1);
+    _swipeStartX = 0;
+  }, { passive: true });
+})();
 
 // ── Copy pitch subject / message to clipboard ─────────────────
 function pdCopyField(field) {
