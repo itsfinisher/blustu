@@ -1365,7 +1365,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <!-- Styled currency picker -->
               <div class="calc-fx-picker" id="calcFxPickerWrap">
-                <div class="calc-fx-display" id="calcFxDisplay" onclick="toggleFxPicker()">
+                <div class="calc-fx-display" id="calcFxDisplay" onclick="toggleFxPicker(event)">
                   <span class="calc-fx-flag" id="calcFxFlag">🇨🇦</span>
                   <span class="calc-fx-label" id="calcFxLabel">CAD</span>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--gray-400);flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1413,7 +1413,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
             <div>
               <label class="form-label">Creator</label>
               <div class="calc-creator-picker" id="calcPickerWrap">
-                <div class="calc-picker-display" id="calcPickerDisplay" onclick="toggleCalcPicker()">
+                <div class="calc-picker-display" id="calcPickerDisplay" onclick="toggleCalcPicker(event)">
                   <div class="calc-picker-av" id="calcPickerAv"></div>
                   <span id="calcPickerLabel" style="flex:1;font-size:13px;color:var(--gray-600)">Select or type a creator…</span>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--gray-400)"><polyline points="6 9 12 15 18 9"/></svg>
@@ -5297,7 +5297,7 @@ function _renderCalcPickerList(query) {
       ? '<div class="calc-picker-av"><img src="' + pic + '" alt="' + it.name + '"></div>'
       : '<div class="calc-picker-av" style="background:' + bg + '">' + it.name[0].toUpperCase() + '</div>';
     const sel = _calcPickerSelected && _calcPickerSelected.name === it.name;
-    return '<div class="calc-picker-item' + (sel ? ' selected' : '') + '" onclick="selectCalcPickerItem(' + JSON.stringify(it.name) + ',' + it.base + ')">'
+    return '<div class="calc-picker-item' + (sel ? ' selected' : '') + '" onclick="selectCalcPickerItem(' + JSON.stringify(it.name) + ',' + it.base + ',event)">'
       + avH
       + '<div>'
       +   '<div class="calc-picker-item-name">' + it.name + '</div>'
@@ -5307,7 +5307,8 @@ function _renderCalcPickerList(query) {
   }).join('');
 }
 
-function toggleCalcPicker() {
+function toggleCalcPicker(event) {
+  if (event) event.stopPropagation();
   _calcPickerOpen = !_calcPickerOpen;
   const dd  = document.getElementById('calcPickerDropdown');
   const btn = document.getElementById('calcPickerDisplay');
@@ -5322,7 +5323,8 @@ function toggleCalcPicker() {
 
 function filterCalcPicker(q) { _renderCalcPickerList(q); }
 
-function selectCalcPickerItem(name, base) {
+function selectCalcPickerItem(name, base, event) {
+  if (event) event.stopPropagation();
   _calcPickerSelected = { name, base };
   // Update hidden input + rate input
   const nameEl = document.getElementById('calcCreatorName');
@@ -5357,14 +5359,17 @@ function selectCalcPickerItem(name, base) {
   renderCalc();
 }
 
-// Close picker when clicking outside
+// Merged outside-click handler — closes both calc picker and FX picker
 document.addEventListener('click', function(e) {
-  if (!e.target.closest('#calcPickerWrap')) {
+  if (!e.target.closest('#calcPickerWrap') && !e.target.closest('#calcFxPickerWrap')) {
+    // Close creator picker
     _calcPickerOpen = false;
-    const dd  = document.getElementById('calcPickerDropdown');
-    const btn = document.getElementById('calcPickerDisplay');
-    if (dd)  dd.classList.remove('open');
-    if (btn) btn.classList.remove('open');
+    document.getElementById('calcPickerDropdown')?.classList.remove('open');
+    document.getElementById('calcPickerDisplay')?.classList.remove('open');
+    // Close FX picker
+    _calcFxPickerOpen = false;
+    document.getElementById('calcFxDropdown')?.classList.remove('open');
+    document.getElementById('calcFxDisplay')?.classList.remove('open');
   }
 });
 
@@ -5421,7 +5426,7 @@ function _renderFxList(query) {
     return;
   }
   el.innerHTML = filtered.map(c =>
-    '<div class="calc-fx-item' + (c.code === _calcFxCode ? ' active' : '') + '" onclick="selectFxCurrency(\'' + c.code + '\')">'
+    '<div class="calc-fx-item' + (c.code === _calcFxCode ? ' active' : '') + '" onclick="selectFxCurrency(\'' + c.code + '\',event)">'
     + '<span style="font-size:18px;line-height:1">' + c.flag + '</span>'
     + '<div style="flex:1;min-width:0">'
     +   '<span class="calc-fx-item-code">' + c.code + '</span> '
@@ -5432,7 +5437,8 @@ function _renderFxList(query) {
   ).join('');
 }
 
-function toggleFxPicker() {
+function toggleFxPicker(event) {
+  if (event) event.stopPropagation();
   _calcFxPickerOpen = !_calcFxPickerOpen;
   const dd  = document.getElementById('calcFxDropdown');
   const btn = document.getElementById('calcFxDisplay');
@@ -5447,7 +5453,8 @@ function toggleFxPicker() {
 
 function filterFxList(q) { _renderFxList(q); }
 
-function selectFxCurrency(code) {
+function selectFxCurrency(code, event) {
+  if (event) event.stopPropagation();
   const cur = FX_CURRENCIES.find(c => c.code === code);
   if (!cur) return;
   _calcFxCode = code;
@@ -5470,14 +5477,7 @@ function selectFxCurrency(code) {
   renderCalc();
 }
 
-// Close fx picker when clicking outside
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('#calcFxPickerWrap')) {
-    _calcFxPickerOpen = false;
-    document.getElementById('calcFxDropdown')?.classList.remove('open');
-    document.getElementById('calcFxDisplay')?.classList.remove('open');
-  }
-});
+// (outside-click handling merged into single listener above)
 
 // ══════════════════════════════════════════════════════════════
 // ── RATES CALCULATOR ──────────────────────────────────────────
@@ -5877,7 +5877,7 @@ function renderManagersTab() {
       : '<span style="font-size:12px;color:var(--gray-400);font-style:italic;padding:4px 0">No creators assigned yet</span>';
 
     const assignBtn = canManage
-      ? '<button class="btn btn-primary btn-sm" style="width:100%;margin-top:4px" onclick="openAssignCreators(' + JSON.stringify(s.email) + ')">&#9998; Assign Creators</button>'
+      ? '<button class="btn btn-primary btn-sm" style="width:100%;margin-top:4px" data-mgr-email="' + s.email.replace(/"/g,'&quot;') + '" onclick="openAssignByAttr(this)">&#9998; Assign Creators</button>'
       : '';
 
     return '<div class="mgr-card">'
@@ -5899,6 +5899,12 @@ function renderManagersTab() {
 }
 
 // Open the assign creators modal for a given manager email
+// Helper: read email from data-attr to avoid quote-escaping bugs in onclick strings
+function openAssignByAttr(btn) {
+  const email = btn?.dataset?.mgrEmail;
+  if (email) openAssignCreators(email);
+}
+
 function openAssignCreators(email) {
   const s = STAFF.find(x => x.email === email);
   if (!s) return;
