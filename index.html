@@ -342,6 +342,26 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
 .user-card-header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
 .user-card-avatar{width:44px;height:44px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;flex-shrink:0;box-shadow:0 2px 8px rgba(33,152,237,.3);}
 .user-card-actions{display:flex;gap:8px;margin-top:14px;}
+/* ── Managers page grid ── */
+.mpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;}
+.mpl-card{background:white;border:1.5px solid var(--gray-100);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-sm);cursor:pointer;transition:all .18s;}
+.mpl-card:hover{border-color:var(--blue);box-shadow:var(--shadow-md);transform:translateY(-2px);}
+.mpl-card-hdr{padding:20px;display:flex;align-items:center;gap:14px;}
+.mpl-av{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:20px;font-weight:700;color:white;flex-shrink:0;overflow:hidden;}
+.mpl-av img{width:100%;height:100%;object-fit:cover;}
+.mpl-card-body{padding:0 20px 16px;}
+.mpl-roster-strip{display:flex;gap:4px;flex-wrap:wrap;}
+.mpl-roster-av{width:28px;height:28px;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;overflow:hidden;margin-left:-6px;}
+.mpl-roster-av:first-child{margin-left:0;}
+.mpl-roster-av img{width:100%;height:100%;object-fit:cover;}
+/* ── Manager detail profile card ── */
+.mpl-profile-card{background:white;border:1px solid var(--gray-100);border-radius:18px;overflow:hidden;box-shadow:var(--shadow-sm);}
+.mpl-profile-hdr{background:linear-gradient(135deg,#0b1f36 0%,#1a4872 60%,#2198ED 100%);padding:28px 28px 24px;position:relative;overflow:hidden;}
+.mpl-profile-hdr::before{content:'';position:absolute;bottom:-30px;right:-30px;width:140px;height:140px;border-radius:50%;background:rgba(33,152,237,.18);pointer-events:none;}
+.mpl-profile-hdr::after{content:'';position:absolute;top:-20px;left:160px;width:90px;height:90px;border-radius:50%;background:rgba(33,152,237,.1);pointer-events:none;}
+.mpl-profile-av{width:72px;height:72px;border-radius:50%;border:3px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:26px;font-weight:700;color:white;overflow:hidden;flex-shrink:0;}
+.mpl-profile-av img{width:100%;height:100%;object-fit:cover;}
+.mpl-profile-body{padding:22px 28px;}
 .mgr-card{background:var(--white);border:1.5px solid var(--gray-100);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-sm);transition:box-shadow .15s;}
 .mgr-card:hover{box-shadow:var(--shadow-md);}
 .mgr-card-header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
@@ -645,6 +665,36 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
 .calc-apply-btn{font-size:11px;font-weight:600;background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:4px 10px;cursor:pointer;transition:all .13s;}
 .calc-apply-btn:hover{background:rgba(255,255,255,.28);}
 .calc-copy-btn{font-size:11px;font-weight:600;color:var(--blue);background:var(--blue-light);border:1px solid rgba(33,152,237,.18);border-radius:7px;padding:4px 10px;cursor:pointer;}
+/* ── Calc creator picker ── */
+.calc-creator-picker{position:relative;}
+.calc-picker-display{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:10px;cursor:pointer;background:white;transition:border-color .15s;user-select:none;}
+.calc-picker-display:hover{border-color:var(--blue);}
+.calc-picker-display.open{border-color:var(--blue);box-shadow:0 0 0 3px rgba(33,152,237,.12);}
+.calc-picker-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;overflow:hidden;background:var(--gray-200);}
+.calc-picker-av img{width:100%;height:100%;object-fit:cover;}
+.calc-picker-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:white;border:1.5px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 32px rgba(15,17,32,.12);z-index:200;overflow:hidden;}
+.calc-picker-dropdown.open{display:block;animation:fadeInDown .12s ease;}
+@keyframes fadeInDown{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.calc-picker-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .1s;}
+.calc-picker-item:hover,.calc-picker-item.selected{background:var(--blue-light);}
+.calc-picker-item-name{font-size:13px;font-weight:600;color:var(--gray-900);}
+.calc-picker-item-rate{font-size:11px;color:var(--gray-400);margin-top:1px;}
+.calc-picker-empty{padding:16px;text-align:center;font-size:12px;color:var(--gray-400);}
+/* ── Secondary currency picker ── */
+.calc-fx-picker{position:relative;}
+.calc-fx-display{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:10px;cursor:pointer;background:white;transition:border-color .15s;user-select:none;min-width:90px;}
+.calc-fx-display:hover{border-color:var(--blue);}
+.calc-fx-display.open{border-color:var(--blue);box-shadow:0 0 0 3px rgba(33,152,237,.12);}
+.calc-fx-flag{font-size:16px;line-height:1;}
+.calc-fx-label{font-size:13px;font-weight:700;color:var(--gray-900);}
+.calc-fx-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:240px;background:white;border:1.5px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 32px rgba(15,17,32,.13);z-index:300;overflow:hidden;}
+.calc-fx-dropdown.open{display:block;animation:fadeInDown .12s ease;}
+.calc-fx-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;transition:background .1s;font-size:13px;}
+.calc-fx-item:hover,.calc-fx-item.active{background:var(--blue-light);}
+.calc-fx-item-code{font-weight:700;color:var(--gray-900);min-width:36px;}
+.calc-fx-item-name{color:var(--gray-600);font-size:11px;}
+.calc-fx-item-rate{margin-left:auto;font-size:11px;color:var(--gray-400);}
+.calc-cad{font-size:11px;color:var(--gray-400);margin-top:2px;font-weight:500;}
 .calc-copy-btn:hover{background:rgba(33,152,237,.18);}
 
 </style>
@@ -859,6 +909,10 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       Calendar
     </button>
     <div class="nav-section-label">More</div>
+    <button class="nav-item" id="nav-managers" onclick="showPage('managers',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><circle cx="19" cy="8" r="3"/><path d="M23 20v-1a3 3 0 0 0-4-2.83"/></svg>
+      Team
+    </button>
     <button class="nav-item" onclick="showPage('inbox',this)">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       Inbox
@@ -1305,18 +1359,37 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
             </div>
           </div>
 
-          <!-- CAD toggle + rate -->
+          <!-- Secondary currency selector -->
           <div>
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-bottom:6px">CAD Display</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <div class="calc-toggle" style="width:auto">
-                <button class="calc-toggle-btn active" id="calcBtnCadOn"  onclick="setCalcCad(true,this)" style="padding:8px 14px">On</button>
-                <button class="calc-toggle-btn"        id="calcBtnCadOff" onclick="setCalcCad(false,this)" style="padding:8px 14px">Off</button>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-bottom:6px">Secondary Currency</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <!-- Styled currency picker -->
+              <div class="calc-fx-picker" id="calcFxPickerWrap">
+                <div class="calc-fx-display" id="calcFxDisplay" onclick="toggleFxPicker()">
+                  <span class="calc-fx-flag" id="calcFxFlag">🇨🇦</span>
+                  <span class="calc-fx-label" id="calcFxLabel">CAD</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--gray-400);flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+                <div class="calc-fx-dropdown" id="calcFxDropdown">
+                  <div style="padding:7px">
+                    <input class="form-input" id="calcFxSearch" placeholder="Search currency…"
+                           oninput="filterFxList(this.value)"
+                           style="font-size:12px;padding:6px 10px">
+                  </div>
+                  <div id="calcFxList" style="max-height:220px;overflow-y:auto"></div>
+                </div>
               </div>
+              <!-- On/Off toggle -->
+              <div class="calc-toggle" style="width:auto">
+                <button class="calc-toggle-btn active" id="calcBtnFxOn"  onclick="setCalcFx(true,this)"  style="padding:8px 12px">Show</button>
+                <button class="calc-toggle-btn"        id="calcBtnFxOff" onclick="setCalcFx(false,this)" style="padding:8px 12px">Hide</button>
+              </div>
+              <!-- Custom rate input -->
               <div style="display:flex;align-items:center;gap:5px">
-                <span style="font-size:12px;color:var(--gray-400)">1 GBP =</span>
-                <input class="form-input" id="cadRate" type="number" step="0.01" value="1.85" style="width:72px;padding:6px 8px;font-size:12px" oninput="renderCalc()">
-                <span style="font-size:12px;color:var(--gray-400)">CAD</span>
+                <span style="font-size:12px;color:var(--gray-400);white-space:nowrap">1 GBP =</span>
+                <input class="form-input" id="calcFxRate" type="number" step="0.0001" value="1.85"
+                       style="width:80px;padding:6px 8px;font-size:12px" oninput="renderCalc()">
+                <span style="font-size:12px;color:var(--gray-400);min-width:30px" id="calcFxRateLabel">CAD</span>
               </div>
             </div>
           </div>
@@ -1335,20 +1408,34 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <!-- SINGLE mode input -->
         <div id="calcSingleInput" class="calc-section" style="margin-bottom:18px">
           <div class="calc-section-title">Creator &amp; Base Rate</div>
-          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-            <div class="form-group" style="flex:2;min-width:160px;margin:0">
-              <label class="form-label">Creator Name</label>
-              <input class="form-input" id="calcCreatorName" placeholder="e.g. Parmita" oninput="renderCalc()">
-            </div>
-            <div class="form-group" style="flex:1;min-width:120px;margin:0">
-              <label class="form-label">TikTok Base Rate (£)</label>
-              <div style="display:flex;align-items:center;gap:5px">
-                <span style="color:var(--gray-400)">£</span>
-                <input class="form-input" id="calcBaseRate" type="number" min="0" placeholder="250" oninput="renderCalc()">
-              </div>
-            </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <!-- Creator picker: searchable inline select -->
             <div>
-              <button class="btn btn-ghost btn-sm" onclick="calcLoadFromRoster()" title="Pick from pre-loaded roster">&#128100; Load Creator</button>
+              <label class="form-label">Creator</label>
+              <div class="calc-creator-picker" id="calcPickerWrap">
+                <div class="calc-picker-display" id="calcPickerDisplay" onclick="toggleCalcPicker()">
+                  <div class="calc-picker-av" id="calcPickerAv"></div>
+                  <span id="calcPickerLabel" style="flex:1;font-size:13px;color:var(--gray-600)">Select or type a creator…</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--gray-400)"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+                <div class="calc-picker-dropdown" id="calcPickerDropdown">
+                  <div style="padding:8px">
+                    <input class="form-input" id="calcPickerSearch" placeholder="Search creators…" oninput="filterCalcPicker(this.value)" style="font-size:12px;padding:7px 10px">
+                  </div>
+                  <div id="calcPickerList" style="max-height:240px;overflow-y:auto"></div>
+                </div>
+              </div>
+              <input type="hidden" id="calcCreatorName">
+            </div>
+            <!-- Base rate input -->
+            <div>
+              <label class="form-label">TikTok Base Rate (£)</label>
+              <div style="position:relative">
+                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gray-400);font-size:13px;font-weight:600">£</span>
+                <input class="form-input" id="calcBaseRate" type="number" min="0" placeholder="250"
+                       style="padding-left:26px" oninput="renderCalc()">
+              </div>
+              <div style="font-size:11px;color:var(--gray-400);margin-top:5px">Or type any amount — not limited to roster</div>
             </div>
           </div>
         </div>
@@ -1560,6 +1647,62 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
     </div>
 
 
+
+    <!-- ══ TEAM / MANAGERS PAGE ══ -->
+    <div class="page" id="page-managers">
+      <div class="page-header">
+        <div><h1>Team</h1><p id="managers-page-sub">Your staff and their creator rosters</p></div>
+        <div style="display:flex;gap:8px;align-items:center" id="managers-page-actions">
+          <!-- Edit/Assign buttons injected here when a manager is open -->
+        </div>
+      </div>
+
+      <!-- ── GRID VIEW: all staff cards ── -->
+      <div id="managers-list-view">
+        <div id="mpl-grid" class="mpl-grid"></div>
+        <div id="mpl-empty" style="display:none;text-align:center;padding:60px 20px;color:var(--gray-400)">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+               style="margin-bottom:14px;opacity:.35"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+               <circle cx="19" cy="8" r="3"/><path d="M23 20v-1a3 3 0 0 0-4-2.83"/></svg>
+          <div style="font-size:15px;font-weight:600;margin-bottom:6px">No staff yet</div>
+          <div style="font-size:13px">Add staff in Users &amp; Access to see them here.</div>
+        </div>
+      </div>
+
+      <!-- ── DETAIL VIEW: one staff member ── -->
+      <div id="managers-detail-view" style="display:none">
+        <!-- Back button -->
+        <button class="btn btn-ghost btn-sm" onclick="closeMgrDetail()"
+                style="margin-bottom:18px;display:inline-flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"/></svg> Back to Team
+        </button>
+
+        <!-- Staff profile header card -->
+        <div class="mpl-profile-card" id="mgrDetailCard">
+          <!-- populated by renderMgrDetail() -->
+        </div>
+
+        <!-- Assigned creators grid -->
+        <div style="margin-top:24px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div>
+              <div style="font-size:16px;font-weight:700;color:var(--gray-900)" id="mgrDetailRosterTitle">Creator Roster</div>
+              <div style="font-size:12px;color:var(--gray-400);margin-top:2px" id="mgrDetailRosterSub"></div>
+            </div>
+            <button class="btn btn-primary btn-sm" id="mgrDetailAssignBtn" onclick="openAssignCreatorsFromDetail()">
+              &#9998; Manage Roster
+            </button>
+          </div>
+          <div id="mgrDetailGrid" class="crm-grid"></div>
+          <div id="mgrDetailEmpty" style="display:none;text-align:center;padding:40px;background:var(--gray-50);border-radius:14px;color:var(--gray-400)">
+            <div style="font-size:28px;margin-bottom:10px">&#128100;</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">No creators assigned yet</div>
+            <div style="font-size:12px">Click "Manage Roster" to assign creators to this manager.</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- ══ EARNINGS TRACKER PAGE ══ -->
     <div class="page" id="page-earnings">
       <div class="page-header">
@@ -2845,6 +2988,7 @@ const pageTitles = {
   onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit',
   campaigns:'Campaigns', pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline',
   inbox:'Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
+  managers:'Team',
   creatorgrid:'Select Creators', earnings:'Earnings Tracker', calendar:'Team Calendar'
 };
 
@@ -2896,6 +3040,7 @@ function showPage(id, btn) {
   if (id === 'campaigns')  { renderCampaigns(currentCampaignFilter); }
   if (id === 'earnings')   { populateEarningSelects(); renderEarnings(); }
   if (id === 'calendar')   { renderCalendar(); }
+  if (id === 'managers')   { renderManagersPage(); }
 }
 
 function statusBadge(s){
@@ -4920,6 +5065,420 @@ async function addStaffUser() {
 }
 
 
+
+// ══════════════════════════════════════════════════════════════
+// ── MANAGERS / TEAM PAGE ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+let _mgrDetailEmail = null;  // which staff member's detail view is open
+
+// Render the main team page (grid of all staff cards)
+function renderManagersPage() {
+  const listView   = document.getElementById('managers-list-view');
+  const detailView = document.getElementById('managers-detail-view');
+  if (listView)   listView.style.display   = '';
+  if (detailView) detailView.style.display = 'none';
+  _mgrDetailEmail = null;
+
+  const grid  = document.getElementById('mpl-grid');
+  const empty = document.getElementById('mpl-empty');
+  const sub   = document.getElementById('managers-page-sub');
+  if (!grid) return;
+
+  if (!STAFF.length) {
+    grid.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  if (sub) sub.textContent = STAFF.length + ' staff member' + (STAFF.length !== 1 ? 's' : '');
+
+  const canManage = currentUser &&
+    (currentUser.systemRole === 'owner' || currentUser.systemRole === 'admin');
+
+  grid.innerHTML = STAFF.map((s, idx) => {
+    const assignedIds = managerAssignments[s.email] || [];
+    const assigned    = assignedIds.map(id => creators.find(c => c.id === id)).filter(Boolean);
+    const bgColor     = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+    const r           = s.systemRole || 'readonly';
+    const pic         = profilePics['staff_' + s.email];  // staff profile pics if set
+
+    const avHtml = pic
+      ? '<img src="' + pic + '" alt="' + s.name + '">'
+      : s.name[0].toUpperCase();
+
+    // Stacked avatar strip of assigned creators (max 6 shown)
+    const stripHtml = assigned.slice(0, 6).map(c => {
+      const cp = profilePics[c.id];
+      return cp
+        ? '<div class="mpl-roster-av"><img src="' + cp + '" alt="' + c.name + '"></div>'
+        : '<div class="mpl-roster-av" style="background:' + avatarColor(c.id) + '">' + avatarLetter(c.name) + '</div>';
+    }).join('') + (assigned.length > 6
+      ? '<div class="mpl-roster-av" style="background:var(--gray-200);color:var(--gray-600);font-size:9px">+' + (assigned.length - 6) + '</div>'
+      : '');
+
+    return '<div class="mpl-card" onclick="openMgrDetail(' + JSON.stringify(s.email) + ')">'
+      + '<div class="mpl-card-hdr">'
+      +   '<div class="mpl-av" style="background:' + bgColor + '">' + avHtml + '</div>'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div style="font-size:15px;font-weight:700;color:var(--gray-900)">' + s.name + '</div>'
+      +     '<div style="font-size:11px;color:var(--gray-400);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + s.email + '</div>'
+      +     '<span class="role-badge role-' + r + '" style="margin-top:4px">' + (ROLE_LABELS[r] || r) + '</span>'
+      +   '</div>'
+      + '</div>'
+      + '<div class="mpl-card-body">'
+      +   '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-bottom:8px">'
+      +     'Roster (' + assigned.length + ' creator' + (assigned.length !== 1 ? 's' : '') + ')'
+      +   '</div>'
+      +   (assigned.length
+      ?     '<div class="mpl-roster-strip">' + stripHtml + '</div>'
+      +     (assigned.length > 0 ? '<div style="font-size:11px;color:var(--gray-400);margin-top:6px">' + assigned.map(c => c.name).slice(0,3).join(', ') + (assigned.length > 3 ? ' +' + (assigned.length-3) + ' more' : '') + '</div>' : '')
+      :     '<div style="font-size:12px;color:var(--gray-400);font-style:italic">No creators assigned</div>')
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+// Open detail view for a staff member
+function openMgrDetail(email) {
+  const s = STAFF.find(x => x.email === email);
+  if (!s) return;
+  _mgrDetailEmail = email;
+
+  const listView   = document.getElementById('managers-list-view');
+  const detailView = document.getElementById('managers-detail-view');
+  if (listView)   listView.style.display   = 'none';
+  if (detailView) detailView.style.display = '';
+
+  renderMgrDetail(email);
+}
+
+function closeMgrDetail() {
+  _mgrDetailEmail = null;
+  const listView   = document.getElementById('managers-list-view');
+  const detailView = document.getElementById('managers-detail-view');
+  if (listView)   listView.style.display   = '';
+  if (detailView) detailView.style.display = 'none';
+  renderManagersPage();
+}
+
+function renderMgrDetail(email) {
+  const s     = STAFF.find(x => x.email === email);
+  if (!s) return;
+  const r     = s.systemRole || 'readonly';
+  const idx   = STAFF.indexOf(s);
+  const bg    = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+  const pic   = profilePics['staff_' + email];
+  const canManage = currentUser && (currentUser.systemRole === 'owner' || currentUser.systemRole === 'admin');
+
+  // Profile header card
+  const card = document.getElementById('mgrDetailCard');
+  if (card) {
+    const avHtml = pic
+      ? '<div class="mpl-profile-av"><img src="' + pic + '" alt="' + s.name + '"></div>'
+      : '<div class="mpl-profile-av" style="background:' + bg + '">' + s.name[0].toUpperCase() + '</div>';
+
+    card.innerHTML = '<div class="mpl-profile-hdr" style="display:flex;align-items:center;gap:20px">'
+      + avHtml
+      + '<div style="flex:1;position:relative;z-index:1">'
+      +   '<div style="font-family:\"DM Serif Display\",serif;font-size:24px;color:white;line-height:1.2;margin-bottom:4px">' + s.name + '</div>'
+      +   '<div style="font-size:12px;color:rgba(255,255,255,.65);margin-bottom:8px">' + s.email + '</div>'
+      +   '<span class="role-badge role-' + r + '">' + (ROLE_LABELS[r] || r) + '</span>'
+      + '</div>'
+      + (canManage ? '<button class="btn btn-ghost btn-sm" style="background:rgba(255,255,255,.12);color:white;border-color:rgba(255,255,255,.2)" onclick="openEditUser(' + JSON.stringify(s.email) + ')">Edit Profile</button>' : '')
+      + '</div>'
+      + '<div class="mpl-profile-body">'
+      +   '<div style="display:flex;gap:24px;flex-wrap:wrap">'
+      +     '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gray-400)">Role</div><div style="font-size:14px;font-weight:600;margin-top:3px">' + (ROLE_LABELS[r] || r) + '</div></div>'
+      +     '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gray-400)">Email</div><div style="font-size:14px;font-weight:600;margin-top:3px">' + s.email + '</div></div>'
+      +     '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gray-400)">Creators Managed</div><div style="font-size:14px;font-weight:600;margin-top:3px">' + (managerAssignments[email] || []).length + '</div></div>'
+      +   '</div>'
+      + '</div>';
+  }
+
+  // Assigned creators grid (reuse crm-gc cards)
+  const assignedIds = managerAssignments[email] || [];
+  const assigned    = assignedIds.map(id => creators.find(c => c.id === id)).filter(Boolean);
+
+  const titleEl = document.getElementById('mgrDetailRosterTitle');
+  const subEl   = document.getElementById('mgrDetailRosterSub');
+  const assignBtn = document.getElementById('mgrDetailAssignBtn');
+  if (titleEl) titleEl.textContent = s.name + "'s Creator Roster";
+  if (subEl) subEl.textContent = assigned.length + ' creator' + (assigned.length !== 1 ? 's' : '') + ' assigned';
+  if (assignBtn) assignBtn.style.display = canManage ? '' : 'none';
+
+  const gridEl  = document.getElementById('mgrDetailGrid');
+  const emptyEl = document.getElementById('mgrDetailEmpty');
+  if (!gridEl) return;
+
+  if (!assigned.length) {
+    gridEl.innerHTML = '';
+    gridEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  gridEl.style.display = '';
+
+  gridEl.innerHTML = assigned.map(c => {
+    const r2  = resolveCreator(c);
+    const cp  = profilePics[c.id];
+    const avH = cp ? '<img src="' + cp + '" alt="' + c.name + '">' : avatarLetter(c.name);
+    const avS = cp ? '' : 'background:' + avatarColor(c.id) + ';';
+    return '<div class="crm-gc" onclick="openCreatorProfile(' + c.id + ')">'
+      + '<div class="crm-gc-av" style="' + avS + '">' + avH + '</div>'
+      + '<div class="crm-gc-name">' + c.name + '</div>'
+      + '<div class="crm-gc-niche">' + (r2.niche || c.niche || '—') + '</div>'
+      + '<div class="crm-gc-stats">'
+      +   '<div class="crm-gc-stat"><div class="crm-gc-stat-val">' + (r2.followers || '—') + '</div><div class="crm-gc-stat-lbl">Followers</div></div>'
+      +   '<div class="crm-gc-stat"><div class="crm-gc-stat-val" style="color:var(--green)">' + (r2.engRate != null ? r2.engRate + '%' : '—') + '</div><div class="crm-gc-stat-lbl">Engagement</div></div>'
+      +   (r2.audience ? '<div class="crm-gc-stat full"><div class="crm-gc-stat-val">' + r2.audience + '</div><div class="crm-gc-stat-lbl">Audience</div></div>' : '')
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+// Open assign modal from detail view
+function openAssignCreatorsFromDetail() {
+  if (_mgrDetailEmail) openAssignCreators(_mgrDetailEmail);
+}
+
+// Override saveManagerAssignments to also refresh detail view if open
+const _origSaveManagerAssignments = saveManagerAssignments;
+// (extended below in saveManagerAssignments — we patch the post-save refresh)
+
+// ══════════════════════════════════════════════════════════════
+// ── RATES CALCULATOR — improved creator picker ─────────────────
+// ══════════════════════════════════════════════════════════════
+
+let _calcPickerOpen = false;
+let _calcPickerSelected = null;  // { name, base }
+
+function _buildCalcPickerItems(query) {
+  // Merge CALC_ROSTER with any creators in the CRM that have admin override rates
+  const q = (query || '').toLowerCase();
+
+  // Start from CALC_ROSTER
+  const items = CALC_ROSTER.map(it => ({
+    name: it.name,
+    base: it.base,
+    fromRoster: true,
+    creator: creators.find(c => c.name.toLowerCase().startsWith(it.name.toLowerCase())),
+  }));
+
+  // Also add any CRM creators NOT in roster who have a TikTok base rate set
+  creators.forEach(c => {
+    const ao = adminOverrides[c.id] || {};
+    const ob = c.onboarding || {};
+    const tikBase = (ao.rates && ao.rates['TikTok Video']) || (ob.rates && ob.rates['TikTok Video']);
+    if (tikBase && !items.find(it => it.creator && it.creator.id === c.id)) {
+      items.push({ name: c.name, base: parseInt(tikBase), fromRoster: false, creator: c });
+    }
+  });
+
+  return items.filter(it => !q || it.name.toLowerCase().includes(q));
+}
+
+function _renderCalcPickerList(query) {
+  const el = document.getElementById('calcPickerList');
+  if (!el) return;
+  const items = _buildCalcPickerItems(query);
+
+  if (!items.length) {
+    el.innerHTML = '<div class="calc-picker-empty">No creators found</div>';
+    return;
+  }
+
+  el.innerHTML = items.map((it, i) => {
+    const c   = it.creator;
+    const pic = c ? profilePics[c.id] : null;
+    const bg  = c ? avatarColor(c.id) : AVATAR_COLORS[i % AVATAR_COLORS.length];
+    const avH = pic
+      ? '<div class="calc-picker-av"><img src="' + pic + '" alt="' + it.name + '"></div>'
+      : '<div class="calc-picker-av" style="background:' + bg + '">' + it.name[0].toUpperCase() + '</div>';
+    const sel = _calcPickerSelected && _calcPickerSelected.name === it.name;
+    return '<div class="calc-picker-item' + (sel ? ' selected' : '') + '" onclick="selectCalcPickerItem(' + JSON.stringify(it.name) + ',' + it.base + ')">'
+      + avH
+      + '<div>'
+      +   '<div class="calc-picker-item-name">' + it.name + '</div>'
+      +   '<div class="calc-picker-item-rate">£' + it.base + ' TikTok base</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function toggleCalcPicker() {
+  _calcPickerOpen = !_calcPickerOpen;
+  const dd  = document.getElementById('calcPickerDropdown');
+  const btn = document.getElementById('calcPickerDisplay');
+  if (dd)  dd.classList.toggle('open', _calcPickerOpen);
+  if (btn) btn.classList.toggle('open', _calcPickerOpen);
+  if (_calcPickerOpen) {
+    document.getElementById('calcPickerSearch').value = '';
+    _renderCalcPickerList('');
+    setTimeout(() => document.getElementById('calcPickerSearch').focus(), 50);
+  }
+}
+
+function filterCalcPicker(q) { _renderCalcPickerList(q); }
+
+function selectCalcPickerItem(name, base) {
+  _calcPickerSelected = { name, base };
+  // Update hidden input + rate input
+  const nameEl = document.getElementById('calcCreatorName');
+  const baseEl = document.getElementById('calcBaseRate');
+  if (nameEl) nameEl.value = name;
+  if (baseEl) baseEl.value = base;
+
+  // Update display
+  const labelEl = document.getElementById('calcPickerLabel');
+  if (labelEl) labelEl.textContent = name;
+  labelEl.style.color = 'var(--gray-900)';
+  labelEl.style.fontWeight = '600';
+
+  // Update avatar in picker display
+  const avEl = document.getElementById('calcPickerAv');
+  const items = _buildCalcPickerItems('');
+  const it = items.find(x => x.name === name);
+  if (avEl && it) {
+    const c = it.creator;
+    const pic = c ? profilePics[c.id] : null;
+    const bg  = c ? avatarColor(c.id) : '#2198ED';
+    avEl.innerHTML = pic ? '<img src="' + pic + '" alt="' + name + '">' : name[0].toUpperCase();
+    avEl.style.background = pic ? 'transparent' : bg;
+  }
+
+  // Close picker + re-render
+  _calcPickerOpen = false;
+  const dd  = document.getElementById('calcPickerDropdown');
+  const btn = document.getElementById('calcPickerDisplay');
+  if (dd)  dd.classList.remove('open');
+  if (btn) btn.classList.remove('open');
+  renderCalc();
+}
+
+// Close picker when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#calcPickerWrap')) {
+    _calcPickerOpen = false;
+    const dd  = document.getElementById('calcPickerDropdown');
+    const btn = document.getElementById('calcPickerDisplay');
+    if (dd)  dd.classList.remove('open');
+    if (btn) btn.classList.remove('open');
+  }
+});
+
+
+// ══════════════════════════════════════════════════════════════
+// ── CURRENCY DATA & PICKER ────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+// GBP rates as of 2025 reference — editable by user in the input
+const FX_CURRENCIES = [
+  { code:'CAD', name:'Canadian Dollar',        flag:'🇨🇦', symbol:'$',   rate:1.85,  decimals:0 },
+  { code:'USD', name:'US Dollar',              flag:'🇺🇸', symbol:'$',   rate:1.27,  decimals:0 },
+  { code:'EUR', name:'Euro',                   flag:'🇪🇺', symbol:'€',   rate:1.17,  decimals:0 },
+  { code:'AUD', name:'Australian Dollar',      flag:'🇦🇺', symbol:'A$',  rate:1.97,  decimals:0 },
+  { code:'NZD', name:'New Zealand Dollar',     flag:'🇳🇿', symbol:'NZ$', rate:2.14,  decimals:0 },
+  { code:'AED', name:'UAE Dirham',             flag:'🇦🇪', symbol:'د.إ', rate:4.66,  decimals:0 },
+  { code:'SAR', name:'Saudi Riyal',            flag:'🇸🇦', symbol:'﷼',  rate:4.76,  decimals:0 },
+  { code:'SGD', name:'Singapore Dollar',       flag:'🇸🇬', symbol:'S$',  rate:1.71,  decimals:0 },
+  { code:'INR', name:'Indian Rupee',           flag:'🇮🇳', symbol:'₹',   rate:105.8, decimals:0 },
+  { code:'PKR', name:'Pakistani Rupee',        flag:'🇵🇰', symbol:'₨',   rate:353.0, decimals:0 },
+  { code:'SEK', name:'Swedish Krona',          flag:'🇸🇪', symbol:'kr',  rate:13.2,  decimals:0 },
+  { code:'NOK', name:'Norwegian Krone',        flag:'🇳🇴', symbol:'kr',  rate:13.5,  decimals:0 },
+  { code:'DKK', name:'Danish Krone',           flag:'🇩🇰', symbol:'kr',  rate:8.73,  decimals:0 },
+  { code:'CHF', name:'Swiss Franc',            flag:'🇨🇭', symbol:'Fr',  rate:1.12,  decimals:2 },
+  { code:'JPY', name:'Japanese Yen',           flag:'🇯🇵', symbol:'¥',   rate:193.5, decimals:0 },
+  { code:'KRW', name:'South Korean Won',       flag:'🇰🇷', symbol:'₩',   rate:1748,  decimals:0 },
+  { code:'HKD', name:'Hong Kong Dollar',       flag:'🇭🇰', symbol:'HK$', rate:9.91,  decimals:0 },
+  { code:'CNY', name:'Chinese Yuan',           flag:'🇨🇳', symbol:'¥',   rate:9.19,  decimals:0 },
+  { code:'MYR', name:'Malaysian Ringgit',      flag:'🇲🇾', symbol:'RM',  rate:5.64,  decimals:0 },
+  { code:'THB', name:'Thai Baht',              flag:'🇹🇭', symbol:'฿',   rate:44.0,  decimals:0 },
+  { code:'ZAR', name:'South African Rand',     flag:'🇿🇦', symbol:'R',   rate:23.4,  decimals:0 },
+  { code:'NGN', name:'Nigerian Naira',         flag:'🇳🇬', symbol:'₦',   rate:2070,  decimals:0 },
+  { code:'GHS', name:'Ghanaian Cedi',          flag:'🇬🇭', symbol:'₵',   rate:19.3,  decimals:0 },
+  { code:'KES', name:'Kenyan Shilling',        flag:'🇰🇪', symbol:'KSh', rate:163.0, decimals:0 },
+  { code:'BRL', name:'Brazilian Real',         flag:'🇧🇷', symbol:'R$',  rate:7.40,  decimals:0 },
+  { code:'MXN', name:'Mexican Peso',           flag:'🇲🇽', symbol:'$',   rate:22.4,  decimals:0 },
+  { code:'TRY', name:'Turkish Lira',           flag:'🇹🇷', symbol:'₺',   rate:44.2,  decimals:0 },
+  { code:'EGP', name:'Egyptian Pound',         flag:'🇪🇬', symbol:'E£',  rate:62.5,  decimals:0 },
+  { code:'ILS', name:'Israeli Shekel',         flag:'🇮🇱', symbol:'₪',   rate:4.64,  decimals:0 },
+  { code:'QAR', name:'Qatari Riyal',           flag:'🇶🇦', symbol:'QR',  rate:4.62,  decimals:0 },
+];
+
+let _calcFxPickerOpen = false;
+
+function _renderFxList(query) {
+  const el = document.getElementById('calcFxList');
+  if (!el) return;
+  const q = (query || '').toLowerCase();
+  const filtered = FX_CURRENCIES.filter(c =>
+    !q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+  );
+  if (!filtered.length) {
+    el.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:var(--gray-400)">No results</div>';
+    return;
+  }
+  el.innerHTML = filtered.map(c =>
+    '<div class="calc-fx-item' + (c.code === _calcFxCode ? ' active' : '') + '" onclick="selectFxCurrency(\'' + c.code + '\')">'
+    + '<span style="font-size:18px;line-height:1">' + c.flag + '</span>'
+    + '<div style="flex:1;min-width:0">'
+    +   '<span class="calc-fx-item-code">' + c.code + '</span> '
+    +   '<span class="calc-fx-item-name">' + c.name + '</span>'
+    + '</div>'
+    + '<span class="calc-fx-item-rate">' + c.rate + '</span>'
+    + '</div>'
+  ).join('');
+}
+
+function toggleFxPicker() {
+  _calcFxPickerOpen = !_calcFxPickerOpen;
+  const dd  = document.getElementById('calcFxDropdown');
+  const btn = document.getElementById('calcFxDisplay');
+  if (dd)  dd.classList.toggle('open', _calcFxPickerOpen);
+  if (btn) btn.classList.toggle('open', _calcFxPickerOpen);
+  if (_calcFxPickerOpen) {
+    const si = document.getElementById('calcFxSearch');
+    if (si) { si.value = ''; si.focus(); }
+    _renderFxList('');
+  }
+}
+
+function filterFxList(q) { _renderFxList(q); }
+
+function selectFxCurrency(code) {
+  const cur = FX_CURRENCIES.find(c => c.code === code);
+  if (!cur) return;
+  _calcFxCode = code;
+
+  // Update picker display
+  const flagEl  = document.getElementById('calcFxFlag');
+  const labelEl = document.getElementById('calcFxLabel');
+  const rateEl  = document.getElementById('calcFxRate');
+  const rateLbl = document.getElementById('calcFxRateLabel');
+  if (flagEl)  flagEl.textContent  = cur.flag;
+  if (labelEl) labelEl.textContent = cur.code;
+  if (rateEl)  rateEl.value        = cur.rate;
+  if (rateLbl) rateLbl.textContent = cur.code;
+
+  // Close picker
+  _calcFxPickerOpen = false;
+  document.getElementById('calcFxDropdown')?.classList.remove('open');
+  document.getElementById('calcFxDisplay')?.classList.remove('open');
+
+  renderCalc();
+}
+
+// Close fx picker when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#calcFxPickerWrap')) {
+    _calcFxPickerOpen = false;
+    document.getElementById('calcFxDropdown')?.classList.remove('open');
+    document.getElementById('calcFxDisplay')?.classList.remove('open');
+  }
+});
+
 // ══════════════════════════════════════════════════════════════
 // ── RATES CALCULATOR ──────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════
@@ -4955,7 +5514,9 @@ const CALC_ROSTER = [
 
 // State
 let _calcStructure = 'AB';   // 'AB' = Established/Emerging, 'C' = Startup/Growth
-let _calcShowCad   = true;
+let _calcShowFx    = true;   // show secondary currency
+let _calcFxCode    = 'CAD';  // ISO code of secondary currency
+let _calcFxOpen    = false;  // picker open state
 let _calcMode      = 'single'; // 'single' | 'batch' | 'roster'
 
 // ── Math helpers ──────────────────────────────────────────────
@@ -5018,14 +5579,22 @@ function _calcRates(base, structure) {
 
 // ── Formatting helpers ────────────────────────────────────────
 function _fmtGbp(v) { return '\u00a3' + v.toLocaleString(); }
-function _fmtCad(v, rate) {
-  const cad = Math.ceil((v * rate) / 5) * 5;
-  return '$' + cad.toLocaleString() + ' CAD';
+function _fmtFx(v, fxRate, code) {
+  const cur = FX_CURRENCIES.find(c => c.code === code) || { symbol: '', decimals: 0 };
+  // Round to nearest 5 if decimals=0, else nearest 0.5
+  const rounded = cur.decimals === 0
+    ? Math.ceil((v * fxRate) / 5) * 5
+    : Math.round(v * fxRate * 2) / 2;
+  const formatted = cur.decimals === 0
+    ? rounded.toLocaleString('en-GB', { maximumFractionDigits: 0 })
+    : rounded.toLocaleString('en-GB', { minimumFractionDigits: cur.decimals, maximumFractionDigits: cur.decimals });
+  return cur.symbol + formatted + ' ' + code;
 }
-function _fmtCell(gbp, cadRate) {
-  if (!_calcShowCad) return '<div class="calc-val">' + _fmtGbp(gbp) + '</div>';
+function _fmtCell(gbp, fxRate) {
+  const code = _calcFxCode;
+  if (!_calcShowFx) return '<div class="calc-val">' + _fmtGbp(gbp) + '</div>';
   return '<div class="calc-val">' + _fmtGbp(gbp) + '</div>'
-       + '<div class="calc-cad">(' + _fmtCad(gbp, cadRate) + ')</div>';
+       + '<div class="calc-cad">(' + _fmtFx(gbp, fxRate, code) + ')</div>';
 }
 
 // ── Render one creator block ──────────────────────────────────
@@ -5096,7 +5665,7 @@ function renderCalc() {
   const out = document.getElementById('calcOutput');
   if (!out) return;
 
-  const cadRate = parseFloat(document.getElementById('cadRate')?.value || '1.85') || 1.85;
+  const fxRate = parseFloat(document.getElementById('calcFxRate')?.value || '1.85') || 1.85;
 
   if (_calcMode === 'single') {
     const name = (document.getElementById('calcCreatorName')?.value || '').trim();
@@ -5105,7 +5674,7 @@ function renderCalc() {
       out.innerHTML = '<div style="color:var(--gray-400);font-size:13px;padding:20px">Enter a creator name and TikTok base rate above.</div>';
       return;
     }
-    out.innerHTML = _renderCreatorBlock(name, base, cadRate, 0);
+    out.innerHTML = _renderCreatorBlock(name, base, fxRate, 0);
 
   } else if (_calcMode === 'batch') {
     const raw = document.getElementById('calcBatchText')?.value || '';
@@ -5120,10 +5689,10 @@ function renderCalc() {
       out.innerHTML = '<div style="color:var(--gray-400);font-size:13px;padding:20px">Paste a list of creators above (e.g. <code>Parmita — 250</code>).</div>';
       return;
     }
-    out.innerHTML = items.map((it, i) => _renderCreatorBlock(it.name, it.base, cadRate, i)).join('');
+    out.innerHTML = items.map((it, i) => _renderCreatorBlock(it.name, it.base, fxRate, i)).join('');
 
   } else { // roster
-    out.innerHTML = CALC_ROSTER.map((it, i) => _renderCreatorBlock(it.name, it.base, cadRate, i)).join('');
+    out.innerHTML = CALC_ROSTER.map((it, i) => _renderCreatorBlock(it.name, it.base, fxRate, i)).join('');
   }
 }
 
@@ -5134,9 +5703,9 @@ function setCalcStructure(s, btn) {
   if (btn) btn.classList.add('active');
   renderCalc();
 }
-function setCalcCad(on, btn) {
-  _calcShowCad = on;
-  ['calcBtnCadOn','calcBtnCadOff'].forEach(id => {
+function setCalcFx(on, btn) {
+  _calcShowFx = on;
+  ['calcBtnFxOn','calcBtnFxOff'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
@@ -5166,33 +5735,7 @@ function setCalcMode(mode, btn) {
 }
 
 // Load creator from pre-populated roster into single mode
-function calcLoadFromRoster() {
-  // Build quick picker
-  const names = CALC_ROSTER.map((r, i) =>
-    '<option value="' + i + '">' + r.name + ' — \u00a3' + r.base + '</option>'
-  ).join('');
-  const sel = document.createElement('select');
-  sel.className = 'form-select';
-  sel.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;width:260px;box-shadow:0 8px 32px rgba(0,0,0,.2);border-radius:10px';
-  sel.innerHTML = '<option value="">Pick a creator…</option>' + names;
-  sel.onchange = function() {
-    const idx = parseInt(this.value);
-    if (isNaN(idx)) return;
-    const it = CALC_ROSTER[idx];
-    const nameEl = document.getElementById('calcCreatorName');
-    const baseEl = document.getElementById('calcBaseRate');
-    if (nameEl) nameEl.value = it.name;
-    if (baseEl) baseEl.value = it.base;
-    renderCalc();
-    document.body.removeChild(sel);
-    document.body.removeChild(overlay);
-  };
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:9998';
-  overlay.onclick = () => { document.body.removeChild(sel); document.body.removeChild(overlay); };
-  document.body.appendChild(overlay);
-  document.body.appendChild(sel);
-}
+// calcLoadFromRoster replaced by inline picker (selectCalcPickerItem)
 
 // Apply calculated rates to a creator's adminOverrides (writes into CRM system)
 async function calcApplyToCreator(creatorId, rates, usage) {
@@ -5435,6 +5978,8 @@ async function saveManagerAssignments() {
   if (document.getElementById('page-crm') && document.getElementById('page-crm').classList.contains('active')) {
     renderCRM(creators);
   }
+  // Refresh managers detail view if it's open
+  if (_mgrDetailEmail) { renderMgrDetail(_mgrDetailEmail); } else { renderManagersPage(); }
 
   const s = STAFF.find(x => x.email === _assigningManagerEmail);
   showToast('Assignments saved for ' + (s ? s.name : 'manager'));
