@@ -342,6 +342,20 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
 .user-card-header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
 .user-card-avatar{width:44px;height:44px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;flex-shrink:0;box-shadow:0 2px 8px rgba(33,152,237,.3);}
 .user-card-actions{display:flex;gap:8px;margin-top:14px;}
+.mgr-card{background:var(--white);border:1.5px solid var(--gray-100);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-sm);transition:box-shadow .15s;}
+.mgr-card:hover{box-shadow:var(--shadow-md);}
+.mgr-card-header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.mgr-roster{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px;min-height:26px;}
+.mgr-creator-chip{display:inline-flex;align-items:center;gap:5px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:20px;padding:3px 10px 3px 5px;font-size:11px;font-weight:600;color:var(--gray-700);}
+.mgr-creator-chip-av{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;flex-shrink:0;overflow:hidden;}
+.mgr-creator-chip-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.crm-mgr-badge{display:inline-flex;align-items:center;gap:3px;background:var(--blue-light);color:var(--blue);border-radius:20px;padding:1px 7px;font-size:10px;font-weight:600;margin-left:5px;vertical-align:middle;white-space:nowrap;line-height:1.4;}
+.assign-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--gray-100);border-radius:10px;background:var(--white);cursor:pointer;transition:all .12s;user-select:none;}
+.assign-row:hover{border-color:var(--blue);background:var(--blue-light);}
+.assign-row.selected{background:var(--blue-light);border-color:var(--blue);}
+.assign-row input[type=checkbox]{accent-color:var(--blue);width:16px;height:16px;flex-shrink:0;cursor:pointer;}
+.assign-row-name{font-size:13px;font-weight:600;color:var(--gray-900);}
+.assign-row-sub{font-size:11px;color:var(--gray-400);margin-top:1px;}
 
 /* ── TOPBAR ACCENT ── */
 .topbar{background:var(--white);border-bottom:1px solid var(--gray-100);padding:0 28px;height:60px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50;box-shadow:0 1px 0 var(--gray-100);}
@@ -611,6 +625,27 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
   /* Hide carousel arrows on mobile (swipe handled by touch) */
   .pd-av-arr { display: none !important; }
 }
+
+/* ── Rates Calculator ── */
+.calc-section{background:white;border:1px solid var(--gray-100);border-radius:14px;padding:20px;margin-bottom:16px;}
+.calc-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--gray-400);margin-bottom:14px;}
+.calc-toggle{display:flex;gap:0;border:1.5px solid var(--gray-200);border-radius:10px;overflow:hidden;background:var(--gray-50);}
+.calc-toggle-btn{flex:1;padding:8px 12px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--gray-600);transition:all .15s;white-space:nowrap;}
+.calc-toggle-btn.active{background:var(--blue);color:white;}
+.calc-result-table{width:100%;border-collapse:collapse;font-size:13px;}
+.calc-result-table th{background:var(--blue);color:white;padding:9px 14px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+.calc-result-table td{padding:9px 14px;border-bottom:1px solid var(--gray-100);vertical-align:top;}
+.calc-result-table tr:last-child td{border-bottom:none;}
+.calc-result-table tr:nth-child(even) td{background:var(--gray-50);}
+.calc-val{font-weight:700;color:var(--gray-900);}
+.calc-cad{font-size:11px;color:var(--gray-400);margin-top:1px;}
+.calc-section-divider{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);padding:10px 14px;background:var(--gray-50);border-bottom:1px solid var(--gray-100);}
+.calc-creator-block{border:1px solid var(--gray-100);border-radius:12px;overflow:hidden;margin-bottom:14px;}
+.calc-creator-hdr{background:linear-gradient(135deg,#0b1f36,#1a4872);color:white;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;}
+.calc-apply-btn{font-size:11px;font-weight:600;background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:4px 10px;cursor:pointer;transition:all .13s;}
+.calc-apply-btn:hover{background:rgba(255,255,255,.28);}
+.calc-copy-btn{font-size:11px;font-weight:600;color:var(--blue);background:var(--blue-light);border:1px solid rgba(33,152,237,.18);border-radius:7px;padding:4px 10px;cursor:pointer;}
+.calc-copy-btn:hover{background:rgba(33,152,237,.18);}
 
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
@@ -1212,36 +1247,126 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
     <div class="page" id="page-ratekit">
       <div class="page-header">
         <div><h1>Rate Kit</h1><p>Brand-ready rate cards for your creators</p></div>
-        <button class="btn btn-ghost" onclick="exportKitAsPng('rateKitExportTarget','RateKit')" id="btn-export-ratekit">⬇ Export PNG</button>
-      </div>
-      <div class="grid-2">
-        <div>
-          <div class="card" style="margin-bottom:14px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-              <div class="card-title">Rate Card</div>
-              <select class="form-select" style="width:200px" id="rateKitSelector" onchange="renderRateKit(this.value)">
-                <option value="">Select creator…</option>
-              </select>
-            </div>
-            <div id="rateKitPreview">
-              <div style="font-size:13px;color:var(--gray-400)">Select a creator to view their rate card.</div>
-            </div>
-            <!-- Hidden export target (clean, no UI chrome) -->
-            <div id="rateKitExportTarget" style="display:none"></div>
-          </div>
-        </div>
-        <div>
-          <div class="card">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-              <div class="card-title">Edit Admin Rates</div>
-              <span style="font-size:11px;color:var(--gray-400)">Overrides self-reported</span>
-            </div>
-            <div id="rateKitEditBody">
-              <div style="font-size:13px;color:var(--gray-400)">Select a creator above to edit their rates.</div>
-            </div>
-          </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost" id="btn-export-ratekit" onclick="exportKitAsPng('rateKitExportTarget','RateKit')" style="display:none">&#11015; Export PNG</button>
+          <button class="btn btn-ghost" id="btn-calc-copy-all" onclick="calcCopyAll()" style="display:none">&#128203; Copy All</button>
         </div>
       </div>
+
+      <!-- Tabs -->
+      <div class="profile-tabs" style="margin-bottom:20px" id="rateKitTabs">
+        <button class="profile-tab active" id="rktab-ratecard" onclick="switchRateKitTab('ratecard',this)">Rate Cards</button>
+        <button class="profile-tab" id="rktab-calculator" onclick="switchRateKitTab('calculator',this)">&#129518; Rates Calculator</button>
+      </div>
+
+      <!-- Tab: Rate Cards (existing) -->
+      <div class="profile-tab-content active" id="rkpane-ratecard">
+        <div class="grid-2">
+          <div>
+            <div class="card" style="margin-bottom:14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                <div class="card-title">Rate Card</div>
+                <select class="form-select" style="width:200px" id="rateKitSelector" onchange="renderRateKit(this.value)">
+                  <option value="">Select creator…</option>
+                </select>
+              </div>
+              <div id="rateKitPreview">
+                <div style="font-size:13px;color:var(--gray-400)">Select a creator to view their rate card.</div>
+              </div>
+              <div id="rateKitExportTarget" style="display:none"></div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                <div class="card-title">Edit Admin Rates</div>
+                <span style="font-size:11px;color:var(--gray-400)">Overrides self-reported</span>
+              </div>
+              <div id="rateKitEditBody">
+                <div style="font-size:13px;color:var(--gray-400)">Select a creator above to edit their rates.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Rates Calculator -->
+      <div class="profile-tab-content" id="rkpane-calculator">
+
+        <!-- Controls row -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px">
+
+          <!-- Structure toggle -->
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-bottom:6px">Tier Structure</div>
+            <div class="calc-toggle">
+              <button class="calc-toggle-btn active" id="calcBtnAB"   onclick="setCalcStructure('AB',this)">Established / Emerging</button>
+              <button class="calc-toggle-btn"        id="calcBtnC"    onclick="setCalcStructure('C',this)">Startup / Growth</button>
+            </div>
+          </div>
+
+          <!-- CAD toggle + rate -->
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-bottom:6px">CAD Display</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="calc-toggle" style="width:auto">
+                <button class="calc-toggle-btn active" id="calcBtnCadOn"  onclick="setCalcCad(true,this)" style="padding:8px 14px">On</button>
+                <button class="calc-toggle-btn"        id="calcBtnCadOff" onclick="setCalcCad(false,this)" style="padding:8px 14px">Off</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:5px">
+                <span style="font-size:12px;color:var(--gray-400)">1 GBP =</span>
+                <input class="form-input" id="cadRate" type="number" step="0.01" value="1.85" style="width:72px;padding:6px 8px;font-size:12px" oninput="renderCalc()">
+                <span style="font-size:12px;color:var(--gray-400)">CAD</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mode toggle -->
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-bottom:6px">Mode</div>
+            <div class="calc-toggle">
+              <button class="calc-toggle-btn active" id="calcBtnSingle" onclick="setCalcMode('single',this)">Single Creator</button>
+              <button class="calc-toggle-btn"        id="calcBtnBatch"  onclick="setCalcMode('batch',this)">Batch</button>
+              <button class="calc-toggle-btn"        id="calcBtnRoster" onclick="setCalcMode('roster',this)">Full Roster</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SINGLE mode input -->
+        <div id="calcSingleInput" class="calc-section" style="margin-bottom:18px">
+          <div class="calc-section-title">Creator &amp; Base Rate</div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div class="form-group" style="flex:2;min-width:160px;margin:0">
+              <label class="form-label">Creator Name</label>
+              <input class="form-input" id="calcCreatorName" placeholder="e.g. Parmita" oninput="renderCalc()">
+            </div>
+            <div class="form-group" style="flex:1;min-width:120px;margin:0">
+              <label class="form-label">TikTok Base Rate (£)</label>
+              <div style="display:flex;align-items:center;gap:5px">
+                <span style="color:var(--gray-400)">£</span>
+                <input class="form-input" id="calcBaseRate" type="number" min="0" placeholder="250" oninput="renderCalc()">
+              </div>
+            </div>
+            <div>
+              <button class="btn btn-ghost btn-sm" onclick="calcLoadFromRoster()" title="Pick from pre-loaded roster">&#128100; Load Creator</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- BATCH mode input -->
+        <div id="calcBatchInput" class="calc-section" style="display:none;margin-bottom:18px">
+          <div class="calc-section-title">Paste Creator List</div>
+          <div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">One per line: <code>Name — rate</code> or <code>Name, rate</code></div>
+          <textarea class="form-textarea" id="calcBatchText" rows="8"
+            placeholder="Safwar — 450&#10;Parmita — 250&#10;Daniel — 220&#10;Maham — 160"
+            oninput="renderCalc()"></textarea>
+        </div>
+
+        <!-- Output area -->
+        <div id="calcOutput"></div>
+
+      </div><!-- /rkpane-calculator -->
+
     </div>
 
     <!-- ══ CAMPAIGNS ══ -->
@@ -1412,10 +1537,24 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <p>Only the Owner or Admin can manage user accounts.</p>
       </div>
       <div id="users-content">
-        <div class="users-grid" id="usersGrid"></div>
-        <div style="background:var(--blue-light);border:1px solid rgba(33,152,237,.2);border-radius:var(--radius);padding:14px;margin-top:20px;display:flex;align-items:flex-start;gap:12px">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <div style="font-size:11px;color:var(--blue);line-height:1.6"><strong>Role system:</strong> Owner has full access. Admin can manage most things. Manager can edit creators &amp; deals. Team has read+edit on assigned data. Read Only can only view.</div>
+        <div class="profile-tabs" style="margin-bottom:20px">
+          <button class="profile-tab active" id="users-tab-staff"    onclick="switchUsersTab('staff',this)">Staff Accounts</button>
+          <button class="profile-tab"        id="users-tab-managers" onclick="switchUsersTab('managers',this)">&#128101; Talent Managers</button>
+        </div>
+        <div class="profile-tab-content active" id="users-pane-staff">
+          <div class="users-grid" id="usersGrid"></div>
+          <div style="background:var(--blue-light);border:1px solid rgba(33,152,237,.2);border-radius:var(--radius);padding:14px;margin-top:20px;display:flex;align-items:flex-start;gap:12px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div style="font-size:11px;color:var(--blue);line-height:1.6"><strong>Role system:</strong> Owner has full access. Admin can manage most things. Manager can edit creators &amp; deals. Team has read+edit on assigned data. Read Only can only view.</div>
+          </div>
+        </div>
+        <div class="profile-tab-content" id="users-pane-managers">
+          <div id="managers-empty" style="display:none;text-align:center;padding:48px;color:var(--gray-400)">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:.35"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><circle cx="19" cy="8" r="3"/><path d="M23 20v-1a3 3 0 0 0-4-2.83"/></svg>
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">No managers found</div>
+            <div style="font-size:12px">Add a staff member with the Manager role, then assign creators to them.</div>
+          </div>
+          <div class="users-grid" id="managersGrid"></div>
         </div>
       </div>
     </div>
@@ -1995,6 +2134,28 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
   </div>
 </div>
 
+<!-- Assign Creators to Manager Modal -->
+<div class="modal-overlay" id="assignCreatorsModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title" id="assignModalTitle">Assign Creators</div>
+      <button class="modal-close" onclick="closeModal('assignCreatorsModal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray-400);margin-bottom:14px" id="assignModalSub">Select creators for this manager.</p>
+      <input class="form-input" id="assignSearch" placeholder="Search creators..." oninput="filterAssignList(this.value)" style="margin-bottom:12px">
+      <div id="assignCreatorList" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <span style="font-size:12px;color:var(--gray-400)" id="assignCountLabel">0 selected</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="closeModal('assignCreatorsModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveManagerAssignments()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Edit User Modal -->
 <div class="modal-overlay" id="editUserModal">
   <div class="modal">
@@ -2381,13 +2542,14 @@ async function syncAllFromDB() {
       STAFF = seeded; Storage.set('staff', STAFF);
     }
 
-    const [pp, ia, ao, ps, ke, bl] = await Promise.all([
+    const [pp, ia, ao, ps, ke, bl, ma] = await Promise.all([
       DB.getAppData('profilePics'),
       DB.getAppData('kitAnalytics'),
       DB.getAppData('adminOverrides'),
       DB.getAppData('pitchSubjects'),
       DB.getAppData('kitExtraCreators'),
       DB.getAppData('brandLogos'),
+      DB.getAppData('managerAssignments'),
     ]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
@@ -2395,6 +2557,7 @@ async function syncAllFromDB() {
     if (ps) { pitchSubjects = ps; Storage.set('pitchSubjects', pitchSubjects); }
     if (ke) { kitExtraCreators = ke; Storage.set('kitExtraCreators', kitExtraCreators); }
     if (bl) { brandLogos = bl; Storage.set('brandLogos', brandLogos); }
+    if (ma) { managerAssignments = ma; Storage.set('managerAssignments', managerAssignments); }
 
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
@@ -2465,7 +2628,8 @@ let kitAnalytics    = Storage.get('kitAnalytics',    {});
 let kitExtraCreators = Storage.get('kitExtraCreators', {});  // primaryCreatorId -> [extraId, ...]
 let profilePics   = Storage.get('profilePics',   {});
 let pitchSubjects = Storage.get('pitchSubjects', {});  // pitch_id -> subject (stored in app_data, not pitch_decks table)
-let brandLogos    = Storage.get('brandLogos',    {});  // brand name (lowercase) -> data URL or image URL
+let brandLogos          = Storage.get('brandLogos',          {});  // brand name (lowercase) -> data URL or image URL
+let managerAssignments  = Storage.get('managerAssignments',  {});  // staffEmail -> [creatorId, ...]
 function saveInbox()    { Storage.set('inboxMessages', inboxMessages); }
 function saveAnalyticsData() { Storage.set('kitAnalytics', kitAnalytics); }
 function saveProfilePics()   { Storage.set('profilePics', profilePics); }
@@ -2726,7 +2890,7 @@ function showPage(id, btn) {
     const firstMkTab = document.querySelector('#page-mediakit .profile-tab');
     switchMKTab('kit', firstMkTab);
   }
-  if (id === 'ratekit')    { populateRateKitSelector(); }
+  if (id === 'ratekit')    { populateRateKitSelector(); switchRateKitTab('ratecard', document.getElementById('rktab-ratecard')); }
   if (id === 'users')      { renderUsersPage(); }
   if (id === 'pipeline')   { renderPipeline(); }
   if (id === 'campaigns')  { renderCampaigns(currentCampaignFilter); }
@@ -2801,6 +2965,7 @@ function renderCRMGrid(list) {
       <div class="crm-gc" data-id="${c.id}" onclick="openCreatorProfile(${c.id})">
         <div class="crm-gc-av" style="${avStyle}">${avH}</div>
         <div class="crm-gc-name">${c.name}</div>
+        ${(function(){var m=getCreatorManager(c.id);return m?'<div class="crm-mgr-badge" style="margin:2px 0 4px;font-size:10px">'+m+'</div>':'';})()}
         <div class="crm-gc-niche">${r.niche || c.niche || '—'}</div>
         <div class="crm-gc-stats">
           <div class="crm-gc-stat">
@@ -2864,7 +3029,7 @@ function renderCRM(list) {
     return `
     <tr data-id="${c.id}">
       ${handleTd}
-      <td><div class="creator-cell">${avatarHtml}<div><div class="creator-name">${c.name}</div><div class="creator-handle">${c.email}</div></div></div></td>
+      <td><div class="creator-cell">${avatarHtml}<div><div class="creator-name">${c.name}${(function(){var m=getCreatorManager(c.id);return m?'<span class="crm-mgr-badge">'+m+'</span>':'';})()}</div><div class="creator-handle">${c.email}</div></div></div></td>
       <td style="font-size:12px;color:var(--gray-400)">${c.role}</td>
       <td style="font-size:12px">${c.location}</td>
       <td>${c.onboarding ? '<span class="badge badge-green">✓ Complete</span>' : c.status === 'Invited' ? '<span class="badge badge-amber">Invited</span>' : '<span class="badge badge-gray">Pending</span>'}</td>
@@ -4649,6 +4814,10 @@ function renderUsersPage() {
   document.getElementById('btn-add-user').style.display = canManage ? '' : 'none';
   if (!canManage) return;
 
+  // Re-render managers tab if currently visible
+  const activeUsersTab = document.querySelector('#page-users .profile-tab.active');
+  if (activeUsersTab && activeUsersTab.id === 'users-tab-managers') { renderManagersTab(); }
+
   const grid = document.getElementById('usersGrid');
   grid.innerHTML = STAFF.map(s => {
     const r = s.systemRole || 'readonly';
@@ -4748,6 +4917,529 @@ async function addStaffUser() {
   addActivity(`Staff account added: <strong>${name}</strong> (${ROLE_LABELS[role]})`);
   showToast(`${name} added as ${ROLE_LABELS[role]}`);
   ['nu-name','nu-email','nu-pass'].forEach(id=>{ const el=document.getElementById(id); if(el)el.value=''; });
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// ── RATES CALCULATOR ──────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+// Pre-loaded BluStu roster base rates (v3)
+const CALC_ROSTER = [
+  {name:'Safwar',      base:450},
+  {name:'FM2Breezy',   base:260},
+  {name:'Parmita',     base:250},
+  {name:'Muskan',      base:250},
+  {name:'Valentina',   base:220},
+  {name:'Daniel',      base:220},
+  {name:'Imran',       base:220},
+  {name:'Faiza',       base:180},
+  {name:'Jess',        base:180},
+  {name:'Maham',       base:160},
+  {name:'Sanin',       base:160},
+  {name:'Simran',      base:160},
+  {name:'Maddie',      base:150},
+  {name:'Mehrab',      base:120},
+  {name:'Faisal',      base:110},
+  {name:'Kim',         base:100},
+  {name:'Anita',       base:90},
+  {name:'Humaz',       base:90},
+  {name:'Krantz',      base:90},
+  {name:'Samirah',     base:90},
+  {name:'Faridah',     base:90},
+  {name:'HBVlogs',     base:90},
+  {name:'Ridha',       base:80},
+  {name:'Rayyan',      base:80},
+  {name:'MD',          base:70},
+];
+
+// State
+let _calcStructure = 'AB';   // 'AB' = Established/Emerging, 'C' = Startup/Growth
+let _calcShowCad   = true;
+let _calcMode      = 'single'; // 'single' | 'batch' | 'roster'
+
+// ── Math helpers ──────────────────────────────────────────────
+function _roundUp5(v) { return Math.ceil(v / 5) * 5; }
+
+function _calcRates(base, structure) {
+  const tiktok = base;
+  const reel   = _roundUp5(base * 0.81);
+  const story  = _roundUp5(base * 0.38);
+  const u30    = _roundUp5(base * 0.45);
+  const u60    = _roundUp5(base * 0.80);
+  const u90    = _roundUp5(base * 1.10);
+  const uperp  = _roundUp5(base * 2.20);
+
+  if (structure === 'AB') {
+    const estTiktok = _roundUp5(tiktok * 1.25);
+    const estReel   = _roundUp5(reel   * 1.25);
+    const estStory  = _roundUp5(story  * 1.25);
+    return {
+      structure: 'AB',
+      formats: [
+        {label:'TikTok Video',    a: estTiktok, b: tiktok},
+        {label:'Instagram Reel',  a: estReel,   b: reel},
+        {label:'Instagram Story', a: estStory,  b: story},
+      ],
+      usage: [
+        {label:'30 days paid promo',  fee: u30},
+        {label:'60 days paid promo',  fee: u60},
+        {label:'90 days paid promo',  fee: u90},
+        {label:'Perpetual / Buyout',  fee: uperp},
+      ],
+      // For "Apply to creator" — write these into adminOverrides
+      adminRates: {'TikTok Video': tiktok, 'Instagram Reel': reel, 'Instagram Story': story},
+      adminUsage: {'30 days': u30, '60 days': u60, '90 days': u90, 'Perpetual': uperp},
+    };
+  } else {
+    // Startup / Growth
+    const growth  = _roundUp5(tiktok * 1.30);
+    const pkg3s   = _roundUp5(tiktok * 2.70);  // 3-video package (startup tier)
+    const pkg3g   = _roundUp5(growth * 2.70);  // 3-video package (growth tier)
+    return {
+      structure: 'C',
+      formats: [
+        {label:'TikTok Video (per post)', c: tiktok,  g: growth},
+        {label:'Instagram Reel',          c: reel,    g: _roundUp5(reel * 1.30)},
+        {label:'Instagram Story',         c: story,   g: _roundUp5(story * 1.30)},
+        {label:'3-Video Package',         c: pkg3s,   g: pkg3g},
+      ],
+      usage: [
+        {label:'30 days paid promo',  fee: u30},
+        {label:'60 days paid promo',  fee: u60},
+        {label:'90 days paid promo',  fee: u90},
+        {label:'Perpetual / Buyout',  fee: uperp},
+      ],
+      adminRates: {'TikTok Video': tiktok, 'Instagram Reel': reel, 'Instagram Story': story},
+      adminUsage: {'30 days': u30, '60 days': u60, '90 days': u90, 'Perpetual': uperp},
+    };
+  }
+}
+
+// ── Formatting helpers ────────────────────────────────────────
+function _fmtGbp(v) { return '\u00a3' + v.toLocaleString(); }
+function _fmtCad(v, rate) {
+  const cad = Math.ceil((v * rate) / 5) * 5;
+  return '$' + cad.toLocaleString() + ' CAD';
+}
+function _fmtCell(gbp, cadRate) {
+  if (!_calcShowCad) return '<div class="calc-val">' + _fmtGbp(gbp) + '</div>';
+  return '<div class="calc-val">' + _fmtGbp(gbp) + '</div>'
+       + '<div class="calc-cad">(' + _fmtCad(gbp, cadRate) + ')</div>';
+}
+
+// ── Render one creator block ──────────────────────────────────
+function _renderCreatorBlock(name, base, cadRate, idx) {
+  if (!base || base <= 0) return '';
+  const d = _calcRates(base, _calcStructure);
+
+  const isAB = d.structure === 'AB';
+  const col1 = isAB ? 'Established' : 'Startup';
+  const col2 = isAB ? 'Emerging'    : 'Growth';
+
+  // Formats table
+  let fmtRows = d.formats.map(f => {
+    const aVal = isAB ? f.a : f.c;
+    const bVal = isAB ? f.b : f.g;
+    return '<tr><td>' + f.label + '</td>'
+         + '<td>' + _fmtCell(aVal, cadRate) + '</td>'
+         + '<td>' + _fmtCell(bVal, cadRate) + '</td>'
+         + '</tr>';
+  }).join('');
+
+  // Usage table
+  let usageRows = d.usage.map(u =>
+    '<tr><td>' + u.label + '</td>'
+    + '<td colspan="2">' + _fmtCell(u.fee, cadRate) + '</td>'
+    + '</tr>'
+  ).join('');
+
+  // Copy-text for clipboard
+  const copyId = 'calcBlock-' + idx;
+
+  // "Apply to creator" button — only if creator found in roster/creators array
+  const match = creators.find(c =>
+    c.name.toLowerCase().includes(name.toLowerCase()) ||
+    name.toLowerCase().includes(c.name.toLowerCase().split(' ')[0])
+  );
+  const applyBtn = match
+    ? '<button class="calc-apply-btn" onclick="calcApplyToCreator(' + match.id + ',' + JSON.stringify(d.adminRates) + ',' + JSON.stringify(d.adminUsage) + ')">&#8593; Apply to CRM</button>'
+    : '';
+
+  return '<div class="calc-creator-block" id="' + copyId + '">'
+    + '<div class="calc-creator-hdr">'
+    +   '<div>'
+    +     '<div style="font-family:\'DM Serif Display\',serif;font-size:16px;font-weight:700">' + name + '</div>'
+    +     '<div style="font-size:11px;opacity:.65;margin-top:1px">TikTok base: ' + _fmtGbp(base) + '</div>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:8px;align-items:center">'
+    +     applyBtn
+    +     '<button class="calc-copy-btn" onclick="calcCopyBlock(\'' + copyId + '\',\'' + name + '\')" style="background:rgba(255,255,255,.13);color:white;border-color:rgba(255,255,255,.2)">&#128203; Copy</button>'
+    +   '</div>'
+    + '</div>'
+    + '<div style="overflow-x:auto">'
+    + '<table class="calc-result-table" style="margin:0">'
+    + '<thead><tr><th>Format</th><th>' + col1 + '</th><th>' + col2 + '</th></tr></thead>'
+    + '<tbody>' + fmtRows + '</tbody>'
+    + '</table>'
+    + '<div class="calc-section-divider">Usage / Licensing Rights (add-on, based on ' + col1 + ' tier)</div>'
+    + '<table class="calc-result-table" style="margin:0">'
+    + '<thead><tr><th>Duration</th><th colspan="2">Fee</th></tr></thead>'
+    + '<tbody>' + usageRows + '</tbody>'
+    + '</table>'
+    + '</div>'
+    + '</div>';
+}
+
+// ── Main render ───────────────────────────────────────────────
+function renderCalc() {
+  const out = document.getElementById('calcOutput');
+  if (!out) return;
+
+  const cadRate = parseFloat(document.getElementById('cadRate')?.value || '1.85') || 1.85;
+
+  if (_calcMode === 'single') {
+    const name = (document.getElementById('calcCreatorName')?.value || '').trim();
+    const base = parseFloat(document.getElementById('calcBaseRate')?.value || '0');
+    if (!name || !base) {
+      out.innerHTML = '<div style="color:var(--gray-400);font-size:13px;padding:20px">Enter a creator name and TikTok base rate above.</div>';
+      return;
+    }
+    out.innerHTML = _renderCreatorBlock(name, base, cadRate, 0);
+
+  } else if (_calcMode === 'batch') {
+    const raw = document.getElementById('calcBatchText')?.value || '';
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const items = lines.map(line => {
+      // Support "Name — rate", "Name, rate", "Name - rate", "Name: rate"
+      const m = line.match(/^(.+?)[\u2014\-,:\s]+(\d+)\s*$/);
+      return m ? {name: m[1].trim(), base: parseInt(m[2])} : null;
+    }).filter(Boolean);
+
+    if (!items.length) {
+      out.innerHTML = '<div style="color:var(--gray-400);font-size:13px;padding:20px">Paste a list of creators above (e.g. <code>Parmita — 250</code>).</div>';
+      return;
+    }
+    out.innerHTML = items.map((it, i) => _renderCreatorBlock(it.name, it.base, cadRate, i)).join('');
+
+  } else { // roster
+    out.innerHTML = CALC_ROSTER.map((it, i) => _renderCreatorBlock(it.name, it.base, cadRate, i)).join('');
+  }
+}
+
+// ── Control handlers ──────────────────────────────────────────
+function setCalcStructure(s, btn) {
+  _calcStructure = s;
+  document.querySelectorAll('#rkpane-calculator .calc-toggle-btn[id^="calcBtn"][id$="AB"],[id$="C"]').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderCalc();
+}
+function setCalcCad(on, btn) {
+  _calcShowCad = on;
+  ['calcBtnCadOn','calcBtnCadOff'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+  if (btn) btn.classList.add('active');
+  renderCalc();
+}
+function setCalcMode(mode, btn) {
+  _calcMode = mode;
+  ['calcSingleInput','calcBatchInput'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  if (mode === 'single') {
+    const el = document.getElementById('calcSingleInput');
+    if (el) el.style.display = '';
+  } else if (mode === 'batch') {
+    const el = document.getElementById('calcBatchInput');
+    if (el) el.style.display = '';
+  }
+  // "Copy All" button only in batch/roster
+  const copyAll = document.getElementById('btn-calc-copy-all');
+  if (copyAll) copyAll.style.display = (mode !== 'single') ? '' : 'none';
+
+  document.querySelectorAll('#rkpane-calculator .calc-toggle-btn[id^="calcBtn"][id$="Single"],[id$="Batch"],[id$="Roster"]').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderCalc();
+}
+
+// Load creator from pre-populated roster into single mode
+function calcLoadFromRoster() {
+  // Build quick picker
+  const names = CALC_ROSTER.map((r, i) =>
+    '<option value="' + i + '">' + r.name + ' — \u00a3' + r.base + '</option>'
+  ).join('');
+  const sel = document.createElement('select');
+  sel.className = 'form-select';
+  sel.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;width:260px;box-shadow:0 8px 32px rgba(0,0,0,.2);border-radius:10px';
+  sel.innerHTML = '<option value="">Pick a creator…</option>' + names;
+  sel.onchange = function() {
+    const idx = parseInt(this.value);
+    if (isNaN(idx)) return;
+    const it = CALC_ROSTER[idx];
+    const nameEl = document.getElementById('calcCreatorName');
+    const baseEl = document.getElementById('calcBaseRate');
+    if (nameEl) nameEl.value = it.name;
+    if (baseEl) baseEl.value = it.base;
+    renderCalc();
+    document.body.removeChild(sel);
+    document.body.removeChild(overlay);
+  };
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:9998';
+  overlay.onclick = () => { document.body.removeChild(sel); document.body.removeChild(overlay); };
+  document.body.appendChild(overlay);
+  document.body.appendChild(sel);
+}
+
+// Apply calculated rates to a creator's adminOverrides (writes into CRM system)
+async function calcApplyToCreator(creatorId, rates, usage) {
+  if (!adminOverrides[creatorId]) adminOverrides[creatorId] = {};
+  adminOverrides[creatorId].rates = rates;
+  adminOverrides[creatorId].usage = usage;
+  adminOverrides[creatorId].updatedBy = currentUser ? currentUser.name : 'Calculator';
+  adminOverrides[creatorId].updatedAt = new Date().toISOString();
+  await saveAdminOverrides();
+  const c = creators.find(x => x.id === creatorId);
+  showToast('\u2705 Rates applied to ' + (c ? c.name : 'creator') + ' in CRM');
+}
+
+// Copy a single block as plain text
+function calcCopyBlock(blockId, name) {
+  const el = document.getElementById(blockId);
+  if (!el) return;
+  // Build plain text table from the block's tables
+  const tables = el.querySelectorAll('table');
+  let text = name + ' — Rate Card\n' + '='.repeat(40) + '\n';
+  tables.forEach(tbl => {
+    tbl.querySelectorAll('tr').forEach(row => {
+      const cells = [...row.querySelectorAll('th,td')].map(td => td.innerText.replace(/\n/g,' ').trim());
+      text += cells.join('\t') + '\n';
+    });
+    text += '\n';
+  });
+  navigator.clipboard ? navigator.clipboard.writeText(text).then(() => showToast('\u2705 Copied!')) : prompt('Copy:', text);
+}
+
+// Copy all visible blocks
+function calcCopyAll() {
+  const blocks = document.querySelectorAll('#calcOutput .calc-creator-block');
+  if (!blocks.length) { showToast('Nothing to copy yet'); return; }
+  let text = '';
+  blocks.forEach(el => {
+    const nameEl = el.querySelector('.calc-creator-hdr div div');
+    const name = nameEl ? nameEl.innerText : '—';
+    text += name + '\n' + '='.repeat(40) + '\n';
+    el.querySelectorAll('table').forEach(tbl => {
+      tbl.querySelectorAll('tr').forEach(row => {
+        const cells = [...row.querySelectorAll('th,td')].map(td => td.innerText.replace(/\n/g,' ').trim());
+        text += cells.join('\t') + '\n';
+      });
+      text += '\n';
+    });
+    text += '\n';
+  });
+  navigator.clipboard ? navigator.clipboard.writeText(text).then(() => showToast('\u2705 All rate cards copied!')) : prompt('Copy:', text);
+}
+
+// Tab switcher for Rate Kit page
+function switchRateKitTab(tab, btn) {
+  document.querySelectorAll('#page-ratekit .profile-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-ratekit .profile-tab-content').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const pane = document.getElementById('rkpane-' + tab);
+  if (pane) pane.classList.add('active');
+
+  // Show/hide page-level buttons
+  const exportBtn = document.getElementById('btn-export-ratekit');
+  const copyAllBtn = document.getElementById('btn-calc-copy-all');
+  if (exportBtn) exportBtn.style.display = (tab === 'ratecard') ? '' : 'none';
+  if (copyAllBtn) copyAllBtn.style.display = (tab === 'calculator' && _calcMode !== 'single') ? '' : 'none';
+
+  // Auto-render calculator when switching to it
+  if (tab === 'calculator') renderCalc();
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// ── TALENT MANAGERS ───────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+let _assigningManagerEmail = null;
+
+async function saveManagerAssignmentsData() {
+  Storage.set('managerAssignments', managerAssignments);
+  await DB.setAppData('managerAssignments', managerAssignments);
+}
+
+// Returns the manager name for a creator id, or null
+function getCreatorManager(creatorId) {
+  for (const [email, ids] of Object.entries(managerAssignments)) {
+    if (Array.isArray(ids) && ids.includes(creatorId)) {
+      const s = STAFF.find(x => x.email === email);
+      return s ? s.name : null;
+    }
+  }
+  return null;
+}
+
+// Tab switcher on the Users & Access page
+function switchUsersTab(tab, btn) {
+  document.querySelectorAll('#page-users .profile-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-users .profile-tab-content').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const pane = document.getElementById('users-pane-' + tab);
+  if (pane) pane.classList.add('active');
+  if (tab === 'managers') renderManagersTab();
+}
+
+// Render the Talent Managers tab grid
+function renderManagersTab() {
+  const grid  = document.getElementById('managersGrid');
+  const empty = document.getElementById('managers-empty');
+  if (!grid) return;
+
+  // Show owner, admin, and manager-role staff
+  const mgrs = STAFF.filter(s =>
+    s.systemRole === 'manager' || s.systemRole === 'admin' || s.systemRole === 'owner'
+  );
+
+  if (!mgrs.length) {
+    grid.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  const canManage = currentUser &&
+    (currentUser.systemRole === 'owner' || currentUser.systemRole === 'admin');
+
+  grid.innerHTML = mgrs.map(s => {
+    const assignedIds = managerAssignments[s.email] || [];
+    const assigned    = assignedIds.map(id => creators.find(c => c.id === id)).filter(Boolean);
+    const roleIdx     = STAFF.indexOf(s);
+    const bgColor     = AVATAR_COLORS[roleIdx % AVATAR_COLORS.length];
+    const r           = s.systemRole || 'readonly';
+
+    const rosterHtml = assigned.length
+      ? assigned.map(c => {
+          const pic = profilePics[c.id];
+          const av  = pic
+            ? '<div class="mgr-creator-chip-av"><img src="' + pic + '" alt="' + c.name + '"></div>'
+            : '<div class="mgr-creator-chip-av" style="background:' + avatarColor(c.id) + '">' + avatarLetter(c.name) + '</div>';
+          return '<span class="mgr-creator-chip">' + av + c.name + '</span>';
+        }).join('')
+      : '<span style="font-size:12px;color:var(--gray-400);font-style:italic;padding:4px 0">No creators assigned yet</span>';
+
+    const assignBtn = canManage
+      ? '<button class="btn btn-primary btn-sm" style="width:100%;margin-top:4px" onclick="openAssignCreators(' + JSON.stringify(s.email) + ')">&#9998; Assign Creators</button>'
+      : '';
+
+    return '<div class="mgr-card">'
+      + '<div class="mgr-card-header">'
+      +   '<div class="user-card-avatar" style="background:' + bgColor + '">' + s.name[0].toUpperCase() + '</div>'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div style="font-size:14px;font-weight:700;color:var(--gray-900)">' + s.name + '</div>'
+      +     '<div style="font-size:11px;color:var(--gray-400);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + s.email + '</div>'
+      +   '</div>'
+      +   '<span class="role-badge role-' + r + '">' + (ROLE_LABELS[r] || r) + '</span>'
+      + '</div>'
+      + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gray-400);margin-bottom:6px">'
+      +   'Roster <span style="background:var(--blue);color:white;border-radius:20px;padding:1px 7px;font-size:9px;margin-left:4px">' + assigned.length + '</span>'
+      + '</div>'
+      + '<div class="mgr-roster">' + rosterHtml + '</div>'
+      + assignBtn
+      + '</div>';
+  }).join('');
+}
+
+// Open the assign creators modal for a given manager email
+function openAssignCreators(email) {
+  const s = STAFF.find(x => x.email === email);
+  if (!s) return;
+  _assigningManagerEmail = email;
+  document.getElementById('assignModalTitle').textContent = 'Assign Creators — ' + s.name;
+  document.getElementById('assignModalSub').textContent   =
+    'Tick creators ' + s.name + ' is responsible for. Untick to unassign.';
+  document.getElementById('assignSearch').value = '';
+  _renderAssignList('');
+  openModal('assignCreatorsModal');
+}
+
+function _renderAssignList(query) {
+  const el      = document.getElementById('assignCreatorList');
+  if (!el) return;
+  const current = managerAssignments[_assigningManagerEmail] || [];
+  const q       = (query || '').toLowerCase();
+  const filtered = creators.filter(c =>
+    !q || c.name.toLowerCase().includes(q) || (c.niche || '').toLowerCase().includes(q)
+  );
+
+  el.innerHTML = filtered.map(c => {
+    const checked = current.includes(c.id);
+    const pic     = profilePics[c.id];
+    const av      = pic
+      ? '<div class="mgr-creator-chip-av" style="width:32px;height:32px;font-size:13px"><img src="' + pic + '" alt="' + c.name + '"></div>'
+      : '<div class="mgr-creator-chip-av" style="width:32px;height:32px;font-size:13px;background:' + avatarColor(c.id) + '">' + avatarLetter(c.name) + '</div>';
+    // Note if another manager also has this creator
+    const otherMgr = Object.entries(managerAssignments)
+      .filter(([e]) => e !== _assigningManagerEmail)
+      .find(([, ids]) => ids && ids.includes(c.id));
+    const otherNote = otherMgr
+      ? ' <span style="font-size:10px;color:var(--amber);margin-left:4px">also: ' + (STAFF.find(x => x.email === otherMgr[0])?.name || otherMgr[0]) + '</span>'
+      : '';
+    return '<label class="assign-row' + (checked ? ' selected' : '') + '" for="ac-' + c.id + '">'
+      + '<input type="checkbox" id="ac-' + c.id + '" data-id="' + c.id + '" ' + (checked ? 'checked' : '') + ' onchange="toggleAssignRow(this)">'
+      + av
+      + '<div style="flex:1;min-width:0">'
+      +   '<div class="assign-row-name">' + c.name + otherNote + '</div>'
+      +   '<div class="assign-row-sub">' + (c.niche || '—') + ' · ' + (c.location || '—') + '</div>'
+      + '</div>'
+      + '</label>';
+  }).join('');
+  _updateAssignCount();
+}
+
+function filterAssignList(q) { _renderAssignList(q); }
+
+function toggleAssignRow(cb) {
+  const row = cb.closest('.assign-row');
+  if (row) row.classList.toggle('selected', cb.checked);
+  _updateAssignCount();
+}
+
+function _updateAssignCount() {
+  const n   = document.querySelectorAll('#assignCreatorList input[type=checkbox]:checked').length;
+  const lbl = document.getElementById('assignCountLabel');
+  if (lbl) lbl.textContent = n + ' creator' + (n !== 1 ? 's' : '') + ' selected';
+}
+
+async function saveManagerAssignments() {
+  if (!_assigningManagerEmail) return;
+  const checked = [...document.querySelectorAll('#assignCreatorList input[type=checkbox]:checked')];
+  const ids     = checked.map(cb => parseInt(cb.dataset.id, 10)).filter(Boolean);
+
+  if (ids.length > 0) {
+    managerAssignments[_assigningManagerEmail] = ids;
+  } else {
+    delete managerAssignments[_assigningManagerEmail];
+  }
+
+  await saveManagerAssignmentsData();
+  closeModal('assignCreatorsModal');
+  renderManagersTab();
+
+  // Refresh CRM badges if CRM is the active page
+  if (document.getElementById('page-crm') && document.getElementById('page-crm').classList.contains('active')) {
+    renderCRM(creators);
+  }
+
+  const s = STAFF.find(x => x.email === _assigningManagerEmail);
+  showToast('Assignments saved for ' + (s ? s.name : 'manager'));
+  addActivity('Creator assignments updated for <strong>' + (s ? s.name : _assigningManagerEmail) + '</strong>');
+  _assigningManagerEmail = null;
 }
 
 // ── CONFIRM MODAL HELPER ─────────────────────────────────────
