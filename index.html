@@ -1906,7 +1906,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Bill To (Client)</label><textarea class="form-textarea" id="inv-billto" placeholder="Client Name&#10;Company&#10;Address&#10;Email" style="min-height:80px"></textarea></div>
-        <div class="form-group"><label class="form-label">Pay To (Your Details)</label><textarea class="form-textarea" id="inv-payto" placeholder="blustu™ Talent Agency&#10;Your Address&#10;bank@blustu.agency" style="min-height:80px" value="blustu™ Talent Agency"></textarea></div>
+        <div class="form-group"><label class="form-label">Pay To (Your Details)</label><textarea class="form-textarea" id="inv-payto" placeholder="blustu™ Talent Agency&#10;Your Address&#10;bank@blustu.agency" style="min-height:80px"></textarea></div>
       </div>
       <div class="form-group"><label class="form-label">Payment Method</label><input class="form-input" id="inv-payment" placeholder="e.g. Bank Transfer — Sort: 00-00-00 Acc: 00000000"></div>
 
@@ -6427,7 +6427,9 @@ function initInvoice() {
   const set = (id, val) => { const el=document.getElementById(id); if(el&&!el.value) el.value=val; };
   set('inv-issue', today); set('inv-due', due30); set('inv-sigdate', today);
   set('inv-number', 'INV-' + Date.now().toString().slice(-4));
-  set('inv-payto', 'blustu™ Talent Agency\ncontact@blustu.agency');
+  // FIX: textareas need .value, not the value attribute — set default explicitly
+  const paytoEl = document.getElementById('inv-payto');
+  if (paytoEl && !paytoEl.value) paytoEl.value = 'blustu™ Talent Agency\ncontact@blustu.agency';
 
   // Wire up live preview
   document.querySelectorAll('#page-invoice input, #page-invoice textarea').forEach(el => {
@@ -6467,13 +6469,24 @@ function updateInvoicePreview() {
   const sig     = g('inv-signature');
   const sigdate = g('inv-sigdate');
 
+  // Format ISO date strings into readable form (e.g. "4 Dec 2025")
+  const fmtDate = d => {
+    if (!d) return '—';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt)) return d;
+      return dt.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+    } catch(e) { return d; }
+  };
+
   const p = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val||''; };
   p('prev-title', title); p('prev-number', number);
   p('prev-billto', billto); p('prev-payto', payto);
-  p('prev-signature', sig); p('prev-sigdate', sigdate);
+  p('prev-signature', sig);
+  p('prev-sigdate', sigdate ? fmtDate(sigdate) : '');
 
   const datesEl = document.getElementById('prev-dates');
-  if (datesEl) datesEl.innerHTML = `<div>Issued: ${issue||'—'}</div><div>Due: ${due||'—'}</div>`;
+  if (datesEl) datesEl.innerHTML = `<div>Issued: ${fmtDate(issue)}</div><div>Due: ${fmtDate(due)}</div>`;
 
   const rows = document.querySelectorAll('.inv-item-row');
   let subtotal = 0;
@@ -6523,54 +6536,83 @@ function clearInvoice() {
 }
 
 function exportInvoicePDF() {
+  if (typeof html2canvas === 'undefined') {
+    showToast('Export library not ready — try again in a moment');
+    return;
+  }
   const preview = document.getElementById('invoicePreview');
   if (!preview) { showToast('No invoice to export'); return; }
-  const win = window.open('', '_blank', 'width=800,height=1100');
-  if (!win) { showToast('Allow popups to export PDF'); return; }
 
-  // Clone only the preview container contents
-  const clone = preview.cloneNode(true);
-  // Remove any action buttons that may be inside the preview
-  clone.querySelectorAll('button, .no-print').forEach(el => el.remove());
-  const html = clone.innerHTML;
+  showToast('Generating PDF…');
 
-  win.document.write(`<!DOCTYPE html><html><head>
-    <meta charset="UTF-8">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
-    <style>
-      *{margin:0;padding:0;box-sizing:border-box}
-      body{
-        font-family:'DM Sans',sans-serif;
-        background:white;
-        color:#0f1120;
-        font-size:13px;
-        line-height:1.6;
-      }
-      .inv-wrap{
-        max-width:680px;
-        margin:0 auto;
-        padding:48px;
-        background:white;
-      }
-      table{width:100%;border-collapse:collapse}
-      td,th{padding:8px 12px;font-size:12px}
-      th{background:#f8f9ff;font-weight:600;text-align:left;border-bottom:2px solid #e8eaf0}
-      tr:nth-child(even) td{background:#fafbff}
-      .inv-total-row td{font-weight:700;font-size:14px;border-top:2px solid #0f1120;padding-top:12px}
-      hr{border:none;border-top:1px solid #e8eaf0;margin:20px 0}
-      @media print{
-        body{padding:0}
-        .inv-wrap{padding:28px}
-        @page{margin:20mm}
-      }
-    </style>
+  // Capture the live preview EXACTLY as it appears on screen.
+  // This guarantees the PDF matches the preview pixel-for-pixel.
+  html2canvas(preview, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    logging: false,
+    windowWidth: preview.scrollWidth,
+    windowHeight: preview.scrollHeight,
+  }).then(canvas => {
+    const imgData = canvas.toDataURL('image/png');
+    const win = window.open('', '_blank', 'width=900,height=1200');
+    if (!win) { showToast('Allow pop-ups to export PDF'); return; }
+
+    // Filename uses invoice number
+    const invNum = document.getElementById('inv-number')?.value || 'invoice';
+
+    win.document.write(`<!DOCTYPE html><html><head>
+      <meta charset="UTF-8">
+      <title>Invoice ${invNum}</title>
+      <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        html,body{
+          background:white;
+          width:100%;
+          min-height:100%;
+          -webkit-print-color-adjust:exact;
+          print-color-adjust:exact;
+        }
+        .pdf-wrap{
+          width:100%;
+          padding:20px;
+          display:flex;
+          justify-content:center;
+          align-items:flex-start;
+        }
+        .pdf-wrap img{
+          max-width:100%;
+          height:auto;
+          display:block;
+          box-shadow:0 4px 24px rgba(0,0,0,.08);
+        }
+        @media print {
+          body{padding:0}
+          .pdf-wrap{padding:0}
+          .pdf-wrap img{box-shadow:none;max-width:100%;width:100%}
+          @page{margin:15mm;size:A4}
+        }
+      </style>
     </head><body>
-    <div class="inv-wrap">${html}</div>
-    <script>
-      window.onload = () => { setTimeout(() => window.print(), 800); };
-    <\/script>
+      <div class="pdf-wrap">
+        <img src="${imgData}" alt="Invoice ${invNum}">
+      </div>
+      <script>
+        window.onload = () => {
+          setTimeout(() => {
+            window.print();
+            window.onafterprint = () => window.close();
+          }, 500);
+        };
+      <\/script>
     </body></html>`);
-  win.document.close();
+    win.document.close();
+    showToast('✅ Print dialog opened — choose "Save as PDF"');
+  }).catch(err => {
+    console.error('Invoice export error:', err);
+    showToast('❌ Export failed — check browser console');
+  });
 }
 
 // ══════════════════════════════════════════════════════════════
