@@ -7983,73 +7983,178 @@ function onEarnCampaignChange() {
 }
 
 /**
- * Show how much creator-payout budget is left on the selected campaign.
- * "Left" = campaign.value − sum of creator_payout from all earnings on that campaign,
- * EXCLUDING the row being currently edited.
- * Agency-only entries don't reduce the budget (they aren't paid to creators).
+ * Compute everything that's been "accounted for" on a campaign:
+ *   - sum of creator payouts
+ *   - sum of standard agency cuts (the 20%)
+ *   - sum of late fees
+ *   - sum of per-deal extra agency profits
+ *   - sum of any existing agency-only profit entries
+ *
+ * The "untied pure profit left" = campaign.value − all of the above.
+ * That's the leftover that hasn't been assigned to anyone yet.
+ *
+ * `excludeEarningId` skips the row currently being edited so we don't double-count it.
+ */
+function computeCampaignTotals(campaignId, excludeEarningId) {
+  const camp = campaigns.find(c => String(c.id) === String(campaignId));
+  const dealTotal = camp ? Number(camp.value || 0) : 0;
+
+  const rows = earnings.filter(e =>
+    String(e.campaign_id) === String(campaignId) &&
+    String(e.id) !== String(excludeEarningId)
+  );
+
+  let creatorPayouts = 0, standardCuts = 0, lateFees = 0, dealExtras = 0, agencyOnly = 0;
+  let creatorRecordCount = 0;
+
+  for (const e of rows) {
+    if (e.entry_type === 'agency_only') {
+      agencyOnly += Number(e.extra_agency_profit || e.deal_value || 0);
+    } else {
+      creatorPayouts += Number(e.creator_payout || 0);
+      standardCuts   += agencyStandardCutFor(e);
+      lateFees       += lateFeeFor(e);
+      dealExtras     += extraProfitFor(e);
+      creatorRecordCount++;
+    }
+  }
+
+  const accountedFor = creatorPayouts + standardCuts + lateFees + dealExtras + agencyOnly;
+  const untiedLeft   = dealTotal - accountedFor;
+  const creatorBudgetLeft = dealTotal - creatorPayouts;
+
+  return {
+    dealTotal,
+    creatorPayouts,
+    standardCuts,
+    lateFees,
+    dealExtras,
+    agencyOnly,
+    accountedFor,
+    untiedLeft,            // for "Use remaining" on agency-only
+    creatorBudgetLeft,     // for "left for creators" on creator entries
+    creatorRecordCount,
+  };
+}
+
+/**
+ * Refresh the campaign-budget banner above the modal fields.
+ * Shows different info depending on the entry type:
+ *   - creator entry  → "X left for creators"
+ *   - agency-only    → "X untied profit left on this campaign"
  */
 function updateCampaignBudgetBanner() {
-  const banner   = document.getElementById('earn-campaign-budget');
+  const banner = document.getElementById('earn-campaign-budget');
   if (!banner) return;
-  const campId   = document.getElementById('earn-campaign-sel').value;
-  const editId   = document.getElementById('earn-id').value;
+  const campId = document.getElementById('earn-campaign-sel').value;
+  const editId = document.getElementById('earn-id').value;
+  const type   = document.querySelector('input[name="earn-entry-type"]:checked')?.value || 'creator';
+
+  // Always update the "Use remaining" button visibility on the agency-only field
+  const useBtn  = document.getElementById('earn-use-remaining-btn');
+  const useAmt  = document.getElementById('earn-use-remaining-amt');
+  const useHint = document.getElementById('earn-use-remaining-hint');
+  if (useBtn) {
+    if (type === 'agency_only' && campId) {
+      const tt = computeCampaignTotals(campId, editId);
+      useBtn.style.display  = '';
+      if (useAmt) useAmt.textContent = fmtMoneyFull(Math.max(0, tt.untiedLeft));
+      if (useHint) useHint.style.display = 'none';
+    } else if (type === 'agency_only') {
+      useBtn.style.display  = 'none';
+      if (useHint) useHint.style.display = '';
+    } else {
+      useBtn.style.display  = 'none';
+      if (useHint) useHint.style.display = 'none';
+    }
+  }
+
   if (!campId) { banner.style.display = 'none'; return; }
 
   const camp = campaigns.find(c => String(c.id) === String(campId));
   if (!camp || !camp.value) { banner.style.display = 'none'; return; }
 
-  const dealTotal = Number(camp.value) || 0;
-  const allocated = earnings
-    .filter(e => String(e.campaign_id) === String(campId) && String(e.id) !== String(editId))
-    .reduce((s, e) => {
-      // Only creator payouts count against the creator budget
-      if (e.entry_type === 'agency_only') return s;
-      return s + Number(e.creator_payout || 0);
-    }, 0);
+  const t = computeCampaignTotals(campId, editId);
 
-  // If we're editing a creator earning, also reflect what's currently in the form
-  let pending = 0;
-  const type = document.querySelector('input[name="earn-entry-type"]:checked')?.value || 'creator';
-  if (type === 'creator') {
-    pending = Number(document.getElementById('earn-payout').value) || 0;
-  }
-  const proposed = allocated + pending;
-  const remaining = dealTotal - allocated;
-  const afterThis = dealTotal - proposed;
+  // Render based on entry type
+  let html = '';
+  let warning = false;
 
-  // Build message
-  const records = earnings.filter(e => String(e.campaign_id) === String(campId) && String(e.id) !== String(editId) && e.entry_type !== 'agency_only');
-  const recordCount = records.length;
-
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-    <div>
-      <div style="font-weight:600;margin-bottom:2px">📊 Campaign budget: ${fmtMoneyFull(dealTotal)}</div>
-      <div style="font-size:11px;opacity:.85">
-        ${recordCount} creator earning${recordCount === 1 ? '' : 's'} already saved → ${fmtMoneyFull(allocated)} allocated
+  if (type === 'agency_only') {
+    // Agency-only view: focus on untied profit left
+    const pending = Number(document.getElementById('earn-agency-only-amount')?.value) || 0;
+    const afterThis = t.untiedLeft - pending;
+    html = `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:600;margin-bottom:2px">📊 Campaign budget: ${fmtMoneyFull(t.dealTotal)}</div>
+        <div style="font-size:11px;opacity:.85;line-height:1.6">
+          Creator payouts: <strong>${fmtMoneyFull(t.creatorPayouts)}</strong> &nbsp;·&nbsp;
+          Agency cuts (20%): <strong>${fmtMoneyFull(t.standardCuts)}</strong> &nbsp;·&nbsp;
+          Late fees: <strong>${fmtMoneyFull(t.lateFees)}</strong>${t.dealExtras > 0 ? ` &nbsp;·&nbsp; Deal extras: <strong>${fmtMoneyFull(t.dealExtras)}</strong>` : ''}${t.agencyOnly > 0 ? ` &nbsp;·&nbsp; Existing agency-only: <strong>${fmtMoneyFull(t.agencyOnly)}</strong>` : ''}
+        </div>
       </div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:18px;font-weight:700;color:${remaining < 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoneyFull(remaining)}</div>
-      <div style="font-size:11px;opacity:.85">left for creators</div>
-    </div>
-  </div>`;
-
-  if (type === 'creator' && pending > 0) {
-    if (afterThis < 0) {
-      html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(59,130,246,.3);color:#991b1b;font-weight:600;font-size:12px">
-        ⚠ This entry (${fmtMoneyFull(pending)}) puts you ${fmtMoneyFull(Math.abs(afterThis))} over the campaign budget.
-      </div>`;
-    } else {
-      html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(59,130,246,.3);font-size:12px">
-        After this entry (${fmtMoneyFull(pending)}): <strong>${fmtMoneyFull(afterThis)} remaining</strong>
-      </div>`;
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:${t.untiedLeft < 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoneyFull(t.untiedLeft)}</div>
+        <div style="font-size:11px;opacity:.85">untied profit left</div>
+      </div>
+    </div>`;
+    if (pending > 0) {
+      if (afterThis < 0) {
+        warning = true;
+        html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(59,130,246,.3);color:#991b1b;font-weight:600;font-size:12px">
+          ⚠ This entry (${fmtMoneyFull(pending)}) is ${fmtMoneyFull(Math.abs(afterThis))} more than the untied profit available.
+        </div>`;
+      } else {
+        html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(59,130,246,.3);font-size:12px">
+          After this entry (${fmtMoneyFull(pending)}): <strong>${fmtMoneyFull(afterThis)} untied left</strong>
+        </div>`;
+      }
+    }
+  } else {
+    // Creator entry view: focus on creator-payout budget left
+    const pending = Number(document.getElementById('earn-payout')?.value) || 0;
+    const afterThis = t.creatorBudgetLeft - pending;
+    html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:600;margin-bottom:2px">📊 Campaign budget: ${fmtMoneyFull(t.dealTotal)}</div>
+        <div style="font-size:11px;opacity:.85">
+          ${t.creatorRecordCount} creator earning${t.creatorRecordCount === 1 ? '' : 's'} already saved → ${fmtMoneyFull(t.creatorPayouts)} paid to creators
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:${t.creatorBudgetLeft < 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoneyFull(t.creatorBudgetLeft)}</div>
+        <div style="font-size:11px;opacity:.85">left for creators</div>
+      </div>
+    </div>`;
+    if (pending > 0) {
+      if (afterThis < 0) {
+        warning = true;
+        html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(59,130,246,.3);color:#991b1b;font-weight:600;font-size:12px">
+          ⚠ This entry (${fmtMoneyFull(pending)}) puts you ${fmtMoneyFull(Math.abs(afterThis))} over the campaign budget.
+        </div>`;
+      } else {
+        html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(59,130,246,.3);font-size:12px">
+          After this entry (${fmtMoneyFull(pending)}): <strong>${fmtMoneyFull(afterThis)} remaining for other creators</strong>
+        </div>`;
+      }
     }
   }
 
   banner.innerHTML = html;
-  banner.style.background = (afterThis < 0) ? '#fee2e2' : 'var(--blue-light)';
-  banner.style.color      = (afterThis < 0) ? '#991b1b' : 'var(--blue)';
+  banner.style.background = warning ? '#fee2e2' : 'var(--blue-light)';
+  banner.style.color      = warning ? '#991b1b' : 'var(--blue)';
   banner.style.display = '';
+}
+
+/** Auto-fill the agency-only amount field with whatever untied profit is left on this campaign. */
+function useRemainingForAgencyOnly() {
+  const campId = document.getElementById('earn-campaign-sel').value;
+  const editId = document.getElementById('earn-id').value;
+  if (!campId) { showToast('Pick a campaign first'); return; }
+  const t = computeCampaignTotals(campId, editId);
+  const amt = Math.max(0, t.untiedLeft);
+  document.getElementById('earn-agency-only-amount').value = amt.toFixed(2);
+  updateCampaignBudgetBanner();
 }
 
 function onLateToggle() {
@@ -11265,8 +11370,16 @@ async function deleteMailboxPassword() {
       <div id="earn-agency-only-fields" style="display:none">
         <div class="form-group">
           <label class="form-label">🏢 Agency profit amount (£) *</label>
-          <input class="form-input" id="earn-agency-only-amount" type="number" min="0" step="0.01" placeholder="0.00">
+          <div style="display:flex;gap:8px;align-items:stretch">
+            <input class="form-input" id="earn-agency-only-amount" type="number" min="0" step="0.01" placeholder="0.00" style="flex:1" oninput="updateCampaignBudgetBanner()">
+            <button type="button" class="btn btn-ghost" id="earn-use-remaining-btn" onclick="useRemainingForAgencyOnly()" style="white-space:nowrap;display:none">
+              Use remaining: <span id="earn-use-remaining-amt" style="font-weight:700;margin-left:4px">£0</span>
+            </button>
+          </div>
           <div class="form-hint">Total agency profit on this campaign that isn't tied to any specific creator. Goes straight into the Agency Profit page.</div>
+          <div class="form-hint" id="earn-use-remaining-hint" style="margin-top:4px;color:var(--blue);display:none">
+            💡 Pick a campaign above to auto-fill the leftover amount that wasn't paid to creators.
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Payment Status</label>
