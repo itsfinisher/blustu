@@ -9413,7 +9413,7 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
   });
 
   try {
-    const data = await emailApi('/message', { mailbox: _currentInbox.mailbox, uid });
+    const data = await emailApi('/message', { mailbox: _currentInbox.mailbox, uid, folder: _currentInbox.folder });
     const m = data.message;
     const fromName = _parseFromName(m.from);
     const fromAddr = _parseFromAddress(m.from);
@@ -9580,18 +9580,20 @@ function stripHtmlForQuote(html) {
 
 async function markMessageSeen(uid, seen, isCreatorTab, creatorId) {
   try {
-    await emailApi('/mark', { mailbox: _currentInbox.mailbox, uid, seen });
+    await emailApi('/mark', { mailbox: _currentInbox.mailbox, uid, seen, folder: _currentInbox.folder });
     showToast(seen ? 'Marked as read' : 'Marked as unread');
-    if (isCreatorTab) renderCreatorEmail(creatorId); else refreshTeamInbox();
+    if (isCreatorTab) renderCreatorEmail(creatorId, _currentInbox.folder);
+    else loadTeamInbox(_currentInbox.mailbox, _currentInbox.folder);
   } catch(e) { showToast('❌ ' + e.message); }
 }
 
 async function deleteEmailMessage(uid, isCreatorTab, creatorId) {
   showConfirm('Delete this email?', 'It will be permanently removed from the mailbox.', async () => {
     try {
-      await emailApi('/delete', { mailbox: _currentInbox.mailbox, uid });
+      await emailApi('/delete', { mailbox: _currentInbox.mailbox, uid, folder: _currentInbox.folder });
       showToast('Email deleted');
-      if (isCreatorTab) renderCreatorEmail(creatorId); else refreshTeamInbox();
+      if (isCreatorTab) renderCreatorEmail(creatorId, _currentInbox.folder);
+      else loadTeamInbox(_currentInbox.mailbox, _currentInbox.folder);
     } catch(e) { showToast('❌ ' + e.message); }
   });
 }
@@ -9664,7 +9666,7 @@ function updateFromPreview() {
 // Debug helper — shows raw IMAP response for an email so we can diagnose body issues.
 async function debugMessageBody(uid) {
   try {
-    const data = await emailApi('/message', { mailbox: _currentInbox.mailbox, uid, debug: true });
+    const data = await emailApi('/message', { mailbox: _currentInbox.mailbox, uid, folder: _currentInbox.folder, debug: true });
     const dbg = data._debug || {};
     const msg = data.message || {};
     const txt = `=== DEBUG INFO for UID ${uid} ===
