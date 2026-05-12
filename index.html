@@ -918,6 +918,10 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       Inbox
       <span class="nav-badge" id="inboxBadge">5</span>
     </button>
+    <button class="nav-item" id="nav-emailsetup" onclick="showPage('emailsetup',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="18" cy="8" r="3" fill="currentColor"/></svg>
+      Email Setup
+    </button>
     <button class="nav-item" id="nav-users" onclick="showPage('users',this)">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><path d="M16 11l2 2 4-4"/></svg>
       Users &amp; Access
@@ -1626,6 +1630,43 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       </div>
     </div>
 
+    <!-- ══ EMAIL SETUP PAGE ══ -->
+    <div class="page" id="page-emailsetup">
+      <div class="page-header">
+        <div><h1>📧 Email Setup</h1><p>Manage MXroute passwords for each mailbox. Stored encrypted in Supabase.</p></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" onclick="refreshEmailSetup()">↻ Refresh</button>
+        </div>
+      </div>
+      <div id="emailsetup-perm-denied" style="display:none" class="perm-denied">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <h3>Access Restricted</h3>
+        <p>Only the Owner or Admin can manage email passwords.</p>
+      </div>
+      <div id="emailsetup-content">
+        <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+          <div class="stat-card"><div class="stat-label">Total Mailboxes</div><div class="stat-value" id="es-total">—</div><div class="stat-change neutral">All your creators</div></div>
+          <div class="stat-card"><div class="stat-label">Passwords Set</div><div class="stat-value" id="es-configured" style="color:var(--green)">—</div><div class="stat-change up">Ready to use</div></div>
+          <div class="stat-card"><div class="stat-label">Not Configured</div><div class="stat-value" id="es-missing" style="color:var(--red)">—</div><div class="stat-change neutral">Click to set</div></div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--gray-100)">
+            <div class="card-title" style="margin:0">All Mailboxes</div>
+            <div class="crm-search" style="max-width:220px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B93A8" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input type="text" id="emailsetup-search" placeholder="Search mailboxes…" oninput="renderEmailSetup()">
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Mailbox</th><th>Linked Creator</th><th>Status</th><th>Last Updated</th><th style="text-align:right">Action</th></tr></thead>
+              <tbody id="emailsetup-tbody"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--gray-400)">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ USERS & ACCESS ══ -->
     <div class="page" id="page-users">
       <div class="page-header">
@@ -2270,6 +2311,41 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       <div class="form-group"><input class="form-input" id="ana-loc-3" placeholder="Country / City – %"></div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('analyticsModal')">Cancel</button><button class="btn btn-primary" onclick="saveAnalytics()">Save Analytics</button></div>
+  </div>
+</div>
+
+<!-- Set Mailbox Password Modal -->
+<div class="modal-overlay" id="setPasswordModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="setPwdModalTitle">🔑 Set Email Password</div>
+      <button class="modal-close" onclick="closeModal('setPasswordModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="setpwd-error" style="display:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500"></div>
+      <div id="setpwd-success" style="display:none;background:#dcfce7;color:#166534;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500"></div>
+      <div style="background:var(--blue-light);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--blue);margin-bottom:14px;line-height:1.5">
+        🔒 Password is encrypted with AES-256 before being stored. Only the Cloudflare Worker can decrypt it.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mailbox</label>
+        <input class="form-input" id="setpwd-mailbox-display" readonly style="background:var(--gray-50)">
+        <input type="hidden" id="setpwd-mailbox">
+      </div>
+      <div class="form-group">
+        <label class="form-label">MXroute Password *</label>
+        <div style="display:flex;gap:6px">
+          <input class="form-input" id="setpwd-password" type="password" placeholder="Paste the mailbox password" autocomplete="off">
+          <button class="btn btn-ghost btn-sm" type="button" onclick="togglePwdVisibility()" style="white-space:nowrap">👁 Show</button>
+        </div>
+        <div class="form-hint">This is the password set in MXroute for this email account.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="setpwd-delete-btn" onclick="deleteMailboxPassword()" style="display:none">Remove Password</button>
+      <button class="btn btn-ghost" onclick="closeModal('setPasswordModal')">Cancel</button>
+      <button class="btn btn-primary" id="setpwd-save-btn" onclick="saveMailboxPassword()">Save & Test</button>
+    </div>
   </div>
 </div>
 
@@ -3041,8 +3117,8 @@ const pageTitles = {
   dashboard:'Dashboard', crm:'Creator CRM', creatorprofile:'Creator Profile',
   onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit',
   campaigns:'Campaigns', pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline',
-  inbox:'Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
-  managers:'Team',
+  inbox:'Team Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
+  managers:'Team', emailsetup:'Email Setup',
   creatorgrid:'Select Creators', earnings:'Earnings Tracker', calendar:'Team Calendar'
 };
 
@@ -9309,10 +9385,277 @@ async function sendComposedEmail() {
   if (typeof origShowPage === 'function') {
     window.showPage = function(id, btn) {
       const result = origShowPage.apply(this, arguments);
-      if (id === 'inbox') {
-        setTimeout(initTeamInbox, 50);
-      }
+      if (id === 'inbox') setTimeout(initTeamInbox, 50);
+      if (id === 'emailsetup') setTimeout(renderEmailSetupPage, 50);
       return result;
+    };
+  }
+})();
+
+// ─── EMAIL SETUP PAGE — admin/owner only ──────────────────────────────
+let _emailSetupRows = [];   // [{ mailbox_local, configured, updated_at, updated_by, linkedCreator }]
+
+function _emailIsAdmin() {
+  return currentUser && (currentUser.systemRole === 'owner' || currentUser.systemRole === 'admin');
+}
+
+// Hide the Email Setup nav item for non-admins (called from applyPermissionsUI hook below)
+(function() {
+  const origApply = window.applyPermissionsUI;
+  if (typeof origApply === 'function') {
+    window.applyPermissionsUI = function() {
+      const result = origApply.apply(this, arguments);
+      const navES = document.getElementById('nav-emailsetup');
+      if (navES) navES.style.display = _emailIsAdmin() ? '' : 'none';
+      return result;
+    };
+  }
+})();
+
+async function renderEmailSetupPage() {
+  const denyEl = document.getElementById('emailsetup-perm-denied');
+  const contEl = document.getElementById('emailsetup-content');
+  if (!_emailIsAdmin()) {
+    if (denyEl) denyEl.style.display = 'flex';
+    if (contEl) contEl.style.display = 'none';
+    return;
+  }
+  if (denyEl) denyEl.style.display = 'none';
+  if (contEl) contEl.style.display = '';
+
+  if (EMAIL_API.includes('YOUR-SUBDOMAIN')) {
+    document.getElementById('emailsetup-tbody').innerHTML =
+      '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--red)">⚙️ EMAIL_API URL not configured</td></tr>';
+    return;
+  }
+
+  try {
+    const data = await emailApi('/credentials/list', {});
+    const configured = (data.credentials || []).reduce((acc, c) => {
+      acc[c.mailbox_local] = c; return acc;
+    }, {});
+
+    // Build full list: every creator + the agency mailboxes
+    const AGENCY_MAILBOXES = ['contact', 'partnerships', 'info', 'ubayy', 'ugc', 'rayyan'];
+    const seen = new Set();
+    const rows = [];
+
+    // Creators
+    creators.forEach(c => {
+      const local = (c.email || '').split('@')[0].toLowerCase();
+      if (!local) return;
+      seen.add(local);
+      rows.push({
+        mailbox_local: local,
+        creator: c,
+        agency: false,
+        configured: !!configured[local],
+        updated_at: configured[local]?.updated_at,
+        updated_by: configured[local]?.updated_by,
+      });
+    });
+
+    // Agency
+    AGENCY_MAILBOXES.forEach(m => {
+      if (seen.has(m)) return;
+      rows.push({
+        mailbox_local: m,
+        creator: null,
+        agency: true,
+        configured: !!configured[m],
+        updated_at: configured[m]?.updated_at,
+        updated_by: configured[m]?.updated_by,
+      });
+    });
+
+    _emailSetupRows = rows;
+    renderEmailSetup();
+  } catch (e) {
+    document.getElementById('emailsetup-tbody').innerHTML =
+      `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--red)">❌ ${e.message}</td></tr>`;
+  }
+}
+
+function renderEmailSetup() {
+  const tbody = document.getElementById('emailsetup-tbody');
+  if (!tbody) return;
+  const q = (document.getElementById('emailsetup-search')?.value || '').toLowerCase();
+  const filtered = q
+    ? _emailSetupRows.filter(r => r.mailbox_local.includes(q) || (r.creator?.name||'').toLowerCase().includes(q))
+    : _emailSetupRows;
+
+  // Stats
+  const setEl = document.getElementById('es-total');
+  const okEl = document.getElementById('es-configured');
+  const noEl = document.getElementById('es-missing');
+  if (setEl) setEl.textContent = _emailSetupRows.length;
+  if (okEl)  okEl.textContent  = _emailSetupRows.filter(r => r.configured).length;
+  if (noEl)  noEl.textContent  = _emailSetupRows.filter(r => !r.configured).length;
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--gray-400)">No mailboxes found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(r => {
+    const status = r.configured
+      ? '<span class="badge badge-green">✓ Configured</span>'
+      : '<span class="badge badge-red">Not set</span>';
+    const updated = r.updated_at
+      ? new Date(r.updated_at).toLocaleDateString('en-GB') + ' by ' + (r.updated_by || '—')
+      : '<span style="color:var(--gray-400)">—</span>';
+    const creatorCell = r.creator
+      ? `<div style="display:flex;align-items:center;gap:8px">
+          <div class="creator-avatar" style="background:${avatarColor(r.creator.id)};width:24px;height:24px;font-size:10px">${avatarLetter(r.creator.name)}</div>
+          <span>${r.creator.name}</span>
+        </div>`
+      : '<span style="color:var(--blue);font-size:12px;font-weight:600">Agency mailbox</span>';
+    const action = r.configured
+      ? `<button class="btn btn-ghost btn-sm" onclick="openSetPassword('${r.mailbox_local}')">Update</button>
+         <button class="btn btn-ghost btn-sm" onclick="testMailbox('${r.mailbox_local}', this)">Test</button>`
+      : `<button class="btn btn-primary btn-sm" onclick="openSetPassword('${r.mailbox_local}')">Set Password</button>`;
+    return `<tr>
+      <td><strong>${r.mailbox_local}</strong>@blustu.agency</td>
+      <td>${creatorCell}</td>
+      <td>${status}</td>
+      <td style="font-size:11px;color:var(--gray-400)">${updated}</td>
+      <td style="text-align:right">${action}</td>
+    </tr>`;
+  }).join('');
+}
+
+function refreshEmailSetup() { renderEmailSetupPage(); }
+
+async function testMailbox(mailbox, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Testing…'; }
+  try {
+    const r = await emailApi('/credentials/test', { mailbox });
+    if (r.ok) showToast('✅ Login OK for ' + mailbox + '@blustu.agency');
+    else showToast('❌ Login failed: ' + (r.error || 'unknown'));
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Test'; }
+}
+
+// ─── SET PASSWORD MODAL ─────────────────────────────────────────────────
+function openSetPassword(mailboxLocal) {
+  if (!_emailIsAdmin()) { showToast('Owner or Admin only'); return; }
+  document.getElementById('setpwd-mailbox').value = mailboxLocal;
+  document.getElementById('setpwd-mailbox-display').value = mailboxLocal + '@blustu.agency';
+  document.getElementById('setpwd-password').value = '';
+  document.getElementById('setpwd-password').type = 'password';
+  document.getElementById('setpwd-error').style.display = 'none';
+  document.getElementById('setpwd-success').style.display = 'none';
+
+  // Show delete button only if currently configured
+  const existing = _emailSetupRows.find(r => r.mailbox_local === mailboxLocal);
+  const delBtn = document.getElementById('setpwd-delete-btn');
+  if (delBtn) delBtn.style.display = (existing && existing.configured) ? '' : 'none';
+
+  openModal('setPasswordModal');
+  setTimeout(() => document.getElementById('setpwd-password').focus(), 100);
+}
+
+function togglePwdVisibility() {
+  const el = document.getElementById('setpwd-password');
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+async function saveMailboxPassword() {
+  const errEl = document.getElementById('setpwd-error');
+  const okEl  = document.getElementById('setpwd-success');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+
+  const mailbox = document.getElementById('setpwd-mailbox').value;
+  const password = document.getElementById('setpwd-password').value;
+  if (!password) { errEl.textContent = 'Enter the mailbox password'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('setpwd-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving & testing…';
+
+  try {
+    const r = await emailApi('/credentials/set', { mailbox, password });
+    btn.disabled = false; btn.textContent = 'Save & Test';
+    if (r.login === 'ok') {
+      okEl.textContent = '✅ Password saved and IMAP login verified!';
+      okEl.style.display = 'block';
+      setTimeout(() => { closeModal('setPasswordModal'); renderEmailSetupPage(); }, 1500);
+    } else if (r.login && r.login.startsWith('login_failed')) {
+      errEl.innerHTML = '⚠️ Password saved BUT login test failed.<br><small>' + r.login + '</small><br>The password is stored — check it\'s correct in MXroute.';
+      errEl.style.display = 'block';
+      setTimeout(() => renderEmailSetupPage(), 100);
+    } else {
+      okEl.textContent = '✅ Password saved.';
+      okEl.style.display = 'block';
+      setTimeout(() => { closeModal('setPasswordModal'); renderEmailSetupPage(); }, 1200);
+    }
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Save & Test';
+    errEl.textContent = '❌ ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function deleteMailboxPassword() {
+  const mailbox = document.getElementById('setpwd-mailbox').value;
+  showConfirm('Remove password?', 'Remove the stored password for ' + mailbox + '@blustu.agency? The mailbox will become inaccessible from the panel until you set a new password.', async () => {
+    try {
+      await emailApi('/credentials/delete', { mailbox });
+      closeModal('setPasswordModal');
+      showToast('Password removed');
+      renderEmailSetupPage();
+    } catch(e) { showToast('❌ ' + e.message); }
+  });
+}
+
+// ─── Per-creator profile — add "Set Email Password" button to email tab ──
+// We hook renderCreatorEmail to show a "🔑 Set password" button when no
+// password is configured for that creator's mailbox.
+(function() {
+  const origRender = window.renderCreatorEmail;
+  if (typeof origRender === 'function') {
+    window.renderCreatorEmail = async function(creatorId) {
+      // Call original first
+      const c = creators.find(x => x.id === creatorId);
+      if (!c) return origRender.apply(this, arguments);
+      const mailbox = mailboxForCreator(c);
+      if (!mailbox) return origRender.apply(this, arguments);
+
+      // Try the original — but if it fails with "No password set", show an inline setup card
+      const wrap = document.getElementById('profile-email-body');
+      if (!wrap) return origRender.apply(this, arguments);
+      if (EMAIL_API.includes('YOUR-SUBDOMAIN')) return origRender.apply(this, arguments);
+
+      // Quick probe: is there a password set?
+      let needsSetup = false;
+      try {
+        const accs = await loadEmailAccounts(true);
+        needsSetup = !accs.find(a => a.local === mailbox);
+      } catch(e) { /* fall through to original */ }
+
+      if (needsSetup && _emailIsAdmin()) {
+        wrap.innerHTML = `<div class="card" style="padding:32px;text-align:center">
+          <div style="font-size:32px;margin-bottom:12px">🔑</div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:6px">Email password not set</div>
+          <div style="font-size:13px;color:var(--gray-600);margin-bottom:20px;line-height:1.6">
+            ${c.name}'s mailbox (<strong>${mailbox}@blustu.agency</strong>) doesn't have a password configured yet.<br>
+            Add it once — it'll be encrypted and saved for the team.
+          </div>
+          <button class="btn btn-primary" onclick="openSetPassword('${mailbox}')">🔑 Set Password Now</button>
+        </div>`;
+        return;
+      }
+      if (needsSetup && !_emailIsAdmin()) {
+        wrap.innerHTML = `<div class="card" style="padding:32px;text-align:center;color:var(--gray-400)">
+          <div style="font-size:32px;margin-bottom:12px">🔒</div>
+          <div style="font-size:14px;font-weight:600">No password set for this mailbox</div>
+          <div style="font-size:12px;margin-top:6px">Ask an Owner or Admin to configure it in Email Setup.</div>
+        </div>`;
+        return;
+      }
+
+      return origRender.apply(this, arguments);
     };
   }
 })();
