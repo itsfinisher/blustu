@@ -251,6 +251,24 @@ tr:hover td{background:var(--gray-50);}
 .inbox-email-actions{padding:16px 24px;border-top:1px solid var(--gray-100);display:flex;gap:8px;}
 .inbox-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;color:var(--gray-400);}
 
+/* ── EMAIL FOLDER TABS ── */
+.email-folder-tabs{display:flex;gap:4px;align-items:center;border-bottom:1px solid var(--gray-100);padding:0 2px 8px;margin-bottom:10px;flex-wrap:wrap;}
+.email-folder-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:transparent;border:1px solid transparent;border-radius:999px;cursor:pointer;font-size:12px;font-weight:500;color:var(--gray-500);transition:all .15s;}
+.email-folder-tab:hover{background:var(--gray-50);color:var(--gray-900);}
+.email-folder-tab.active{background:var(--blue-light);color:var(--blue);border-color:var(--blue);}
+
+/* ── THREAD VIEW (Gmail-style stacked messages) ── */
+.thread-msg{border:1px solid var(--gray-100);border-radius:10px;margin:0 24px 10px;background:var(--white);overflow:hidden;}
+.thread-msg.expanded{box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.thread-msg-head{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;transition:background .15s;}
+.thread-msg-head:hover{background:var(--gray-50);}
+.thread-msg-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0;}
+.thread-msg-meta{flex:1;min-width:0;}
+.thread-msg-from{font-size:13px;font-weight:600;color:var(--gray-900);}
+.thread-msg-preview{font-size:12px;color:var(--gray-400);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.thread-msg-date{font-size:11px;color:var(--gray-400);flex-shrink:0;}
+.thread-msg-body{padding:0 16px 16px;}
+
 /* ── ONBOARDING ── */
 .onboarding-step{display:flex;gap:16px;padding:16px;border:1px solid var(--gray-100);border-radius:var(--radius);margin-bottom:12px;align-items:flex-start;background:var(--white);}
 .step-num{width:28px;height:28px;border-radius:50%;background:var(--blue-light);color:var(--blue);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -1616,6 +1634,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
           <button class="btn btn-primary btn-sm" onclick="openCompose()">✉ Compose</button>
         </div>
       </div>
+      <div id="teamInboxFolderTabs" class="email-folder-tabs" style="margin-bottom:12px"></div>
       <div class="inbox-layout">
         <div class="inbox-list" id="inboxList">
           <div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">Select a mailbox above to load messages</div>
@@ -8962,8 +8981,52 @@ const EMAIL_API = 'https://blustu-email.ubayymemon.workers.dev'; // configured
 // In-memory state for the email module
 let _emailAccounts = null;   // cached list of configured mailboxes
 let _currentInbox = {        // currently displayed inbox
-  mailbox: null, messages: [], selectedUid: null, isCreatorTab: false,
+  mailbox: null, folder: 'INBOX', messages: [], selectedUid: null, isCreatorTab: false,
 };
+// Remember the last folder viewed per mailbox so switching tabs is sticky
+const _emailLastFolder = {};
+// Threading: true = group by conversation (Gmail style), false = flat list
+let _emailThreadMode = true;
+
+// Folder list shown in the tab strip. Each entry: [folderName, displayLabel, icon]
+const EMAIL_FOLDERS = [
+  ['INBOX',    'Inbox',   '📥'],
+  ['Sent',     'Sent',    '📤'],   // worker tries variants if "Sent" doesn't exist
+  ['Drafts',   'Drafts',  '📝'],
+  ['Trash',    'Trash',   '🗑'],
+  ['Junk',     'Spam',    '⚠️'],
+];
+
+function _prettyFolderName(f) {
+  const entry = EMAIL_FOLDERS.find(x => x[0].toLowerCase() === (f || '').toLowerCase());
+  return entry ? entry[1] : f;
+}
+
+/** Build the folder-tabs HTML strip. clickFn returns the onclick string for each folder. */
+function _folderTabsHtml(currentFolder, clickFn) {
+  return EMAIL_FOLDERS.map(([f, label, icon]) => {
+    const active = (f.toLowerCase() === (currentFolder || '').toLowerCase());
+    return `<button class="email-folder-tab${active ? ' active' : ''}" onclick="${clickFn(f)}">
+      <span>${icon}</span> ${label}
+    </button>`;
+  }).join('') + `
+    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--gray-500);user-select:none">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" ${_emailThreadMode ? 'checked' : ''} onchange="_setThreadMode(this.checked)" style="margin:0">
+        <span>Group threads</span>
+      </label>
+    </div>`;
+}
+
+function _setThreadMode(on) {
+  _emailThreadMode = on;
+  // Re-render current inbox view
+  if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
+    renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder);
+  } else if (_currentInbox.mailbox) {
+    loadTeamInbox(_currentInbox.mailbox, _currentInbox.folder);
+  }
+}
 
 /** Auth token sent to the Worker — same scheme as Supabase login */
 function _emailAuthToken() {
@@ -9015,7 +9078,7 @@ function mailboxForCreator(creator) {
 }
 
 // ─── EMAIL TAB ON CREATOR PROFILE ─────────────────────────────────────
-async function renderCreatorEmail(creatorId) {
+async function renderCreatorEmail(creatorId, folder) {
   const wrap = document.getElementById('profile-email-body');
   if (!wrap) return;
   const c = creators.find(x => x.id === creatorId);
@@ -9037,6 +9100,10 @@ async function renderCreatorEmail(creatorId) {
     return;
   }
 
+  // Default to whichever folder was last viewed for this mailbox, else INBOX
+  const currentFolder = folder || _emailLastFolder[mailbox] || 'INBOX';
+  _emailLastFolder[mailbox] = currentFolder;
+
   wrap.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <div>
@@ -9044,9 +9111,12 @@ async function renderCreatorEmail(creatorId) {
         <div style="font-size:12px;color:var(--gray-400)" id="ce-status-${creatorId}">Loading…</div>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" onclick="renderCreatorEmail(${creatorId})">↻ Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="renderCreatorEmail(${creatorId}, _emailLastFolder['${mailbox}'])">↻ Refresh</button>
         <button class="btn btn-primary btn-sm" onclick="openCompose('${mailbox}')">✉ Compose</button>
       </div>
+    </div>
+    <div class="email-folder-tabs">
+      ${_folderTabsHtml(currentFolder, f => `renderCreatorEmail(${creatorId}, '${f}')`)}
     </div>
     <div class="inbox-layout" style="height:560px">
       <div class="inbox-list" id="ce-list-${creatorId}">
@@ -9060,14 +9130,14 @@ async function renderCreatorEmail(creatorId) {
       </div>
     </div>`;
 
-  _currentInbox = { mailbox, messages: [], selectedUid: null, isCreatorTab: true, creatorId };
+  _currentInbox = { mailbox, folder: currentFolder, messages: [], selectedUid: null, isCreatorTab: true, creatorId };
 
   try {
-    const data = await emailApi('/inbox', { mailbox, folder: 'INBOX', limit: 30, offset: 0 });
+    const data = await emailApi('/inbox', { mailbox, folder: currentFolder, limit: 50, offset: 0 });
     _currentInbox.messages = data.messages || [];
-    _renderInboxList(`ce-list-${creatorId}`, _currentInbox.messages, mailbox, true, creatorId);
+    _renderInboxList(`ce-list-${creatorId}`, _currentInbox.messages, mailbox, true, creatorId, currentFolder);
     const statusEl = document.getElementById(`ce-status-${creatorId}`);
-    if (statusEl) statusEl.textContent = (data.total || 0) + ' messages';
+    if (statusEl) statusEl.textContent = (data.total || 0) + ' messages in ' + _prettyFolderName(currentFolder);
   } catch(e) {
     const listEl = document.getElementById(`ce-list-${creatorId}`);
     if (listEl) listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:13px;line-height:1.6">
@@ -9103,20 +9173,27 @@ async function initTeamInbox() {
     accounts.map(a => `<option value="${a.local}">${a.email}</option>`).join('');
 }
 
-async function loadTeamInbox(mailbox) {
+async function loadTeamInbox(mailbox, folder) {
   if (!mailbox) return;
   const listEl = document.getElementById('inboxList');
-  const paneEl = document.getElementById('inboxPane');
   if (!listEl) return;
+
+  const currentFolder = folder || _emailLastFolder[mailbox] || 'INBOX';
+  _emailLastFolder[mailbox] = currentFolder;
+
+  // Render folder tabs above the list
+  const tabsEl = document.getElementById('teamInboxFolderTabs');
+  if (tabsEl) tabsEl.innerHTML = _folderTabsHtml(currentFolder, f => `loadTeamInbox('${mailbox}', '${f}')`);
+
   listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">Loading…</div>';
-  _currentInbox = { mailbox, messages: [], selectedUid: null, isCreatorTab: false };
+  _currentInbox = { mailbox, folder: currentFolder, messages: [], selectedUid: null, isCreatorTab: false };
 
   try {
-    const data = await emailApi('/inbox', { mailbox, folder: 'INBOX', limit: 50, offset: 0 });
+    const data = await emailApi('/inbox', { mailbox, folder: currentFolder, limit: 50, offset: 0 });
     _currentInbox.messages = data.messages || [];
-    _renderInboxList('inboxList', _currentInbox.messages, mailbox, false);
+    _renderInboxList('inboxList', _currentInbox.messages, mailbox, false, null, currentFolder);
     const sub = document.getElementById('inbox-sub-title');
-    if (sub) sub.textContent = (data.total || 0) + ' messages in ' + mailbox + '@blustu.agency';
+    if (sub) sub.textContent = (data.total || 0) + ' messages in ' + _prettyFolderName(currentFolder) + ' — ' + mailbox + '@blustu.agency';
   } catch(e) {
     listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:13px">❌ ${e.message}</div>`;
   }
@@ -9124,40 +9201,165 @@ async function loadTeamInbox(mailbox) {
 
 function refreshTeamInbox() {
   const sel = document.getElementById('teamInboxMailbox');
-  if (sel && sel.value) loadTeamInbox(sel.value);
+  if (sel && sel.value) loadTeamInbox(sel.value, _emailLastFolder[sel.value]);
 }
 
 // ─── SHARED: render list of messages ──────────────────────────────────
-function _renderInboxList(listElId, messages, mailbox, isCreatorTab, creatorId) {
+function _renderInboxList(listElId, messages, mailbox, isCreatorTab, creatorId, folder) {
   const listEl = document.getElementById(listElId);
   if (!listEl) return;
   if (!messages.length) {
-    listEl.innerHTML = '<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">No messages in this mailbox</div>';
+    listEl.innerHTML = '<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">No messages in this folder</div>';
     return;
   }
 
-  listEl.innerHTML = messages.map(m => {
-    const fromName = _parseFromName(m.from);
-    const initial = (fromName[0] || '?').toUpperCase();
-    const color = AVATAR_COLORS[Math.abs(_hashCode(fromName)) % AVATAR_COLORS.length];
-    const dateStr = _fmtEmailDate(m.date);
-    const preview = (m.subject || '').replace(/</g,'&lt;').slice(0,80);
-    return `<div class="inbox-item${m.unread ? ' unread' : ''}" data-uid="${m.uid}" onclick="openEmailMessage(${m.uid}, ${isCreatorTab}, ${creatorId || 'null'})">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-        <div style="display:flex;align-items:center;gap:8px;min-width:0">
-          <div style="width:32px;height:32px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">${initial}</div>
-          <div style="min-width:0;flex:1">
-            <div class="inbox-sender">${fromName || '(unknown)'}</div>
-            <div class="inbox-preview">${preview}</div>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-          <div class="inbox-time">${dateStr}</div>
-          ${m.unread ? '<div class="inbox-unread-dot"></div>' : ''}
+  if (_emailThreadMode) {
+    const threads = _groupIntoThreads(messages);
+    listEl.innerHTML = threads.map(t => _renderThreadRow(t, isCreatorTab, creatorId, folder)).join('');
+  } else {
+    listEl.innerHTML = messages.map(m => _renderMessageRow(m, isCreatorTab, creatorId, folder)).join('');
+  }
+}
+
+function _renderMessageRow(m, isCreatorTab, creatorId, folder) {
+  const fromName = _parseFromName(m.from);
+  const initial = (fromName[0] || '?').toUpperCase();
+  const color = AVATAR_COLORS[Math.abs(_hashCode(fromName)) % AVATAR_COLORS.length];
+  const dateStr = _fmtEmailDate(m.date);
+  const preview = (m.subject || '').replace(/</g,'&lt;').slice(0,80);
+  return `<div class="inbox-item${m.unread ? ' unread' : ''}" data-uid="${m.uid}" onclick="openEmailMessage(${m.uid}, ${isCreatorTab}, ${creatorId || 'null'})">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <div style="width:32px;height:32px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">${initial}</div>
+        <div style="min-width:0;flex:1">
+          <div class="inbox-sender">${fromName || '(unknown)'}</div>
+          <div class="inbox-preview">${preview}</div>
         </div>
       </div>
-    </div>`;
-  }).join('');
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <div class="inbox-time">${dateStr}</div>
+        ${m.unread ? '<div class="inbox-unread-dot"></div>' : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function _renderThreadRow(thread, isCreatorTab, creatorId, folder) {
+  // thread = { subject, participants:[name,...], messages:[m,...], anyUnread, latestDate }
+  const m = thread.messages[thread.messages.length - 1]; // latest message
+  const participantsLabel = thread.participants.slice(0, 3).join(', ') + (thread.participants.length > 3 ? `, +${thread.participants.length - 3}` : '');
+  const initial = (thread.participants[0]?.[0] || '?').toUpperCase();
+  const color = AVATAR_COLORS[Math.abs(_hashCode(thread.participants[0] || '')) % AVATAR_COLORS.length];
+  const dateStr = _fmtEmailDate(thread.latestDate);
+  const count = thread.messages.length;
+  const subj = (thread.subject || '(no subject)').replace(/</g,'&lt;').slice(0, 80);
+  return `<div class="inbox-item${thread.anyUnread ? ' unread' : ''}" data-uid="${m.uid}" onclick="openEmailThread('${thread.threadKey}', ${isCreatorTab}, ${creatorId || 'null'})">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <div style="width:32px;height:32px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">${initial}</div>
+        <div style="min-width:0;flex:1">
+          <div class="inbox-sender">
+            ${participantsLabel}
+            ${count > 1 ? `<span style="margin-left:6px;font-size:10px;background:var(--gray-100);color:var(--gray-600);padding:1px 6px;border-radius:8px;font-weight:600">${count}</span>` : ''}
+          </div>
+          <div class="inbox-preview">${subj}</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <div class="inbox-time">${dateStr}</div>
+        ${thread.anyUnread ? '<div class="inbox-unread-dot"></div>' : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+/**
+ * Group a flat list of messages into conversation threads.
+ *
+ * Strategy: union-find. For each message:
+ *   - Initially, each message is its own thread (keyed by messageId).
+ *   - For each reference (References + In-Reply-To), union with the referenced thread.
+ *   - After all union ops, also union messages with no references but matching
+ *     normalised subjects (catches threads where servers didn't preserve References).
+ *
+ * Returns an array of threads, sorted by latest message date (newest first).
+ */
+function _groupIntoThreads(messages) {
+  // Each message gets an ID for union-find (use messageId if present, else synthetic key)
+  const idOf = (m, i) => (m.messageId && m.messageId.trim()) || `__msg_${i}`;
+  const ids = messages.map((m, i) => idOf(m, i));
+
+  // Disjoint-set / union-find
+  const parent = {};
+  ids.forEach(id => { parent[id] = id; });
+
+  function find(x) {
+    if (!(x in parent)) { parent[x] = x; return x; }
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]]; // path compression
+      x = parent[x];
+    }
+    return x;
+  }
+  function union(a, b) {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  }
+
+  // First pass: union by References / In-Reply-To
+  messages.forEach((m, i) => {
+    const myId = ids[i];
+    const refs = (m.references || '').split(/\s+/).filter(Boolean).map(s => s.trim());
+    refs.forEach(r => union(myId, r));
+    if (m.inReplyTo) union(myId, m.inReplyTo.trim());
+  });
+
+  // Second pass: union messages with same normalised subject when both have no threading info
+  // (catches threads where headers were stripped). Use a subject → first-msg map.
+  const subjectAnchor = {};
+  messages.forEach((m, i) => {
+    const subj = _normaliseSubject(m.subject || '').toLowerCase();
+    if (!subj) return;
+    if (!subjectAnchor[subj]) {
+      subjectAnchor[subj] = ids[i];
+    } else {
+      union(subjectAnchor[subj], ids[i]);
+    }
+  });
+
+  // Group messages by their root
+  const groups = {};
+  messages.forEach((m, i) => {
+    const root = find(ids[i]);
+    if (!groups[root]) groups[root] = [];
+    groups[root].push(m);
+  });
+
+  // Build thread objects
+  const threads = Object.entries(groups).map(([root, msgs]) => {
+    msgs.sort((a, b) => new Date(a.date) - new Date(b.date));
+    const participants = [];
+    let anyUnread = false;
+    let latestDate = msgs[0].date;
+    let subject = _normaliseSubject(msgs[0].subject || '');
+    for (const m of msgs) {
+      const name = _parseFromName(m.from) || _parseFromAddress(m.from) || '(unknown)';
+      if (!participants.includes(name)) participants.push(name);
+      if (m.unread) anyUnread = true;
+      if (new Date(m.date) > new Date(latestDate)) latestDate = m.date;
+      const s = _normaliseSubject(m.subject || '');
+      if (s && s.length > subject.length) subject = s;
+    }
+    return { threadKey: root, subject, participants, messages: msgs, anyUnread, latestDate };
+  });
+
+  return threads.sort((a, b) => new Date(b.latestDate) - new Date(a.latestDate));
+}
+
+function _normaliseSubject(s) {
+  if (!s) return '';
+  // Strip Re:, Fwd:, Fw:, Aw:, etc. (English/Continental) repeatedly
+  return s.replace(/^(\s*(re|fwd?|aw|wg|tr|antw)[:[\s]+\d*[\]]?\s*)+/i, '').trim();
 }
 
 function _parseFromName(from) {
@@ -9248,6 +9450,107 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
   } catch(e) {
     pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--red)">❌ ${e.message}</div>`;
   }
+}
+
+/**
+ * Open a thread (group of related messages) in the right pane.
+ * Shows every message stacked, oldest at top, newest at bottom — Gmail style.
+ * Older messages collapsed to a one-line summary; newest one expanded.
+ */
+async function openEmailThread(threadKey, isCreatorTab, creatorId) {
+  const paneId = isCreatorTab ? `ce-pane-${creatorId}` : 'inboxPane';
+  const pane = document.getElementById(paneId);
+  if (!pane) return;
+
+  // Find the thread in the cached current inbox
+  const threads = _groupIntoThreads(_currentInbox.messages);
+  const thread = threads.find(t => t.threadKey === threadKey);
+  if (!thread) { pane.innerHTML = '<div style="padding:32px;text-align:center;color:var(--red)">Thread not found</div>'; return; }
+
+  // Mark active in list
+  const listId = isCreatorTab ? `ce-list-${creatorId}` : 'inboxList';
+  document.querySelectorAll(`#${listId} .inbox-item`).forEach(el => {
+    const inThread = thread.messages.some(m => String(m.uid) === String(el.dataset.uid));
+    el.classList.toggle('active', inThread);
+  });
+
+  pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--gray-400)">Loading conversation (${thread.messages.length} message${thread.messages.length>1?'s':''})…</div>`;
+
+  // Fetch all messages in the thread in parallel
+  let fullMessages;
+  try {
+    fullMessages = await Promise.all(thread.messages.map(m =>
+      emailApi('/message', { mailbox: _currentInbox.mailbox, uid: m.uid, folder: _currentInbox.folder })
+        .then(r => r.message)
+        .catch(e => ({ uid: m.uid, error: e.message, ...m }))
+    ));
+  } catch(e) {
+    pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--red)">❌ ${e.message}</div>`;
+    return;
+  }
+
+  // Latest message is the most recent — expanded by default
+  const subjectLine = (thread.subject || '(no subject)').replace(/</g,'&lt;');
+  const lastIdx = fullMessages.length - 1;
+
+  const messagesHtml = fullMessages.map((m, idx) => {
+    if (m.error) {
+      return `<div class="thread-msg" style="padding:14px;background:#fee2e2;color:#991b1b;border-radius:8px;margin-bottom:8px;font-size:12px">⚠️ Could not load this message: ${m.error}</div>`;
+    }
+    const fromName = _parseFromName(m.from);
+    const fromAddr = _parseFromAddress(m.from);
+    const dateStr = m.date ? new Date(m.date).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const isExpanded = (idx === lastIdx);
+    const initial = (fromName[0] || '?').toUpperCase();
+    const color = AVATAR_COLORS[Math.abs(_hashCode(fromName)) % AVATAR_COLORS.length];
+
+    // Body content
+    let bodyHtml = '';
+    if (m.bodyHtml) {
+      bodyHtml = _sanitiseEmailHtml(m.bodyHtml);
+    } else {
+      const escaped = (m.bodyText || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      bodyHtml = escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--blue)">$1</a>');
+    }
+    const previewText = ((m.bodyText || stripHtmlForQuote(m.bodyHtml || '')) || '').slice(0, 140).replace(/</g,'&lt;');
+
+    return `<div class="thread-msg${isExpanded ? ' expanded' : ''}" data-uid="${m.uid}">
+      <div class="thread-msg-head" onclick="toggleThreadMsg(${m.uid})">
+        <div class="thread-msg-avatar" style="background:${color}">${initial}</div>
+        <div class="thread-msg-meta">
+          <div class="thread-msg-from">${fromName || fromAddr}</div>
+          <div class="thread-msg-preview">${isExpanded ? fromAddr + (m.to ? ' → ' + m.to : '') : previewText}</div>
+        </div>
+        <div class="thread-msg-date">${dateStr}</div>
+      </div>
+      <div class="thread-msg-body" id="thread-body-${m.uid}" style="display:${isExpanded ? 'block' : 'none'}">
+        <div class="inbox-email-body" style="border-top:1px solid var(--gray-100);padding-top:12px;margin-top:8px">${bodyHtml}</div>
+        <div class="inbox-email-actions" style="border-top:1px solid var(--gray-100);margin-top:12px;padding-top:12px">
+          <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
+          <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${m.uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteEmailMessage(${m.uid}, ${isCreatorTab}, ${creatorId || 'null'})">Delete</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  pane.innerHTML = `
+    <div class="inbox-email-header">
+      <div style="font-size:16px;font-weight:600;color:var(--gray-900);margin-bottom:6px">${subjectLine}</div>
+      <div style="font-size:11px;color:var(--gray-400)">${fullMessages.length} message${fullMessages.length>1?'s':''} • ${thread.participants.join(', ')}</div>
+    </div>
+    <div class="inbox-email-body" id="email-body-container" style="padding-top:0">
+      ${messagesHtml}
+    </div>`;
+}
+
+function toggleThreadMsg(uid) {
+  const el = document.getElementById('thread-body-' + uid);
+  const parent = el?.closest('.thread-msg');
+  if (!el || !parent) return;
+  const willOpen = el.style.display === 'none';
+  el.style.display = willOpen ? 'block' : 'none';
+  parent.classList.toggle('expanded', willOpen);
 }
 
 // Very light HTML sanitiser — strips scripts, iframes, on* attrs, javascript: urls.
