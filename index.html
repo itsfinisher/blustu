@@ -9242,6 +9242,7 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
       <div class="inbox-email-actions">
         <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
         <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
+        <button class="btn btn-ghost btn-sm" onclick="debugMessageBody(${uid})" style="margin-left:auto;font-size:11px">🐛 Debug</button>
         <button class="btn btn-danger btn-sm" onclick="deleteEmailMessage(${uid}, ${isCreatorTab}, ${creatorId || 'null'})">Delete</button>
       </div>`;
   } catch(e) {
@@ -9355,6 +9356,50 @@ function updateFromPreview() {
   const mailbox = sel.value;
   if (!mailbox) { preview.textContent = ''; return; }
   preview.innerHTML = `Recipients will see: <strong>${friendlyFromName(mailbox)}</strong> &lt;${mailbox}@blustu.agency&gt;`;
+}
+
+// Debug helper — shows raw IMAP response for an email so we can diagnose body issues.
+async function debugMessageBody(uid) {
+  try {
+    const data = await emailApi('/message', { mailbox: _currentInbox.mailbox, uid, debug: true });
+    const dbg = data._debug || {};
+    const msg = data.message || {};
+    const txt = `=== DEBUG INFO for UID ${uid} ===
+
+Mailbox: ${_currentInbox.mailbox}@blustu.agency
+Subject: ${msg.subject}
+Headers Found: ${dbg.headersFound}
+
+--- Body fields the panel received ---
+bodyText length: ${dbg.bodyTextLength} chars
+bodyHtml length: ${dbg.bodyHtmlLength} chars
+bodyText preview: ${(msg.bodyText || '').slice(0, 300)}
+bodyHtml preview: ${(msg.bodyHtml || '').slice(0, 300)}
+
+--- Raw IMAP literal ---
+Literal count: ${dbg.literalsCount}
+Literal byte length: ${dbg.rawLiteralLength}
+
+First 500 chars of literal:
+${dbg.literalSnippetFirst500}
+
+Last 500 chars of literal:
+${dbg.literalSnippetLast500}
+
+--- Raw response text (first 2KB) ---
+${dbg.responseTextSnippet}
+`;
+    // Copy to clipboard
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {});
+    // Show in a popup
+    const w = window.open('', '_blank', 'width=900,height=700');
+    w.document.body.style.fontFamily = 'monospace';
+    w.document.body.style.padding = '20px';
+    w.document.body.style.whiteSpace = 'pre-wrap';
+    w.document.body.textContent = txt + '\n\n(Also copied to clipboard)';
+  } catch(e) {
+    alert('Debug failed: ' + e.message);
+  }
 }
 
 async function sendComposedEmail() {
