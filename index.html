@@ -7938,7 +7938,10 @@ function openEditEarning(id) {
   }
 
   onEntryTypeChange();
-  onEarnCampaignChange();
+  // ⚠ Don't call onEarnCampaignChange() here — that would re-prefill the deal value
+  // from the campaign's total, overwriting the per-creator value the user saved.
+  // Just refresh the budget banner.
+  updateCampaignBudgetBanner();
   openModal('earningModal');
 }
 
@@ -8058,10 +8061,16 @@ function prefillEarningFromCampaign() {
   if (!selected || !selected.value) return;
   const val = selected.getAttribute('data-value');
   const brand = selected.getAttribute('data-brand');
-  if (val && Number(val) > 0) {
-    document.getElementById('earn-deal-value').value = val;
-    if (brand) document.getElementById('earn-brand').value = brand;
+  const dvField = document.getElementById('earn-deal-value');
+  const brandField = document.getElementById('earn-brand');
+  // Only prefill empty fields — never overwrite a value the user has set.
+  // This protects per-creator splits when editing or when picking a new creator on the same campaign.
+  if (val && Number(val) > 0 && (!dvField.value || Number(dvField.value) === 0)) {
+    dvField.value = val;
     recalcEarning();
+  }
+  if (brand && !brandField.value) {
+    brandField.value = brand;
   }
 }
 
