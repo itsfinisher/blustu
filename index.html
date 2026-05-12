@@ -1100,6 +1100,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <button class="profile-tab active" onclick="switchProfileTab('overview',this)">Overview</button>
         <button class="profile-tab" onclick="switchProfileTab('socials',this)">Socials & Rates</button>
         <button class="profile-tab" onclick="switchProfileTab('deals',this)">Deals</button>
+        <button class="profile-tab" onclick="switchProfileTab('email',this)">📧 Email</button>
         <button class="profile-tab" onclick="switchProfileTab('contracts',this)">Contracts</button>
         <button class="profile-tab" onclick="switchProfileTab('notes',this)">Notes</button>
       </div>
@@ -1118,6 +1119,11 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       </div>
       <div class="profile-tab-content" id="ptab-deals">
         <div class="card"><div class="card-title" style="margin-bottom:12px">Deals</div><div id="profile-deals-body"></div></div>
+      </div>
+      <div class="profile-tab-content" id="ptab-email">
+        <div id="profile-email-body">
+          <div style="font-size:13px;color:var(--gray-400);padding:20px;text-align:center">Loading inbox…</div>
+        </div>
       </div>
       <div class="profile-tab-content" id="ptab-contracts">
         <div class="card">
@@ -1594,14 +1600,22 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
     <!-- ══ INBOX ══ -->
     <div class="page" id="page-inbox">
       <div class="page-header">
-        <div><h1>Inbox</h1><p>Messages from brands & creators</p></div>
+        <div><h1>Team Inbox</h1><p id="inbox-sub-title">Agency mailboxes — click a mailbox to view messages</p></div>
         <div style="display:flex;gap:8px;align-items:center">
-          <div style="font-size:12px;color:var(--gray-400)">IMAP: Read-only preview</div>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('imapModal')">Configure Email</button>
+          <select class="form-select" id="teamInboxMailbox" onchange="loadTeamInbox(this.value)" style="width:240px">
+            <option value="">Choose a mailbox…</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="refreshTeamInbox()" title="Refresh">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Refresh
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="openCompose()">✉ Compose</button>
         </div>
       </div>
       <div class="inbox-layout">
-        <div class="inbox-list" id="inboxList"></div>
+        <div class="inbox-list" id="inboxList">
+          <div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">Select a mailbox above to load messages</div>
+        </div>
         <div class="inbox-pane" id="inboxPane">
           <div class="inbox-empty">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -1906,7 +1920,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Bill To (Client)</label><textarea class="form-textarea" id="inv-billto" placeholder="Client Name&#10;Company&#10;Address&#10;Email" style="min-height:80px"></textarea></div>
-        <div class="form-group"><label class="form-label">Pay To (Your Details)</label><textarea class="form-textarea" id="inv-payto" placeholder="blustu™ Talent Agency&#10;Your Address&#10;bank@blustu.agency" style="min-height:80px"></textarea></div>
+        <div class="form-group"><label class="form-label">Pay To (Your Details)</label><textarea class="form-textarea" id="inv-payto" placeholder="blustu™ Talent Agency&#10;Your Address&#10;bank@blustu.agency" style="min-height:80px" value="blustu™ Talent Agency"></textarea></div>
       </div>
       <div class="form-group"><label class="form-label">Payment Method</label><input class="form-input" id="inv-payment" placeholder="e.g. Bank Transfer — Sort: 00-00-00 Acc: 00000000"></div>
 
@@ -2256,6 +2270,46 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       <div class="form-group"><input class="form-input" id="ana-loc-3" placeholder="Country / City – %"></div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('analyticsModal')">Cancel</button><button class="btn btn-primary" onclick="saveAnalytics()">Save Analytics</button></div>
+  </div>
+</div>
+
+<!-- Compose Email Modal -->
+<div class="modal-overlay" id="composeEmailModal">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <div class="modal-title" id="composeModalTitle">✉ New Email</div>
+      <button class="modal-close" onclick="closeModal('composeEmailModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="compose-error" style="display:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500"></div>
+      <div class="form-group">
+        <label class="form-label">From</label>
+        <select class="form-select" id="compose-from"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">To *</label>
+        <input class="form-input" id="compose-to" placeholder="recipient@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cc (optional)</label>
+        <input class="form-input" id="compose-cc" placeholder="cc@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Subject *</label>
+        <input class="form-input" id="compose-subject" placeholder="Subject line">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Message *</label>
+        <textarea class="form-textarea" id="compose-body" placeholder="Type your message..." style="min-height:240px;font-family:'DM Sans',sans-serif"></textarea>
+      </div>
+      <!-- Hidden fields for reply threading -->
+      <input type="hidden" id="compose-in-reply-to">
+      <input type="hidden" id="compose-references">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('composeEmailModal')">Cancel</button>
+      <button class="btn btn-primary" id="composeSendBtn" onclick="sendComposedEmail()">Send →</button>
+    </div>
   </div>
 </div>
 
@@ -3570,6 +3624,7 @@ function switchProfileTab(id, btn) {
   if (btn) btn.classList.add('active');
   if (id === 'deals' && currentCreatorId) renderCreatorDeals(currentCreatorId);
   if (id === 'contracts' && currentCreatorId) renderCreatorContracts(currentCreatorId);
+  if (id === 'email' && currentCreatorId) renderCreatorEmail(currentCreatorId);
 }
 
 function renderCreatorDeals(creatorId) {
@@ -6427,9 +6482,7 @@ function initInvoice() {
   const set = (id, val) => { const el=document.getElementById(id); if(el&&!el.value) el.value=val; };
   set('inv-issue', today); set('inv-due', due30); set('inv-sigdate', today);
   set('inv-number', 'INV-' + Date.now().toString().slice(-4));
-  // FIX: textareas need .value, not the value attribute — set default explicitly
-  const paytoEl = document.getElementById('inv-payto');
-  if (paytoEl && !paytoEl.value) paytoEl.value = 'blustu™ Talent Agency\ncontact@blustu.agency';
+  set('inv-payto', 'blustu™ Talent Agency\ncontact@blustu.agency');
 
   // Wire up live preview
   document.querySelectorAll('#page-invoice input, #page-invoice textarea').forEach(el => {
@@ -6469,24 +6522,13 @@ function updateInvoicePreview() {
   const sig     = g('inv-signature');
   const sigdate = g('inv-sigdate');
 
-  // Format ISO date strings into readable form (e.g. "4 Dec 2025")
-  const fmtDate = d => {
-    if (!d) return '—';
-    try {
-      const dt = new Date(d);
-      if (isNaN(dt)) return d;
-      return dt.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
-    } catch(e) { return d; }
-  };
-
   const p = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val||''; };
   p('prev-title', title); p('prev-number', number);
   p('prev-billto', billto); p('prev-payto', payto);
-  p('prev-signature', sig);
-  p('prev-sigdate', sigdate ? fmtDate(sigdate) : '');
+  p('prev-signature', sig); p('prev-sigdate', sigdate);
 
   const datesEl = document.getElementById('prev-dates');
-  if (datesEl) datesEl.innerHTML = `<div>Issued: ${fmtDate(issue)}</div><div>Due: ${fmtDate(due)}</div>`;
+  if (datesEl) datesEl.innerHTML = `<div>Issued: ${issue||'—'}</div><div>Due: ${due||'—'}</div>`;
 
   const rows = document.querySelectorAll('.inv-item-row');
   let subtotal = 0;
@@ -6536,83 +6578,54 @@ function clearInvoice() {
 }
 
 function exportInvoicePDF() {
-  if (typeof html2canvas === 'undefined') {
-    showToast('Export library not ready — try again in a moment');
-    return;
-  }
   const preview = document.getElementById('invoicePreview');
   if (!preview) { showToast('No invoice to export'); return; }
+  const win = window.open('', '_blank', 'width=800,height=1100');
+  if (!win) { showToast('Allow popups to export PDF'); return; }
 
-  showToast('Generating PDF…');
+  // Clone only the preview container contents
+  const clone = preview.cloneNode(true);
+  // Remove any action buttons that may be inside the preview
+  clone.querySelectorAll('button, .no-print').forEach(el => el.remove());
+  const html = clone.innerHTML;
 
-  // Capture the live preview EXACTLY as it appears on screen.
-  // This guarantees the PDF matches the preview pixel-for-pixel.
-  html2canvas(preview, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: '#ffffff',
-    logging: false,
-    windowWidth: preview.scrollWidth,
-    windowHeight: preview.scrollHeight,
-  }).then(canvas => {
-    const imgData = canvas.toDataURL('image/png');
-    const win = window.open('', '_blank', 'width=900,height=1200');
-    if (!win) { showToast('Allow pop-ups to export PDF'); return; }
-
-    // Filename uses invoice number
-    const invNum = document.getElementById('inv-number')?.value || 'invoice';
-
-    win.document.write(`<!DOCTYPE html><html><head>
-      <meta charset="UTF-8">
-      <title>Invoice ${invNum}</title>
-      <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        html,body{
-          background:white;
-          width:100%;
-          min-height:100%;
-          -webkit-print-color-adjust:exact;
-          print-color-adjust:exact;
-        }
-        .pdf-wrap{
-          width:100%;
-          padding:20px;
-          display:flex;
-          justify-content:center;
-          align-items:flex-start;
-        }
-        .pdf-wrap img{
-          max-width:100%;
-          height:auto;
-          display:block;
-          box-shadow:0 4px 24px rgba(0,0,0,.08);
-        }
-        @media print {
-          body{padding:0}
-          .pdf-wrap{padding:0}
-          .pdf-wrap img{box-shadow:none;max-width:100%;width:100%}
-          @page{margin:15mm;size:A4}
-        }
-      </style>
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{
+        font-family:'DM Sans',sans-serif;
+        background:white;
+        color:#0f1120;
+        font-size:13px;
+        line-height:1.6;
+      }
+      .inv-wrap{
+        max-width:680px;
+        margin:0 auto;
+        padding:48px;
+        background:white;
+      }
+      table{width:100%;border-collapse:collapse}
+      td,th{padding:8px 12px;font-size:12px}
+      th{background:#f8f9ff;font-weight:600;text-align:left;border-bottom:2px solid #e8eaf0}
+      tr:nth-child(even) td{background:#fafbff}
+      .inv-total-row td{font-weight:700;font-size:14px;border-top:2px solid #0f1120;padding-top:12px}
+      hr{border:none;border-top:1px solid #e8eaf0;margin:20px 0}
+      @media print{
+        body{padding:0}
+        .inv-wrap{padding:28px}
+        @page{margin:20mm}
+      }
+    </style>
     </head><body>
-      <div class="pdf-wrap">
-        <img src="${imgData}" alt="Invoice ${invNum}">
-      </div>
-      <script>
-        window.onload = () => {
-          setTimeout(() => {
-            window.print();
-            window.onafterprint = () => window.close();
-          }, 500);
-        };
-      <\/script>
+    <div class="inv-wrap">${html}</div>
+    <script>
+      window.onload = () => { setTimeout(() => window.print(), 800); };
+    <\/script>
     </body></html>`);
-    win.document.close();
-    showToast('✅ Print dialog opened — choose "Save as PDF"');
-  }).catch(err => {
-    console.error('Invoice export error:', err);
-    showToast('❌ Export failed — check browser console');
-  });
+  win.document.close();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -8855,6 +8868,454 @@ function pdCopyField(field) {
     copy();
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// ── EMAIL SUBSYSTEM (talks to Cloudflare Worker → MXroute IMAP/SMTP) ──
+// ══════════════════════════════════════════════════════════════════════
+//
+// All email traffic goes through the Cloudflare Worker — passwords never
+// touch the browser. The Worker URL is read from a single constant below.
+//
+// IMPORTANT: After deploying your Cloudflare Worker, change EMAIL_API
+// to the Worker's URL (e.g. https://blustu-email.your-name.workers.dev)
+// ══════════════════════════════════════════════════════════════════════
+
+const EMAIL_API = 'https://blustu-email.ubayymemon.workers.dev'; // configured
+
+// In-memory state for the email module
+let _emailAccounts = null;   // cached list of configured mailboxes
+let _currentInbox = {        // currently displayed inbox
+  mailbox: null, messages: [], selectedUid: null, isCreatorTab: false,
+};
+
+/** Auth token sent to the Worker — same scheme as Supabase login */
+function _emailAuthToken() {
+  if (!currentUser) return null;
+  return btoa(currentUser.email + ':' + currentUser.pass);
+}
+
+/** Call the Worker. Auto-injects staff token. */
+async function emailApi(path, body) {
+  const token = _emailAuthToken();
+  if (!token) throw new Error('Not logged in');
+  const opts = {
+    method: body ? 'POST' : 'GET',
+    headers: { 'X-Staff-Token': token },
+  };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const url = EMAIL_API.replace(/\/$/, '') + path;
+  const r = await fetch(url, opts);
+  const text = await r.text();
+  let json; try { json = JSON.parse(text); } catch(e) { json = { error: text }; }
+  if (!r.ok || json.error) {
+    throw new Error(json.error || ('HTTP ' + r.status));
+  }
+  return json;
+}
+
+/** Load list of configured mailboxes (cached) */
+async function loadEmailAccounts(force = false) {
+  if (_emailAccounts && !force) return _emailAccounts;
+  try {
+    const data = await emailApi('/accounts');
+    _emailAccounts = data.mailboxes || [];
+    return _emailAccounts;
+  } catch(e) {
+    console.error('loadEmailAccounts failed:', e);
+    _emailAccounts = [];
+    return [];
+  }
+}
+
+/** Find the mailbox local part (e.g. "muskan") for a creator */
+function mailboxForCreator(creator) {
+  if (!creator || !creator.email) return null;
+  const m = creator.email.match(/^([^@]+)@/);
+  return m ? m[1].toLowerCase() : null;
+}
+
+// ─── EMAIL TAB ON CREATOR PROFILE ─────────────────────────────────────
+async function renderCreatorEmail(creatorId) {
+  const wrap = document.getElementById('profile-email-body');
+  if (!wrap) return;
+  const c = creators.find(x => x.id === creatorId);
+  if (!c) { wrap.innerHTML = '<div style="padding:20px;color:var(--gray-400)">Creator not found</div>'; return; }
+
+  const mailbox = mailboxForCreator(c);
+  if (!mailbox) {
+    wrap.innerHTML = '<div class="card" style="padding:24px;text-align:center;color:var(--gray-400)">No email address on file for this creator.</div>';
+    return;
+  }
+
+  if (EMAIL_API.includes('YOUR-SUBDOMAIN')) {
+    wrap.innerHTML = `<div class="card" style="padding:24px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:8px">⚙️ Email not configured yet</div>
+      <div style="font-size:13px;color:var(--gray-600);line-height:1.6">
+        The Cloudflare Worker URL hasn't been set. Once deployed, edit <code>EMAIL_API</code> at the top of the email section in <code>index.html</code> and re-upload.
+      </div>
+    </div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <div style="font-size:14px;font-weight:600">📧 ${mailbox}@blustu.agency</div>
+        <div style="font-size:12px;color:var(--gray-400)" id="ce-status-${creatorId}">Loading…</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="renderCreatorEmail(${creatorId})">↻ Refresh</button>
+        <button class="btn btn-primary btn-sm" onclick="openCompose('${mailbox}')">✉ Compose</button>
+      </div>
+    </div>
+    <div class="inbox-layout" style="height:560px">
+      <div class="inbox-list" id="ce-list-${creatorId}">
+        <div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">Connecting to mailbox…</div>
+      </div>
+      <div class="inbox-pane" id="ce-pane-${creatorId}">
+        <div class="inbox-empty">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <div style="font-size:13px;font-weight:500;color:var(--gray-600)">Select a message</div>
+        </div>
+      </div>
+    </div>`;
+
+  _currentInbox = { mailbox, messages: [], selectedUid: null, isCreatorTab: true, creatorId };
+
+  try {
+    const data = await emailApi('/inbox', { mailbox, folder: 'INBOX', limit: 30, offset: 0 });
+    _currentInbox.messages = data.messages || [];
+    _renderInboxList(`ce-list-${creatorId}`, _currentInbox.messages, mailbox, true, creatorId);
+    const statusEl = document.getElementById(`ce-status-${creatorId}`);
+    if (statusEl) statusEl.textContent = (data.total || 0) + ' messages';
+  } catch(e) {
+    const listEl = document.getElementById(`ce-list-${creatorId}`);
+    if (listEl) listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:13px;line-height:1.6">
+      ❌ ${e.message}
+      <div style="margin-top:8px;font-size:11px;color:var(--gray-400)">Check: Worker is deployed, password Secret is set, mailbox is in the allow-list.</div>
+    </div>`;
+  }
+}
+
+// ─── TEAM INBOX PAGE ──────────────────────────────────────────────────
+async function initTeamInbox() {
+  const sel = document.getElementById('teamInboxMailbox');
+  if (!sel) return;
+  if (EMAIL_API.includes('YOUR-SUBDOMAIN')) {
+    sel.innerHTML = '<option>⚙️ Email not configured yet</option>';
+    return;
+  }
+  const accounts = await loadEmailAccounts();
+  if (!accounts.length) {
+    sel.innerHTML = '<option>No mailboxes configured</option>';
+    return;
+  }
+  // Prefer agency mailboxes at the top
+  const agency = ['contact','partnerships','info','ubayy','ugc','rayyan'];
+  accounts.sort((a, b) => {
+    const ai = agency.indexOf(a.local), bi = agency.indexOf(b.local);
+    if (ai !== -1 && bi === -1) return -1;
+    if (bi !== -1 && ai === -1) return 1;
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    return a.local.localeCompare(b.local);
+  });
+  sel.innerHTML = '<option value="">Choose a mailbox…</option>' +
+    accounts.map(a => `<option value="${a.local}">${a.email}</option>`).join('');
+}
+
+async function loadTeamInbox(mailbox) {
+  if (!mailbox) return;
+  const listEl = document.getElementById('inboxList');
+  const paneEl = document.getElementById('inboxPane');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">Loading…</div>';
+  _currentInbox = { mailbox, messages: [], selectedUid: null, isCreatorTab: false };
+
+  try {
+    const data = await emailApi('/inbox', { mailbox, folder: 'INBOX', limit: 50, offset: 0 });
+    _currentInbox.messages = data.messages || [];
+    _renderInboxList('inboxList', _currentInbox.messages, mailbox, false);
+    const sub = document.getElementById('inbox-sub-title');
+    if (sub) sub.textContent = (data.total || 0) + ' messages in ' + mailbox + '@blustu.agency';
+  } catch(e) {
+    listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:13px">❌ ${e.message}</div>`;
+  }
+}
+
+function refreshTeamInbox() {
+  const sel = document.getElementById('teamInboxMailbox');
+  if (sel && sel.value) loadTeamInbox(sel.value);
+}
+
+// ─── SHARED: render list of messages ──────────────────────────────────
+function _renderInboxList(listElId, messages, mailbox, isCreatorTab, creatorId) {
+  const listEl = document.getElementById(listElId);
+  if (!listEl) return;
+  if (!messages.length) {
+    listEl.innerHTML = '<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">No messages in this mailbox</div>';
+    return;
+  }
+
+  listEl.innerHTML = messages.map(m => {
+    const fromName = _parseFromName(m.from);
+    const initial = (fromName[0] || '?').toUpperCase();
+    const color = AVATAR_COLORS[Math.abs(_hashCode(fromName)) % AVATAR_COLORS.length];
+    const dateStr = _fmtEmailDate(m.date);
+    const preview = (m.subject || '').replace(/</g,'&lt;').slice(0,80);
+    return `<div class="inbox-item${m.unread ? ' unread' : ''}" data-uid="${m.uid}" onclick="openEmailMessage(${m.uid}, ${isCreatorTab}, ${creatorId || 'null'})">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <div style="width:32px;height:32px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">${initial}</div>
+          <div style="min-width:0;flex:1">
+            <div class="inbox-sender">${fromName || '(unknown)'}</div>
+            <div class="inbox-preview">${preview}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+          <div class="inbox-time">${dateStr}</div>
+          ${m.unread ? '<div class="inbox-unread-dot"></div>' : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _parseFromName(from) {
+  if (!from) return '';
+  // "Name" <email@host> → Name ;  email@host → email
+  const m = from.match(/^"?([^"<]+?)"?\s*<[^>]+>$/);
+  if (m) return m[1].trim();
+  const e = from.match(/<([^>]+)>/);
+  if (e) return e[1];
+  return from.trim();
+}
+
+function _parseFromAddress(from) {
+  if (!from) return '';
+  const m = from.match(/<([^>]+)>/);
+  return m ? m[1] : from.trim();
+}
+
+function _hashCode(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i) | 0;
+  return h;
+}
+
+function _fmtEmailDate(d) {
+  if (!d) return '';
+  try {
+    const dt = new Date(d);
+    const now = new Date();
+    const sameDay = dt.toDateString() === now.toDateString();
+    if (sameDay) return dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const yearDiff = now.getFullYear() - dt.getFullYear();
+    if (yearDiff > 0) return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' });
+    return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  } catch(e) { return d; }
+}
+
+// ─── OPEN ONE MESSAGE ─────────────────────────────────────────────────
+async function openEmailMessage(uid, isCreatorTab, creatorId) {
+  _currentInbox.selectedUid = uid;
+  const paneId = isCreatorTab ? `ce-pane-${creatorId}` : 'inboxPane';
+  const pane = document.getElementById(paneId);
+  if (!pane) return;
+  pane.innerHTML = '<div style="padding:32px;text-align:center;color:var(--gray-400)">Loading message…</div>';
+
+  // Highlight in the list
+  const listId = isCreatorTab ? `ce-list-${creatorId}` : 'inboxList';
+  document.querySelectorAll(`#${listId} .inbox-item`).forEach(el => {
+    el.classList.toggle('active', String(el.dataset.uid) === String(uid));
+    if (String(el.dataset.uid) === String(uid)) el.classList.remove('unread');
+  });
+
+  try {
+    const data = await emailApi('/message', { mailbox: _currentInbox.mailbox, uid });
+    const m = data.message;
+    const fromName = _parseFromName(m.from);
+    const fromAddr = _parseFromAddress(m.from);
+    const dateStr = m.date ? new Date(m.date).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+    // Prefer HTML if present, otherwise plain text. Sanitise rendered HTML for safety.
+    let bodyHtml = '';
+    if (m.bodyHtml) {
+      bodyHtml = _sanitiseEmailHtml(m.bodyHtml);
+    } else {
+      const escaped = (m.bodyText || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      // Linkify URLs
+      bodyHtml = escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--blue)">$1</a>');
+    }
+
+    pane.innerHTML = `
+      <div class="inbox-email-header">
+        <div style="font-size:16px;font-weight:600;color:var(--gray-900);margin-bottom:8px">${(m.subject || '(no subject)').replace(/</g,'&lt;')}</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">${fromName || fromAddr}</div>
+            <div style="font-size:11px;color:var(--gray-400)">${fromAddr}${m.to ? ' → ' + m.to : ''}</div>
+          </div>
+          <div style="font-size:11px;color:var(--gray-400)">${dateStr}</div>
+        </div>
+      </div>
+      <div class="inbox-email-body" id="email-body-container">${bodyHtml}</div>
+      <div class="inbox-email-actions">
+        <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
+        <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEmailMessage(${uid}, ${isCreatorTab}, ${creatorId || 'null'})">Delete</button>
+      </div>`;
+  } catch(e) {
+    pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--red)">❌ ${e.message}</div>`;
+  }
+}
+
+// Very light HTML sanitiser — strips scripts, iframes, on* attrs, javascript: urls.
+function _sanitiseEmailHtml(html) {
+  return html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<link[^>]*>/gi, '')
+    .replace(/<meta[^>]*>/gi, '')
+    .replace(/ on[a-z]+="[^"]*"/gi, '')
+    .replace(/ on[a-z]+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '');
+}
+
+function stripHtmlForQuote(html) {
+  if (!html) return '';
+  return html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n\s*\n/g, '\n\n')
+    .trim();
+}
+
+async function markMessageSeen(uid, seen, isCreatorTab, creatorId) {
+  try {
+    await emailApi('/mark', { mailbox: _currentInbox.mailbox, uid, seen });
+    showToast(seen ? 'Marked as read' : 'Marked as unread');
+    if (isCreatorTab) renderCreatorEmail(creatorId); else refreshTeamInbox();
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function deleteEmailMessage(uid, isCreatorTab, creatorId) {
+  showConfirm('Delete this email?', 'It will be permanently removed from the mailbox.', async () => {
+    try {
+      await emailApi('/delete', { mailbox: _currentInbox.mailbox, uid });
+      showToast('Email deleted');
+      if (isCreatorTab) renderCreatorEmail(creatorId); else refreshTeamInbox();
+    } catch(e) { showToast('❌ ' + e.message); }
+  });
+}
+
+// ─── COMPOSE / REPLY ──────────────────────────────────────────────────
+async function openCompose(presetMailbox) {
+  const accounts = await loadEmailAccounts();
+  const sel = document.getElementById('compose-from');
+  if (!sel) return;
+  sel.innerHTML = accounts.map(a => `<option value="${a.local}">${a.email}</option>`).join('');
+  if (presetMailbox && accounts.find(a => a.local === presetMailbox)) {
+    sel.value = presetMailbox;
+  } else if (_currentInbox.mailbox) {
+    sel.value = _currentInbox.mailbox;
+  }
+  ['compose-to','compose-cc','compose-subject','compose-body','compose-in-reply-to','compose-references'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('composeModalTitle').textContent = '✉ New Email';
+  document.getElementById('compose-error').style.display = 'none';
+  openModal('composeEmailModal');
+  setTimeout(() => document.getElementById('compose-to')?.focus(), 100);
+}
+
+async function openReply(meta) {
+  const accounts = await loadEmailAccounts();
+  const sel = document.getElementById('compose-from');
+  if (!sel) return;
+  sel.innerHTML = accounts.map(a => `<option value="${a.local}">${a.email}</option>`).join('');
+  if (_currentInbox.mailbox) sel.value = _currentInbox.mailbox;
+
+  document.getElementById('compose-to').value = meta.from || '';
+  document.getElementById('compose-cc').value = '';
+  document.getElementById('compose-subject').value = (meta.subject || '').replace(/^(Re:\s*)+/i, '').length
+    ? 'Re: ' + meta.subject.replace(/^(Re:\s*)+/i, '')
+    : 'Re: ' + (meta.subject || '');
+  document.getElementById('compose-in-reply-to').value = meta.messageId || '';
+  const refs = (meta.references || '') + (meta.messageId ? ' ' + meta.messageId : '');
+  document.getElementById('compose-references').value = refs.trim();
+
+  // Build quoted reply body
+  const quoteDate = meta.date ? new Date(meta.date).toLocaleString('en-GB') : '';
+  const quoted = (meta.bodyText || '').split('\n').map(l => '> ' + l).join('\n');
+  document.getElementById('compose-body').value = `\n\nOn ${quoteDate}, ${meta.from} wrote:\n${quoted}`;
+
+  document.getElementById('composeModalTitle').textContent = '↩ Reply';
+  document.getElementById('compose-error').style.display = 'none';
+  openModal('composeEmailModal');
+  setTimeout(() => document.getElementById('compose-body')?.focus(), 100);
+}
+
+async function sendComposedEmail() {
+  const errEl = document.getElementById('compose-error');
+  const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
+  errEl.style.display = 'none';
+
+  const mailbox = document.getElementById('compose-from').value;
+  const to = document.getElementById('compose-to').value.trim();
+  const cc = document.getElementById('compose-cc').value.trim();
+  const subject = document.getElementById('compose-subject').value.trim();
+  const body = document.getElementById('compose-body').value.trim();
+  const inReplyTo = document.getElementById('compose-in-reply-to').value || null;
+  const references = document.getElementById('compose-references').value || null;
+
+  if (!mailbox)            { showErr('Select a From address'); return; }
+  if (!to)                 { showErr('Enter at least one recipient'); return; }
+  if (!subject)            { showErr('Enter a subject'); return; }
+  if (!body)               { showErr('Enter a message'); return; }
+  if (!/^[^@]+@[^@]+\.[^@]+/.test(to.split(',')[0].trim())) { showErr('Recipient email looks invalid'); return; }
+
+  const btn = document.getElementById('composeSendBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+
+  try {
+    await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body, inReplyTo, references });
+    btn.disabled = false; btn.textContent = 'Send →';
+    closeModal('composeEmailModal');
+    showToast('✅ Email sent!');
+    addActivity('Email sent from <strong>' + mailbox + '@blustu.agency</strong> to ' + to);
+    // Refresh whichever inbox is open
+    if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
+      renderCreatorEmail(_currentInbox.creatorId);
+    } else if (_currentInbox.mailbox) {
+      refreshTeamInbox();
+    }
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Send →';
+    showErr('Send failed: ' + e.message);
+  }
+}
+
+// Init team inbox dropdown when page is opened
+(function() {
+  const origShowPage = window.showPage;
+  if (typeof origShowPage === 'function') {
+    window.showPage = function(id, btn) {
+      const result = origShowPage.apply(this, arguments);
+      if (id === 'inbox') {
+        setTimeout(initTeamInbox, 50);
+      }
+      return result;
+    };
+  }
+})();
 
 
 
