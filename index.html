@@ -7698,21 +7698,23 @@ function agencyTotalFor(e) {
   return Math.max(0, dv - payout);
 }
 
-/** Just the standard cut, ignoring late fee and extra profit */
+/** Just the standard cut, ignoring late fee and extra profit. Skip agency-only rows. */
 function agencyStandardCutFor(e) {
+  if (e.entry_type === 'agency_only') return 0;
   const dv = Number(e.deal_value||0);
   if (e.agency_cut_type === 'percent') return dv * Number(e.agency_cut_value||0) / 100;
   return Number(e.agency_cut_value||0);
 }
 
-/** Late fee amount (0 if not applied) */
+/** Late fee amount (0 if not applied). Skip agency-only rows. */
 function lateFeeFor(e) {
+  if (e.entry_type === 'agency_only') return 0;
   if (!e.late_fee_applied) return 0;
   if (e.late_fee_amount !== undefined && e.late_fee_amount !== null) return Number(e.late_fee_amount);
   return Number(e.deal_value||0) * Number(e.late_fee_pct||0) / 100;
 }
 
-/** Extra (untied) agency profit on this deal */
+/** Extra (untied) agency profit on this deal. For agency-only rows, this IS the whole amount. */
 function extraProfitFor(e) {
   return Number(e.extra_agency_profit||0);
 }
@@ -7757,6 +7759,42 @@ function renderEarnings() {
   const STATUS_BADGE  = { unpaid:'badge-red', part_paid:'badge-amber', paid:'badge-green' };
 
   tbody.innerHTML = filtered.map(e => {
+    // Agency-only rows render simpler — no creator avatar, dashes for creator-specific cols
+    if (e.entry_type === 'agency_only') {
+      const dateStr = e.created_at ? new Date(e.created_at).toLocaleDateString('en-GB') : '—';
+      const amount  = Number(e.extra_agency_profit || e.deal_value || 0);
+      const statusBadge = e.payment_status === 'paid'
+        ? '<span class="badge badge-green">Received</span>'
+        : '<span class="badge badge-amber">Awaiting</span>';
+      return `<tr style="background:#f0f9ff">
+        <td><div class="creator-cell">
+          <div style="width:28px;height:28px;font-size:14px;display:flex;align-items:center;justify-content:center;background:var(--blue-light);color:var(--blue);border-radius:50%;flex-shrink:0">🏢</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--blue)">AGENCY ONLY</div>
+            <div style="font-size:10px;color:var(--gray-400)">No creator attribution</div>
+          </div>
+        </div></td>
+        <td>
+          <div style="font-size:13px;font-weight:500">${e.brand_name||'—'}</div>
+          ${e.campaign_brand ? `<div style="font-size:11px;color:var(--gray-400)">${e.campaign_brand}</div>` : ''}
+          <div style="display:flex;gap:4px;margin-top:4px"><span class="badge badge-blue" style="font-size:9px">💼 Pure Profit ${fmtMoneyFull(amount)}</span></div>
+        </td>
+        <td style="color:var(--gray-300)">—</td>
+        <td style="color:var(--gray-300)">—</td>
+        <td style="color:var(--gray-300)">—</td>
+        <td style="font-weight:600;color:var(--green)">${fmtMoneyFull(amount)}</td>
+        <td style="color:var(--gray-300)">—</td>
+        <td>${statusBadge}</td>
+        <td style="color:var(--gray-300)">—</td>
+        <td style="font-size:12px;color:var(--gray-400)">${dateStr}</td>
+        <td style="text-align:right">
+          ${canManage ? `<button class="btn btn-ghost btn-sm" onclick="openEditEarning('${e.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteEarning('${e.id}')">Del</button>` : ''}
+        </td>
+      </tr>`;
+    }
+
+    // Standard creator earning row
     const outstanding = Math.max(0, Number(e.creator_payout||0) - Number(e.amount_paid||0));
     const standardCut = agencyStandardCutFor(e);
     const lateFee     = lateFeeFor(e);
@@ -7823,12 +7861,20 @@ function openAddEarning() {
   set('earn-late-toggle', 'checked', false);
   set('earn-late-pct', 'value', '15');
   set('earn-extra-profit', 'value', '0');
+  set('earn-agency-only-amount', 'value', '');
+  set('earn-agency-only-status', 'value', 'paid');
+  // Default to creator earning mode
+  document.querySelectorAll('input[name="earn-entry-type"]').forEach(r => {
+    r.checked = (r.value === 'creator');
+  });
+  onEntryTypeChange();
   const lateRow = document.getElementById('earn-late-row');
   if (lateRow) lateRow.style.display = 'none';
   const wrap = document.getElementById('earn-paid-date-wrap');
   if (wrap) wrap.style.display = 'none';
   const outstanding = document.getElementById('earn-outstanding-display');
   if (outstanding) outstanding.textContent = '£0.00';
+  document.getElementById('earn-campaign-budget').style.display = 'none';
   populateEarningSelects();
   recalcEarning();
   openModal('earningModal');
@@ -7840,25 +7886,143 @@ function openEditEarning(id) {
   document.getElementById('earningModalTitle').textContent = 'Edit Earnings Record';
   document.getElementById('earn-id').value = e.id;
   populateEarningSelects();
-  document.getElementById('earn-creator-sel').value = e.creator_id;
   document.getElementById('earn-campaign-sel').value = e.campaign_id || '';
   document.getElementById('earn-brand').value = e.brand_name || '';
-  document.getElementById('earn-deal-value').value = e.deal_value || '';
-  document.getElementById('earn-cut-type').value = e.agency_cut_type || 'percent';
-  document.getElementById('earn-cut-value').value = e.agency_cut_value || '0';
-  document.getElementById('earn-payout').value = e.creator_payout || '';
-  document.getElementById('earn-status').value = e.payment_status || 'unpaid';
-  document.getElementById('earn-amount-paid').value = e.amount_paid || '0';
-  document.getElementById('earn-paid-date').value = e.paid_at ? e.paid_at.slice(0,10) : '';
   document.getElementById('earn-notes').value = e.notes || '';
-  document.getElementById('earn-late-toggle').checked = !!e.late_fee_applied;
-  document.getElementById('earn-late-pct').value = e.late_fee_pct || 15;
-  document.getElementById('earn-extra-profit').value = e.extra_agency_profit || 0;
-  const lateRow = document.getElementById('earn-late-row');
-  if (lateRow) lateRow.style.display = e.late_fee_applied ? '' : 'none';
-  togglePaidDate();
-  recalcEarning();
+
+  // Determine entry type
+  const isAgencyOnly = e.entry_type === 'agency_only';
+  document.querySelectorAll('input[name="earn-entry-type"]').forEach(r => {
+    r.checked = (r.value === (isAgencyOnly ? 'agency_only' : 'creator'));
+  });
+
+  if (isAgencyOnly) {
+    document.getElementById('earn-agency-only-amount').value = e.extra_agency_profit || e.deal_value || '';
+    document.getElementById('earn-agency-only-status').value = e.payment_status === 'paid' ? 'paid' : 'unpaid';
+  } else {
+    document.getElementById('earn-creator-sel').value = e.creator_id;
+    document.getElementById('earn-deal-value').value = e.deal_value || '';
+    document.getElementById('earn-cut-type').value = e.agency_cut_type || 'percent';
+    document.getElementById('earn-cut-value').value = e.agency_cut_value || '0';
+    document.getElementById('earn-payout').value = e.creator_payout || '';
+    document.getElementById('earn-status').value = e.payment_status || 'unpaid';
+    document.getElementById('earn-amount-paid').value = e.amount_paid || '0';
+    document.getElementById('earn-paid-date').value = e.paid_at ? e.paid_at.slice(0,10) : '';
+    document.getElementById('earn-late-toggle').checked = !!e.late_fee_applied;
+    document.getElementById('earn-late-pct').value = e.late_fee_pct || 15;
+    document.getElementById('earn-extra-profit').value = e.extra_agency_profit || 0;
+    const lateRow = document.getElementById('earn-late-row');
+    if (lateRow) lateRow.style.display = e.late_fee_applied ? '' : 'none';
+    togglePaidDate();
+    recalcEarning();
+  }
+
+  onEntryTypeChange();
+  onEarnCampaignChange();
   openModal('earningModal');
+}
+
+/** Switch between creator-earning and agency-only modes */
+function onEntryTypeChange() {
+  const type = document.querySelector('input[name="earn-entry-type"]:checked')?.value || 'creator';
+  const creatorFields = document.getElementById('earn-creator-fields');
+  const agencyFields  = document.getElementById('earn-agency-only-fields');
+  const creatorGroup  = document.getElementById('earn-creator-group');
+  const hint          = document.getElementById('earn-entry-type-hint');
+
+  if (type === 'agency_only') {
+    if (creatorFields) creatorFields.style.display = 'none';
+    if (agencyFields)  agencyFields.style.display = '';
+    if (creatorGroup)  creatorGroup.style.display = 'none';
+    if (hint) hint.textContent = 'Pure agency profit on a campaign with no creator attribution. Goes to Agency Profit only.';
+  } else {
+    if (creatorFields) creatorFields.style.display = '';
+    if (agencyFields)  agencyFields.style.display = 'none';
+    if (creatorGroup)  creatorGroup.style.display = '';
+    if (hint) hint.textContent = 'Standard creator deal — record their payout, agency cut, late fee etc.';
+  }
+  // Re-eval budget banner since calc differs
+  onEarnCampaignChange();
+}
+
+/**
+ * Called when the campaign select changes. Updates:
+ *  - Pre-fills brand + deal value if the row is fresh
+ *  - Shows the "£X left for creators" banner
+ */
+function onEarnCampaignChange() {
+  prefillEarningFromCampaign();
+  updateCampaignBudgetBanner();
+}
+
+/**
+ * Show how much creator-payout budget is left on the selected campaign.
+ * "Left" = campaign.value − sum of creator_payout from all earnings on that campaign,
+ * EXCLUDING the row being currently edited.
+ * Agency-only entries don't reduce the budget (they aren't paid to creators).
+ */
+function updateCampaignBudgetBanner() {
+  const banner   = document.getElementById('earn-campaign-budget');
+  if (!banner) return;
+  const campId   = document.getElementById('earn-campaign-sel').value;
+  const editId   = document.getElementById('earn-id').value;
+  if (!campId) { banner.style.display = 'none'; return; }
+
+  const camp = campaigns.find(c => String(c.id) === String(campId));
+  if (!camp || !camp.value) { banner.style.display = 'none'; return; }
+
+  const dealTotal = Number(camp.value) || 0;
+  const allocated = earnings
+    .filter(e => String(e.campaign_id) === String(campId) && String(e.id) !== String(editId))
+    .reduce((s, e) => {
+      // Only creator payouts count against the creator budget
+      if (e.entry_type === 'agency_only') return s;
+      return s + Number(e.creator_payout || 0);
+    }, 0);
+
+  // If we're editing a creator earning, also reflect what's currently in the form
+  let pending = 0;
+  const type = document.querySelector('input[name="earn-entry-type"]:checked')?.value || 'creator';
+  if (type === 'creator') {
+    pending = Number(document.getElementById('earn-payout').value) || 0;
+  }
+  const proposed = allocated + pending;
+  const remaining = dealTotal - allocated;
+  const afterThis = dealTotal - proposed;
+
+  // Build message
+  const records = earnings.filter(e => String(e.campaign_id) === String(campId) && String(e.id) !== String(editId) && e.entry_type !== 'agency_only');
+  const recordCount = records.length;
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div>
+      <div style="font-weight:600;margin-bottom:2px">📊 Campaign budget: ${fmtMoneyFull(dealTotal)}</div>
+      <div style="font-size:11px;opacity:.85">
+        ${recordCount} creator earning${recordCount === 1 ? '' : 's'} already saved → ${fmtMoneyFull(allocated)} allocated
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:18px;font-weight:700;color:${remaining < 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoneyFull(remaining)}</div>
+      <div style="font-size:11px;opacity:.85">left for creators</div>
+    </div>
+  </div>`;
+
+  if (type === 'creator' && pending > 0) {
+    if (afterThis < 0) {
+      html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(59,130,246,.3);color:#991b1b;font-weight:600;font-size:12px">
+        ⚠ This entry (${fmtMoneyFull(pending)}) puts you ${fmtMoneyFull(Math.abs(afterThis))} over the campaign budget.
+      </div>`;
+    } else {
+      html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(59,130,246,.3);font-size:12px">
+        After this entry (${fmtMoneyFull(pending)}): <strong>${fmtMoneyFull(afterThis)} remaining</strong>
+      </div>`;
+    }
+  }
+
+  banner.innerHTML = html;
+  banner.style.background = (afterThis < 0) ? '#fee2e2' : 'var(--blue-light)';
+  banner.style.color      = (afterThis < 0) ? '#991b1b' : 'var(--blue)';
+  banner.style.display = '';
 }
 
 function onLateToggle() {
@@ -7918,6 +8082,7 @@ function recalcEarning() {
   const payout = Math.max(0, dv - standardCut - lateFee - extra);
   document.getElementById('earn-payout').value = payout.toFixed(2);
   recalcOutstanding();
+  updateCampaignBudgetBanner();
 }
 
 function recalcOutstanding() {
@@ -7929,6 +8094,7 @@ function recalcOutstanding() {
     el.textContent = fmtMoneyFull(outstanding);
     el.style.color = outstanding > 0 ? 'var(--red)' : 'var(--green)';
   }
+  updateCampaignBudgetBanner();
 }
 
 function togglePaidDate() {
@@ -7958,9 +8124,75 @@ async function saveEarning() {
 
   // ── Read fields ──
   const id         = document.getElementById('earn-id').value.trim();
-  const creatorId  = Number(document.getElementById('earn-creator-sel').value);
+  const entryType  = document.querySelector('input[name="earn-entry-type"]:checked')?.value || 'creator';
   const campaignId = document.getElementById('earn-campaign-sel').value || null;
   const brand      = document.getElementById('earn-brand').value.trim();
+  const notes      = document.getElementById('earn-notes').value.trim();
+  const campaign   = campaignId ? campaigns.find(c => String(c.id) === String(campaignId)) : null;
+
+  // ── Branch: agency-only entry ──
+  if (entryType === 'agency_only') {
+    const amount = Number(document.getElementById('earn-agency-only-amount').value);
+    const status = document.getElementById('earn-agency-only-status').value;
+    if (!amount || amount <= 0) { showEarnErr('Agency profit amount must be a positive number.'); return; }
+    if (!campaignId && !brand)  { showEarnErr('Pick a campaign or enter a brand name.'); return; }
+
+    const row = {
+      entry_type:       'agency_only',
+      creator_id:       null,
+      creator_name:     '🏢 Agency Only',
+      campaign_id:      campaignId ? Number(campaignId) : null,
+      campaign_brand:   campaign ? (campaign.brand + ' \u00d7 ' + campaign.creator) : null,
+      brand_name:       brand || (campaign ? campaign.brand : null),
+      deal_value:       amount,                       // amount IS the agency profit total for this row
+      currency:         'GBP',
+      agency_cut_type:  'fixed',
+      agency_cut_value: 0,                            // no separate "20% cut" for agency-only
+      creator_payout:   0,                            // no creator gets paid on this row
+      payment_status:   status,
+      amount_paid:      status === 'paid' ? amount : 0,
+      paid_at:          status === 'paid' ? new Date().toISOString() : null,
+      notes:            notes || null,
+      late_fee_applied: false,
+      late_fee_pct:     0,
+      late_fee_amount:  0,
+      extra_agency_profit: amount,                    // the whole amount IS extra profit
+      created_by:       currentUser.id || null,
+      updated_at:       new Date().toISOString(),
+    };
+
+    let result;
+    try {
+      if (id) {
+        row.id = id;
+        result = await DB._req('PATCH', 'creator_earnings', row, '?id=eq.' + id);
+      } else {
+        row.created_at = new Date().toISOString();
+        result = await DB._req('POST', 'creator_earnings', [row], '');
+      }
+    } catch(e) {
+      console.error('[saveEarning agency-only] Exception:', e);
+      showEarnErr('Unexpected error: ' + e.message);
+      return;
+    }
+    if (result === null) {
+      showEarnErr('Save failed — check the browser console. If tables do not exist yet, run the SQL migration in Supabase.');
+      return;
+    }
+
+    closeModal('earningModal');
+    await loadEarnings();
+    renderEarningsProfileCard();
+    addActivity('Agency-only earning ' + (id ? 'updated' : 'added') + ': ' + (campaign ? campaign.brand : brand || '—') + ' \u2014 ' + fmtMoneyFull(amount));
+    showToast(id ? '✅ Agency entry updated' : '✅ Agency entry added');
+    // Also refresh profit/spending pages if they're cached
+    try { loadAgencyProfit(); } catch(e){}
+    try { loadSpending(); } catch(e){}
+    return;
+  }
+
+  // ── Branch: creator earning (existing flow) ──
+  const creatorId  = Number(document.getElementById('earn-creator-sel').value);
   const dealValue  = Number(document.getElementById('earn-deal-value').value);
   const cutType    = document.getElementById('earn-cut-type').value;
   const cutVal     = Number(document.getElementById('earn-cut-value').value) || 0;
@@ -7968,7 +8200,6 @@ async function saveEarning() {
   const status     = document.getElementById('earn-status').value;
   const amtPaid    = Number(document.getElementById('earn-amount-paid').value) || 0;
   const paidDate   = document.getElementById('earn-paid-date').value || null;
-  const notes      = document.getElementById('earn-notes').value.trim();
   const lateOn     = !!document.getElementById('earn-late-toggle')?.checked;
   const latePct    = Number(document.getElementById('earn-late-pct')?.value) || 0;
   const extraProfit = Number(document.getElementById('earn-extra-profit')?.value) || 0;
@@ -7983,11 +8214,11 @@ async function saveEarning() {
   if (extraProfit > dealValue) { showEarnErr('Extra profit cannot exceed deal value.'); return; }
   if (amtPaid > payout)    { showEarnErr('Amount paid cannot exceed creator payout.'); return; }
 
-  const creator  = creators.find(c => c.id === creatorId);
-  const campaign = campaignId ? campaigns.find(c => String(c.id) === String(campaignId)) : null;
+  const creator = creators.find(c => c.id === creatorId);
 
   // ── Build payload ──
   const row = {
+    entry_type:       'creator',
     creator_id:       creatorId,
     creator_name:     creator ? creator.name : String(creatorId),
     campaign_id:      campaignId ? Number(campaignId) : null,
@@ -10884,14 +11115,34 @@ async function deleteMailboxPassword() {
     </div>
     <div class="modal-body">
       <input type="hidden" id="earn-id">
+
+      <!-- Entry type toggle -->
+      <div class="card" style="padding:10px 14px;margin-bottom:14px;background:var(--gray-50);border:1px solid var(--gray-100)">
+        <label class="form-label" style="margin-bottom:6px;display:block">Entry type</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 12px;border-radius:8px;background:var(--white);border:1px solid var(--gray-100);flex:1">
+            <input type="radio" name="earn-entry-type" value="creator" checked onchange="onEntryTypeChange()" style="margin:0">
+            <span style="font-size:13px;font-weight:500">👤 Creator earning</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 12px;border-radius:8px;background:var(--white);border:1px solid var(--gray-100);flex:1">
+            <input type="radio" name="earn-entry-type" value="agency_only" onchange="onEntryTypeChange()" style="margin:0">
+            <span style="font-size:13px;font-weight:500">🏢 Agency profit only</span>
+          </label>
+        </div>
+        <div class="form-hint" id="earn-entry-type-hint" style="margin-top:6px">Standard creator deal — record their payout, agency cut, late fee etc.</div>
+      </div>
+
+      <!-- Campaign budget banner — appears when a campaign is selected -->
+      <div id="earn-campaign-budget" style="display:none;background:var(--blue-light);color:var(--blue);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.5"></div>
+
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group" id="earn-creator-group">
           <label class="form-label">Creator *</label>
           <select class="form-select" id="earn-creator-sel" onchange="prefillEarningFromCampaign()"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Link to Campaign (optional)</label>
-          <select class="form-select" id="earn-campaign-sel" onchange="prefillEarningFromCampaign()">
+          <select class="form-select" id="earn-campaign-sel" onchange="onEarnCampaignChange()">
             <option value="">— No campaign —</option>
           </select>
         </div>
@@ -10900,65 +11151,84 @@ async function deleteMailboxPassword() {
         <label class="form-label">Brand Name (optional)</label>
         <input class="form-input" id="earn-brand" placeholder="e.g. Nike UK">
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Deal Value (£) *</label>
-          <input class="form-input" id="earn-deal-value" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcEarning()">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Agency Cut Type</label>
-          <select class="form-select" id="earn-cut-type" onchange="recalcEarning()">
-            <option value="percent">Percent (%)</option>
-            <option value="fixed">Fixed (£)</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Agency Cut Value</label>
-          <input class="form-input" id="earn-cut-value" type="number" min="0" step="0.01" placeholder="0" oninput="recalcEarning()">
-          <div class="form-hint" id="earn-cut-hint">Enter % of deal value</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Creator Payout (£) *</label>
-          <input class="form-input" id="earn-payout" type="number" min="0" step="0.01" placeholder="Auto-calculated" oninput="recalcOutstanding()">
-          <div class="form-hint">Auto-calculated. Override if needed.</div>
-        </div>
-      </div>
-      <div class="card" style="padding:12px 14px;margin:8px 0;background:var(--gray-50);border:1px solid var(--gray-100)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <input type="checkbox" id="earn-late-toggle" onchange="onLateToggle()" style="margin:0;cursor:pointer">
-          <label for="earn-late-toggle" style="font-size:13px;font-weight:600;cursor:pointer;margin:0">⚠️ Creator submitted late — apply late fee</label>
-        </div>
-        <div class="form-row" id="earn-late-row" style="display:none">
-          <div class="form-group" style="margin:0">
-            <label class="form-label" style="font-size:11px">Late fee %</label>
-            <input class="form-input" id="earn-late-pct" type="number" min="0" max="100" step="0.5" value="15" oninput="recalcEarning()">
-            <div class="form-hint" style="font-size:11px">Taken from creator's payout. Default 15%.</div>
+      <!-- Creator-only fields (hidden for agency-only entries) -->
+      <div id="earn-creator-fields">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Deal Value (£) *</label>
+            <input class="form-input" id="earn-deal-value" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcEarning()">
           </div>
-          <div class="form-group" style="margin:0">
-            <label class="form-label" style="font-size:11px">Late fee amount (auto)</label>
-            <div id="earn-late-amount" style="padding:9px 12px;background:var(--white);border:1px solid var(--gray-100);border-radius:10px;font-size:13px;font-weight:600;color:var(--amber)">£0.00</div>
+          <div class="form-group">
+            <label class="form-label">Agency Cut Type</label>
+            <select class="form-select" id="earn-cut-type" onchange="recalcEarning()">
+              <option value="percent">Percent (%)</option>
+              <option value="fixed">Fixed (£)</option>
+            </select>
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Agency Cut Value</label>
+            <input class="form-input" id="earn-cut-value" type="number" min="0" step="0.01" placeholder="0" oninput="recalcEarning()">
+            <div class="form-hint" id="earn-cut-hint">Enter % of deal value</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Creator Payout (£) *</label>
+            <input class="form-input" id="earn-payout" type="number" min="0" step="0.01" placeholder="Auto-calculated" oninput="recalcOutstanding()">
+            <div class="form-hint">Auto-calculated. Override if needed.</div>
+          </div>
+        </div>
+        <div class="card" style="padding:12px 14px;margin:8px 0;background:var(--gray-50);border:1px solid var(--gray-100)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <input type="checkbox" id="earn-late-toggle" onchange="onLateToggle()" style="margin:0;cursor:pointer">
+            <label for="earn-late-toggle" style="font-size:13px;font-weight:600;cursor:pointer;margin:0">⚠️ Creator submitted late — apply late fee</label>
+          </div>
+          <div class="form-row" id="earn-late-row" style="display:none">
+            <div class="form-group" style="margin:0">
+              <label class="form-label" style="font-size:11px">Late fee %</label>
+              <input class="form-input" id="earn-late-pct" type="number" min="0" max="100" step="0.5" value="15" oninput="recalcEarning()">
+              <div class="form-hint" style="font-size:11px">Taken from creator's payout. Default 15%.</div>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label" style="font-size:11px">Late fee amount (auto)</label>
+              <div id="earn-late-amount" style="padding:9px 12px;background:var(--white);border:1px solid var(--gray-100);border-radius:10px;font-size:13px;font-weight:600;color:var(--amber)">£0.00</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">💼 Extra agency profit on this deal (£) <span style="font-weight:400;color:var(--gray-400);font-size:11px">— optional, untied to creator</span></label>
+          <input class="form-input" id="earn-extra-profit" type="number" min="0" step="0.01" placeholder="0.00" value="0" oninput="recalcEarning()">
+          <div class="form-hint">Money the agency took from this deal that isn't part of the creator's cut. Appears on the Agency Profit page. Comes out of the brand's total, so creator gets less.</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Payment Status</label>
+            <select class="form-select" id="earn-status" onchange="togglePaidDate()">
+              <option value="unpaid">Unpaid</option>
+              <option value="part_paid">Part Paid</option>
+              <option value="paid">Paid</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Amount Paid (£)</label>
+            <input class="form-input" id="earn-amount-paid" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcOutstanding()">
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">💼 Extra agency profit on this deal (£) <span style="font-weight:400;color:var(--gray-400);font-size:11px">— optional, untied to creator</span></label>
-        <input class="form-input" id="earn-extra-profit" type="number" min="0" step="0.01" placeholder="0.00" value="0" oninput="recalcEarning()">
-        <div class="form-hint">Money the agency took from this deal that isn't part of the creator's cut. Appears on the Agency Profit page. Comes out of the brand's total, so creator gets less.</div>
-      </div>
-      <div class="form-row">
+
+      <!-- Agency-only field (shown only when entry-type = agency_only) -->
+      <div id="earn-agency-only-fields" style="display:none">
+        <div class="form-group">
+          <label class="form-label">🏢 Agency profit amount (£) *</label>
+          <input class="form-input" id="earn-agency-only-amount" type="number" min="0" step="0.01" placeholder="0.00">
+          <div class="form-hint">Total agency profit on this campaign that isn't tied to any specific creator. Goes straight into the Agency Profit page.</div>
+        </div>
         <div class="form-group">
           <label class="form-label">Payment Status</label>
-          <select class="form-select" id="earn-status" onchange="togglePaidDate()">
-            <option value="unpaid">Unpaid</option>
-            <option value="part_paid">Part Paid</option>
-            <option value="paid">Paid</option>
+          <select class="form-select" id="earn-agency-only-status">
+            <option value="paid">Received</option>
+            <option value="unpaid">Awaiting</option>
           </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Amount Paid (£)</label>
-          <input class="form-input" id="earn-amount-paid" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcOutstanding()">
         </div>
       </div>
       <div class="form-group" id="earn-paid-date-wrap" style="display:none">
