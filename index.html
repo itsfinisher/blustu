@@ -8174,16 +8174,12 @@ function prefillEarningFromCampaign() {
   const campSel = document.getElementById('earn-campaign-sel');
   const selected = campSel.options[campSel.selectedIndex];
   if (!selected || !selected.value) return;
-  const val = selected.getAttribute('data-value');
   const brand = selected.getAttribute('data-brand');
-  const dvField = document.getElementById('earn-deal-value');
   const brandField = document.getElementById('earn-brand');
-  // Only prefill empty fields — never overwrite a value the user has set.
-  // This protects per-creator splits when editing or when picking a new creator on the same campaign.
-  if (val && Number(val) > 0 && (!dvField.value || Number(dvField.value) === 0)) {
-    dvField.value = val;
-    recalcEarning();
-  }
+  // Only prefill brand name — do NOT pre-fill the deal value field.
+  // Campaigns are often multi-creator, so the per-creator deal value differs
+  // from the campaign total. Pre-filling with the full campaign value caused
+  // the agency cut, late fee, and per-deal extra math to be wildly wrong.
   if (brand && !brandField.value) {
     brandField.value = brand;
   }
