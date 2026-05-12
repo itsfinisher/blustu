@@ -2671,19 +2671,23 @@ const DB = {
       const text = await r.text();
       if (!r.ok) {
         console.error(`DB ${method} ${table} failed (${r.status}):`, text);
+        const detail = (() => { try { return JSON.parse(text).message || text; } catch(e) { return text; } })();
+        // Stash the most recent detailed error so callers can show it inline
+        this._lastError = `${r.status}: ${detail}`;
         if (r.status === 401 || r.status === 403) {
           showToast('🔒 Permission denied — run the SQL migration to set up RLS policies');
         } else if (r.status === 404) {
           showToast(`❌ Table "${table}" not found — run the SQL migration first`);
         } else {
-          const detail = (() => { try { return JSON.parse(text).message || text; } catch(e) { return text; } })();
           showToast(`❌ Save failed (${r.status}): ${detail.slice(0,120)}`);
         }
         return null;
       }
+      this._lastError = null;
       return text ? JSON.parse(text) : [];
     } catch(e) {
       console.error(`DB ${method} ${table} network error:`, e);
+      this._lastError = 'Network error: ' + e.message;
       showToast('⚠️ Network error — check your connection.');
       return null;
     }
@@ -8213,7 +8217,7 @@ async function saveEarning() {
       return;
     }
     if (result === null) {
-      showEarnErr('Save failed — check the browser console. If tables do not exist yet, run the SQL migration in Supabase.');
+      showEarnErr('Save failed: ' + (DB._lastError || 'unknown — check browser console. If tables do not exist yet, run the SQL migration in Supabase.'));
       return;
     }
 
@@ -8299,7 +8303,7 @@ async function saveEarning() {
   }
 
   if (result === null) {
-    showEarnErr('Save failed — check the browser console. If tables do not exist yet, run the SQL migration in Supabase.');
+    showEarnErr('Save failed: ' + (DB._lastError || 'unknown — check browser console. If tables do not exist yet, run the SQL migration in Supabase.'));
     return;
   }
 
