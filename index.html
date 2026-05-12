@@ -7727,7 +7727,10 @@ function lateFeeFor(e) {
   if (e.entry_type === 'agency_only') return 0;
   if (!e.late_fee_applied) return 0;
   if (e.late_fee_amount !== undefined && e.late_fee_amount !== null) return Number(e.late_fee_amount);
-  return Number(e.deal_value||0) * Number(e.late_fee_pct||0) / 100;
+  // Fallback: compute from pct. New math = % of creator's base cut (deal value minus agency cut).
+  const standardCut = agencyStandardCutFor(e);
+  const creatorBase = Math.max(0, Number(e.deal_value||0) - standardCut);
+  return creatorBase * Number(e.late_fee_pct||0) / 100;
 }
 
 /** Extra (untied) agency profit on this deal. For agency-only rows, this IS the whole amount. */
@@ -7930,7 +7933,8 @@ function openEditEarning(id) {
     const lateRow = document.getElementById('earn-late-row');
     if (lateRow) lateRow.style.display = e.late_fee_applied ? '' : 'none';
     togglePaidDate();
-    recalcEarning();
+    // Preserve the saved Creator Payout — don't overwrite with auto-calc on edit open.
+    recalcEarning(true);
   }
 
   onEntryTypeChange();
@@ -8064,15 +8068,19 @@ function prefillEarningFromCampaign() {
 /**
  * Recalculate creator payout & late fee amount.
  *
- * The brand pays `deal_value` total. Out of that:
- *   1. Agency takes the standard cut (% or fixed)
- *   2. Agency takes an "extra profit" amount (e.g. brand markup we kept)
- *   3. If creator submitted late, agency takes an extra late_fee_pct of deal_value
- *   4. Whatever's left goes to the creator
+ * Brand pays `deal_value` total. The split is:
+ *   1. Agency standard cut: % or fixed amount off the top → "agency cut"
+ *   2. What's left = "creator base cut" (e.g. 80% if agency took 20%)
+ *   3. Late fee: % of CREATOR'S BASE CUT (taken from creator if they delivered late)
+ *   4. Extra agency profit: flat amount also taken from creator's side
+ *   5. Creator's final payout = base cut − late fee − extra profit
  *
- * All three agency portions are summed → total agency revenue from this deal.
+ * Total agency revenue = standard cut + late fee + extra profit.
+ *
+ * If `preservePayout` is true (used when opening Edit), we don't overwrite the
+ * Creator Payout field — we only refresh the visible late-fee display.
  */
-function recalcEarning() {
+function recalcEarning(preservePayout) {
   const dv      = Number(document.getElementById('earn-deal-value').value) || 0;
   const cutType = document.getElementById('earn-cut-type').value;
   const cutVal  = Number(document.getElementById('earn-cut-value').value) || 0;
@@ -8090,13 +8098,17 @@ function recalcEarning() {
     if (hint) hint.textContent = 'Enter fixed £ amount';
   }
 
-  const lateFee = lateOn ? (dv * latePct / 100) : 0;
+  const creatorBaseCut = Math.max(0, dv - standardCut);
+  // ✨ Late fee is taken from the creator's cut, not the brand's total ✨
+  const lateFee = lateOn ? (creatorBaseCut * latePct / 100) : 0;
   const lateDisplay = document.getElementById('earn-late-amount');
   if (lateDisplay) lateDisplay.textContent = fmtMoneyFull(lateFee);
 
-  // Creator gets what's left after standard cut + late fee + extra profit
-  const payout = Math.max(0, dv - standardCut - lateFee - extra);
-  document.getElementById('earn-payout').value = payout.toFixed(2);
+  if (!preservePayout) {
+    // Auto-calc: creator gets base cut minus late fee minus extra profit
+    const payout = Math.max(0, creatorBaseCut - lateFee - extra);
+    document.getElementById('earn-payout').value = payout.toFixed(2);
+  }
   recalcOutstanding();
   updateCampaignBudgetBanner();
 }
@@ -8219,7 +8231,11 @@ async function saveEarning() {
   const lateOn     = !!document.getElementById('earn-late-toggle')?.checked;
   const latePct    = Number(document.getElementById('earn-late-pct')?.value) || 0;
   const extraProfit = Number(document.getElementById('earn-extra-profit')?.value) || 0;
-  const lateFeeAmt = lateOn ? (dealValue * latePct / 100) : 0;
+  // Late fee is % of the creator's BASE cut (deal_value minus standard agency cut),
+  // not % of the brand's total deal value.
+  const standardCutForSave = cutType === 'percent' ? (dealValue * cutVal / 100) : cutVal;
+  const creatorBaseCutForSave = Math.max(0, dealValue - standardCutForSave);
+  const lateFeeAmt = lateOn ? (creatorBaseCutForSave * latePct / 100) : 0;
 
   // ── Validate ──
   if (!creatorId)  { showEarnErr('Please select a creator.'); return; }
@@ -11203,7 +11219,7 @@ async function deleteMailboxPassword() {
             <div class="form-group" style="margin:0">
               <label class="form-label" style="font-size:11px">Late fee %</label>
               <input class="form-input" id="earn-late-pct" type="number" min="0" max="100" step="0.5" value="15" oninput="recalcEarning()">
-              <div class="form-hint" style="font-size:11px">Taken from creator's payout. Default 15%.</div>
+              <div class="form-hint" style="font-size:11px">15% of the creator's cut (after the 20% agency cut). Default 15%.</div>
             </div>
             <div class="form-group" style="margin:0">
               <label class="form-label" style="font-size:11px">Late fee amount (auto)</label>
