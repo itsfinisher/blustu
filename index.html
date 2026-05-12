@@ -1009,7 +1009,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">Total Creators</div><div class="stat-value" id="stat-creators">25</div><div class="stat-change up" id="stat-creators-sub">Full roster</div></div>
         <div class="stat-card"><div class="stat-label">Active Campaigns</div><div class="stat-value" id="stat-campaigns">0</div><div class="stat-change neutral" id="stat-campaigns-sub">No campaigns yet</div></div>
-        <div class="stat-card"><div class="stat-label">Pipeline Value</div><div class="stat-value" id="stat-pipeline">£0</div><div class="stat-change up" id="stat-pipeline-sub">Total deal value</div></div>
+        <div class="stat-card"><div class="stat-label">Total Profit</div><div class="stat-value" id="stat-pipeline" style="color:var(--green)">£0</div><div class="stat-change up" id="stat-pipeline-sub">All agency revenue</div></div>
         <div class="stat-card"><div class="stat-label">Avg. Engagement</div><div class="stat-value" id="stat-avg-eng">—</div><div class="stat-change neutral" id="stat-avg-eng-sub">From admin data</div></div>
       </div>
       <div class="grid-2">
@@ -3008,7 +3008,16 @@ async function syncAllFromDB() {
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
   renderAll();
-  loadEarnings();
+  // Load earnings + profit + spending in parallel; once earnings + profit are in,
+  // re-update dashboard stats so the Total Profit card shows the real number
+  // (rather than the £0 placeholder).
+  Promise.all([
+    loadEarnings(),
+    loadAgencyProfit(),
+    loadSpending(),
+  ]).then(() => {
+    try { updateDashStats(); } catch(e) { /* dashboard not on screen */ }
+  });
   loadCalEvents();
 }
 
@@ -4833,8 +4842,10 @@ const STAGE_COLORS={Prospect:'var(--gray-400)',Pitched:'var(--blue)',Negotiating
 function renderPipeline(){
   const board=document.getElementById('pipelineBoard');
   const pipelineValue=deals.filter(d=>d.stage!=='Lost'&&d.stage!=='Completed').reduce((s,d)=>s+Number(d.value||0),0);
-  document.getElementById('stat-pipeline').textContent=fmtMoney(pipelineValue);
-  document.getElementById('pipeline-sub').textContent=`${deals.length} deal${deals.length!==1?'s':''} · Total pipeline: ${fmtMoney(pipelineValue)}`;
+  // Note: dashboard 'stat-pipeline' is now Total Profit, no longer pipeline — don't overwrite.
+  // The pipeline-sub element is on the pipeline page itself; safe to update.
+  const pipSubEl = document.getElementById('pipeline-sub');
+  if (pipSubEl) pipSubEl.textContent = `${deals.length} deal${deals.length!==1?'s':''} · Total pipeline: ${fmtMoney(pipelineValue)}`;
 
   board.innerHTML=PIPELINE_STAGES.map(stage=>{
     const stageDe=deals.filter(d=>d.stage===stage);
@@ -5313,8 +5324,13 @@ function updateDashStats(){
   const activeCamps=campaigns.filter(c=>c.status==='Live'||c.status==='Negotiating');
   document.getElementById('stat-campaigns').textContent=activeCamps.length;
   document.getElementById('stat-campaigns-sub').textContent=activeCamps.length?`${activeCamps.length} in progress`:'No active campaigns';
-  const pipVal=deals.filter(d=>d.stage!=='Lost'&&d.stage!=='Completed').reduce((s,d)=>s+Number(d.value||0),0);
-  document.getElementById('stat-pipeline').textContent=fmtMoney(pipVal);
+
+  // Total Profit card — pure profit from all sources (standard cuts + extras + late fees + standalone)
+  let totalProfit = 0;
+  try { totalProfit = profitTotals().total; } catch(e) { /* profitTotals not loaded yet */ }
+  document.getElementById('stat-pipeline').textContent = fmtMoney(totalProfit);
+  const profSub = document.getElementById('stat-pipeline-sub');
+  if (profSub) profSub.textContent = totalProfit > 0 ? 'All-time agency profit' : 'No earnings yet';
 
   // Avg engagement rate from admin overrides (resolved)
   const engRates = creators.map(c=>resolveCreator(c).engRate).filter(v=>v!=null&&v!=='');
