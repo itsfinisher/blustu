@@ -1849,11 +1849,12 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
           <button class="btn btn-primary" id="btn-add-profit" onclick="openAddProfit()">+ Add Profit Entry</button>
         </div>
       </div>
-      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
-        <div class="stat-card"><div class="stat-label">From Deal Extras</div><div class="stat-value" id="profit-stat-deal" style="color:var(--blue)">£0</div><div class="stat-change neutral">Extras from creator deals</div></div>
-        <div class="stat-card"><div class="stat-label">Standalone Profit</div><div class="stat-value" id="profit-stat-standalone" style="color:var(--blue)">£0</div><div class="stat-change neutral">Manual entries below</div></div>
-        <div class="stat-card"><div class="stat-label">Late Fees Collected</div><div class="stat-value" id="profit-stat-late" style="color:var(--amber)">£0</div><div class="stat-change neutral">15% late penalties</div></div>
-        <div class="stat-card"><div class="stat-label">Total Pure Profit</div><div class="stat-value" id="profit-stat-total" style="color:var(--green)">£0</div><div class="stat-change up">All untied earnings</div></div>
+      <div class="stats-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:24px">
+        <div class="stat-card"><div class="stat-label">Standard Cuts</div><div class="stat-value" id="profit-stat-cut" style="color:var(--blue)">£0</div><div class="stat-change neutral">20% from creator deals</div></div>
+        <div class="stat-card"><div class="stat-label">Deal Extras</div><div class="stat-value" id="profit-stat-deal" style="color:var(--blue)">£0</div><div class="stat-change neutral">Untied bonuses on deals</div></div>
+        <div class="stat-card"><div class="stat-label">Late Fees</div><div class="stat-value" id="profit-stat-late" style="color:var(--amber)">£0</div><div class="stat-change neutral">15% late penalties</div></div>
+        <div class="stat-card"><div class="stat-label">Standalone</div><div class="stat-value" id="profit-stat-standalone" style="color:var(--blue)">£0</div><div class="stat-change neutral">Manual entries below</div></div>
+        <div class="stat-card" style="border:2px solid var(--green)"><div class="stat-label">Total Pure Profit</div><div class="stat-value" id="profit-stat-total" style="color:var(--green)">£0</div><div class="stat-change up">All agency earnings</div></div>
       </div>
       <div class="card" style="padding:0;margin-bottom:24px">
         <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--gray-100)">
@@ -1880,8 +1881,8 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       </div>
       <div class="card" style="padding:0">
         <div style="padding:14px 18px;border-bottom:1px solid var(--gray-100)">
-          <div class="card-title" style="margin:0">From Earnings Tracker (Per-Deal Extras + Late Fees)</div>
-          <div style="font-size:12px;color:var(--gray-400);margin-top:4px">Auto-pulled from the Earnings Tracker. Edit a record there to update these.</div>
+          <div class="card-title" style="margin:0">From Earnings Tracker (every deal with agency revenue)</div>
+          <div style="font-size:12px;color:var(--gray-400);margin-top:4px">Auto-pulled from the Earnings Tracker — includes standard agency cut, deal extras, and late fees.</div>
         </div>
         <div class="table-wrap">
           <table>
@@ -1891,13 +1892,14 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
                 <th>Creator</th>
                 <th>Brand</th>
                 <th>Deal Value</th>
+                <th>Agency Cut</th>
                 <th>Extra Profit</th>
                 <th>Late Fee</th>
-                <th>Total Pure Profit</th>
+                <th>Total Profit</th>
               </tr>
             </thead>
             <tbody id="profitFromDealsBody">
-              <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gray-400)">No tied profit yet.</td></tr>
+              <tr><td colspan="8" style="text-align:center;padding:24px;color:var(--gray-400)">No tied profit yet.</td></tr>
             </tbody>
           </table>
         </div>
@@ -8098,10 +8100,17 @@ async function loadAgencyProfit() {
 }
 
 function profitTotals() {
-  const standalone = agencyProfit.reduce((s, p) => s + Number(p.amount||0), 0);
-  const fromDeals  = earnings.reduce((s, e) => s + extraProfitFor(e), 0);
-  const fromLate   = earnings.reduce((s, e) => s + lateFeeFor(e), 0);
-  return { standalone, fromDeals, fromLate, total: standalone + fromDeals + fromLate };
+  const standalone   = agencyProfit.reduce((s, p) => s + Number(p.amount||0), 0);
+  const fromDeals    = earnings.reduce((s, e) => s + extraProfitFor(e), 0);
+  const fromLate     = earnings.reduce((s, e) => s + lateFeeFor(e), 0);
+  const standardCut  = earnings.reduce((s, e) => s + agencyStandardCutFor(e), 0);
+  return {
+    standalone,
+    fromDeals,
+    fromLate,
+    standardCut,
+    total: standalone + fromDeals + fromLate + standardCut,
+  };
 }
 
 function renderProfit() {
@@ -8111,6 +8120,7 @@ function renderProfit() {
 
   const t = profitTotals();
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmtMoneyFull(val); };
+  set('profit-stat-cut',        t.standardCut);
   set('profit-stat-deal',       t.fromDeals);
   set('profit-stat-standalone', t.standalone);
   set('profit-stat-late',       t.fromLate);
@@ -8142,26 +8152,32 @@ function renderProfit() {
     if (countEl) countEl.textContent = agencyProfit.length + ' entr' + (agencyProfit.length === 1 ? 'y' : 'ies');
   }
 
-  // From-deals table (auto-pulled)
+  // From-deals table (auto-pulled — every earning that has ANY agency revenue)
   const dealsBody = document.getElementById('profitFromDealsBody');
   if (dealsBody) {
     const rows = earnings
-      .map(e => ({ e, extra: extraProfitFor(e), late: lateFeeFor(e) }))
-      .filter(r => r.extra > 0 || r.late > 0)
+      .map(e => ({
+        e,
+        cut:   agencyStandardCutFor(e),
+        extra: extraProfitFor(e),
+        late:  lateFeeFor(e),
+      }))
+      .filter(r => r.cut > 0 || r.extra > 0 || r.late > 0)
       .sort((a, b) => new Date(b.e.created_at || 0) - new Date(a.e.created_at || 0));
     if (!rows.length) {
-      dealsBody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gray-400)">No tied profit yet. Add extras or late fees on Earnings records to see them here.</td></tr>';
+      dealsBody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--gray-400)">No tied profit yet. Add earnings on the Earnings Tracker to see them here.</td></tr>';
     } else {
-      dealsBody.innerHTML = rows.map(({e, extra, late}) => {
+      dealsBody.innerHTML = rows.map(({e, cut, extra, late}) => {
         const date = e.created_at ? new Date(e.created_at).toLocaleDateString('en-GB') : '—';
         return `<tr>
           <td style="font-size:12px;color:var(--gray-600)">${date}</td>
           <td style="font-size:13px;font-weight:500">${e.creator_name||'—'}</td>
           <td>${(e.brand_name||'—').replace(/</g,'&lt;')}</td>
           <td style="font-weight:600">${fmtMoneyFull(e.deal_value)}</td>
+          <td style="color:var(--blue);font-weight:600">${cut > 0 ? fmtMoneyFull(cut) : '—'}</td>
           <td style="color:var(--blue);font-weight:600">${extra > 0 ? fmtMoneyFull(extra) : '—'}</td>
           <td style="color:var(--amber);font-weight:600">${late > 0 ? fmtMoneyFull(late) : '—'}</td>
-          <td style="color:var(--green);font-weight:700">${fmtMoneyFull(extra + late)}</td>
+          <td style="color:var(--green);font-weight:700">${fmtMoneyFull(cut + extra + late)}</td>
         </tr>`;
       }).join('');
     }
@@ -8263,6 +8279,7 @@ function exportProfitCSV() {
   });
   lines.push('');
   lines.push('Summary');
+  lines.push('Standard agency cuts,,,,' + t.standardCut.toFixed(2));
   lines.push('From deal extras,,,,' + t.fromDeals.toFixed(2));
   lines.push('Late fees,,,,' + t.fromLate.toFixed(2));
   lines.push('Standalone,,,,' + t.standalone.toFixed(2));
