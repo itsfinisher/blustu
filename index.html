@@ -922,6 +922,14 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       Earnings
       <span class="nav-badge" id="earningsBadge" style="background:var(--green)">0</span>
     </button>
+    <button class="nav-item" onclick="showPage('profit',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Agency Profit
+    </button>
+    <button class="nav-item" onclick="showPage('spending',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+      Spending
+    </button>
     <button class="nav-item" onclick="showPage('calendar',this)">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       Calendar
@@ -1791,7 +1799,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <div class="stat-card"><div class="stat-label">Total Earned</div><div class="stat-value" id="earn-stat-total">£0</div><div class="stat-change neutral">Gross creator payout</div></div>
         <div class="stat-card"><div class="stat-label">Total Paid</div><div class="stat-value" id="earn-stat-paid" style="color:var(--green)">£0</div><div class="stat-change up">Payments made</div></div>
         <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" id="earn-stat-outstanding" style="color:var(--red)">£0</div><div class="stat-change neutral">Awaiting payment</div></div>
-        <div class="stat-card"><div class="stat-label">Agency Revenue</div><div class="stat-value" id="earn-stat-agency" style="color:var(--blue)">£0</div><div class="stat-change neutral">Total cuts taken</div></div>
+        <div class="stat-card"><div class="stat-label">Agency Revenue</div><div class="stat-value" id="earn-stat-agency" style="color:var(--blue)">£0</div><div class="stat-change neutral">Cuts + late fees + extras</div></div>
       </div>
       <div class="card" style="margin-bottom:16px;padding:14px 20px">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
@@ -1826,6 +1834,119 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
             </thead>
             <tbody id="earningsTableBody">
               <tr><td colspan="11" style="text-align:center;padding:32px;color:var(--gray-400)">No earnings records yet. Add your first record above.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ AGENCY PROFIT PAGE ══ -->
+    <div class="page" id="page-profit">
+      <div class="page-header">
+        <div><h1>Agency Profit</h1><p>Untied profit — per-deal extras plus standalone fees & retainers</p></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="exportProfitCSV()">⬇ Export CSV</button>
+          <button class="btn btn-primary" id="btn-add-profit" onclick="openAddProfit()">+ Add Profit Entry</button>
+        </div>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+        <div class="stat-card"><div class="stat-label">From Deal Extras</div><div class="stat-value" id="profit-stat-deal" style="color:var(--blue)">£0</div><div class="stat-change neutral">Extras from creator deals</div></div>
+        <div class="stat-card"><div class="stat-label">Standalone Profit</div><div class="stat-value" id="profit-stat-standalone" style="color:var(--blue)">£0</div><div class="stat-change neutral">Manual entries below</div></div>
+        <div class="stat-card"><div class="stat-label">Late Fees Collected</div><div class="stat-value" id="profit-stat-late" style="color:var(--amber)">£0</div><div class="stat-change neutral">15% late penalties</div></div>
+        <div class="stat-card"><div class="stat-label">Total Pure Profit</div><div class="stat-value" id="profit-stat-total" style="color:var(--green)">£0</div><div class="stat-change up">All untied earnings</div></div>
+      </div>
+      <div class="card" style="padding:0;margin-bottom:24px">
+        <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--gray-100)">
+          <div class="card-title" style="margin:0">Standalone Profit Entries</div>
+          <span style="font-size:12px;color:var(--gray-400)" id="profit-count-label">0 entries</span>
+        </div>
+        <div class="table-wrap">
+          <table id="profitTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Brand / Source</th>
+                <th>Description</th>
+                <th>Type</th>
+                <th>Amount</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="profitTableBody">
+              <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-400)">No standalone profit entries yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="padding:0">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--gray-100)">
+          <div class="card-title" style="margin:0">From Earnings Tracker (Per-Deal Extras + Late Fees)</div>
+          <div style="font-size:12px;color:var(--gray-400);margin-top:4px">Auto-pulled from the Earnings Tracker. Edit a record there to update these.</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Creator</th>
+                <th>Brand</th>
+                <th>Deal Value</th>
+                <th>Extra Profit</th>
+                <th>Late Fee</th>
+                <th>Total Pure Profit</th>
+              </tr>
+            </thead>
+            <tbody id="profitFromDealsBody">
+              <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gray-400)">No tied profit yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SPENDING PAGE ══ -->
+    <div class="page" id="page-spending">
+      <div class="page-header">
+        <div><h1>Spending</h1><p>Track expenses drawn from agency pure profit</p></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="exportSpendingCSV()">⬇ Export CSV</button>
+          <button class="btn btn-primary" id="btn-add-spending" onclick="openAddSpending()">+ Add Expense</button>
+        </div>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+        <div class="stat-card"><div class="stat-label">Total Pure Profit</div><div class="stat-value" id="spend-stat-profit" style="color:var(--green)">£0</div><div class="stat-change up">Money in</div></div>
+        <div class="stat-card"><div class="stat-label">Total Spent</div><div class="stat-value" id="spend-stat-spent" style="color:var(--red)">£0</div><div class="stat-change down">Money out</div></div>
+        <div class="stat-card" style="border:2px solid var(--green)">
+          <div class="stat-label">Available Balance</div>
+          <div class="stat-value" id="spend-stat-balance" style="color:var(--green)">£0</div>
+          <div class="stat-change neutral">Profit minus spending</div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;padding:14px 20px">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <input class="form-input" id="spend-filter-text" placeholder="Search description or vendor…" oninput="renderSpending()" style="max-width:240px">
+          <select class="form-select" id="spend-filter-cat" onchange="renderSpending()" style="max-width:180px">
+            <option value="">All categories</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('spend-filter-text').value='';document.getElementById('spend-filter-cat').value='';renderSpending()">Clear</button>
+          <span style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="spend-count-label">0 entries</span>
+        </div>
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table id="spendingTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Vendor</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="spendingTableBody">
+              <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-400)">No spending entries yet.</td></tr>
             </tbody>
           </table>
         </div>
@@ -3168,7 +3289,7 @@ const pageTitles = {
   onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit',
   campaigns:'Campaigns', pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline',
   inbox:'Team Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
-  managers:'Team', emailsetup:'Email Setup',
+  managers:'Team', emailsetup:'Email Setup', profit:'Agency Profit', spending:'Spending',
   creatorgrid:'Select Creators', earnings:'Earnings Tracker', calendar:'Team Calendar'
 };
 
@@ -3219,6 +3340,8 @@ function showPage(id, btn) {
   if (id === 'pipeline')   { renderPipeline(); }
   if (id === 'campaigns')  { renderCampaigns(currentCampaignFilter); }
   if (id === 'earnings')   { populateEarningSelects(); renderEarnings(); }
+  if (id === 'profit')     { loadAgencyProfit(); }
+  if (id === 'spending')   { loadSpending(); }
   if (id === 'calendar')   { renderCalendar(); }
   if (id === 'managers')   { renderManagersPage(); }
 }
@@ -7552,17 +7675,44 @@ function updateEarningsStats() {
   const totalEarned     = filtered.reduce((s,e) => s + Number(e.creator_payout||0), 0);
   const totalPaid       = filtered.reduce((s,e) => s + Number(e.amount_paid||0), 0);
   const totalOutstanding = totalEarned - totalPaid;
-  const agencyCut       = filtered.reduce((s,e) => {
-    const dv = Number(e.deal_value||0);
-    const payout = Number(e.creator_payout||0);
-    return s + Math.max(0, dv - payout);
-  }, 0);
+  // Agency revenue = standard cut + late fee + extra profit, summed across all earnings
+  const agencyCut       = filtered.reduce((s,e) => s + agencyTotalFor(e), 0);
 
   const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=fmtMoneyFull(val); };
   set('earn-stat-total',       totalEarned);
   set('earn-stat-paid',        totalPaid);
   set('earn-stat-outstanding', totalOutstanding);
   set('earn-stat-agency',      agencyCut);
+}
+
+/**
+ * Compute the agency's total cut from one earning record.
+ * = standard cut + late fee + extra agency profit
+ */
+function agencyTotalFor(e) {
+  const dv = Number(e.deal_value||0);
+  const payout = Number(e.creator_payout||0);
+  // The simplest correct calc: anything that didn't go to the creator went to the agency.
+  return Math.max(0, dv - payout);
+}
+
+/** Just the standard cut, ignoring late fee and extra profit */
+function agencyStandardCutFor(e) {
+  const dv = Number(e.deal_value||0);
+  if (e.agency_cut_type === 'percent') return dv * Number(e.agency_cut_value||0) / 100;
+  return Number(e.agency_cut_value||0);
+}
+
+/** Late fee amount (0 if not applied) */
+function lateFeeFor(e) {
+  if (!e.late_fee_applied) return 0;
+  if (e.late_fee_amount !== undefined && e.late_fee_amount !== null) return Number(e.late_fee_amount);
+  return Number(e.deal_value||0) * Number(e.late_fee_pct||0) / 100;
+}
+
+/** Extra (untied) agency profit on this deal */
+function extraProfitFor(e) {
+  return Number(e.extra_agency_profit||0);
 }
 
 function fmtMoneyFull(v) {
@@ -7606,9 +7756,15 @@ function renderEarnings() {
 
   tbody.innerHTML = filtered.map(e => {
     const outstanding = Math.max(0, Number(e.creator_payout||0) - Number(e.amount_paid||0));
-    const agencyCutDisplay = e.agency_cut_type === 'percent'
-      ? `${e.agency_cut_value}% (${fmtMoneyFull(Number(e.deal_value||0)*Number(e.agency_cut_value||0)/100)})`
-      : fmtMoneyFull(e.agency_cut_value);
+    const standardCut = agencyStandardCutFor(e);
+    const lateFee     = lateFeeFor(e);
+    const extra       = extraProfitFor(e);
+    const cutSummary  = e.agency_cut_type === 'percent'
+      ? `${e.agency_cut_value}% (${fmtMoneyFull(standardCut)})`
+      : fmtMoneyFull(standardCut);
+    const badges = [];
+    if (e.late_fee_applied) badges.push(`<span class="badge badge-amber" style="font-size:9px">⚠ Late ${e.late_fee_pct||15}% = ${fmtMoneyFull(lateFee)}</span>`);
+    if (extra > 0)          badges.push(`<span class="badge badge-blue" style="font-size:9px">💼 Extra ${fmtMoneyFull(extra)}</span>`);
     const paidDate = e.paid_at ? new Date(e.paid_at).toLocaleDateString('en-GB') : '—';
     const createdDate = e.created_at ? new Date(e.created_at).toLocaleDateString('en-GB') : '—';
     return `<tr>
@@ -7619,9 +7775,10 @@ function renderEarnings() {
       <td>
         <div style="font-size:13px;font-weight:500">${e.brand_name||'—'}</div>
         ${e.campaign_brand ? `<div style="font-size:11px;color:var(--gray-400)">${e.campaign_brand}</div>` : ''}
+        ${badges.length ? `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${badges.join('')}</div>` : ''}
       </td>
       <td style="font-weight:600">${fmtMoneyFull(e.deal_value)}</td>
-      <td style="font-size:12px;color:var(--gray-400)">${agencyCutDisplay}</td>
+      <td style="font-size:12px;color:var(--gray-400)">${cutSummary}</td>
       <td style="font-weight:600;color:var(--blue)">${fmtMoneyFull(e.creator_payout)}</td>
       <td style="color:var(--green)">${fmtMoneyFull(e.amount_paid)}</td>
       <td style="font-weight:600;color:${outstanding > 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoneyFull(outstanding)}</td>
@@ -7661,6 +7818,11 @@ function openAddEarning() {
   set('earn-amount-paid', 'value', '0');
   set('earn-paid-date', 'value', '');
   set('earn-notes', 'value', '');
+  set('earn-late-toggle', 'checked', false);
+  set('earn-late-pct', 'value', '15');
+  set('earn-extra-profit', 'value', '0');
+  const lateRow = document.getElementById('earn-late-row');
+  if (lateRow) lateRow.style.display = 'none';
   const wrap = document.getElementById('earn-paid-date-wrap');
   if (wrap) wrap.style.display = 'none';
   const outstanding = document.getElementById('earn-outstanding-display');
@@ -7687,9 +7849,21 @@ function openEditEarning(id) {
   document.getElementById('earn-amount-paid').value = e.amount_paid || '0';
   document.getElementById('earn-paid-date').value = e.paid_at ? e.paid_at.slice(0,10) : '';
   document.getElementById('earn-notes').value = e.notes || '';
+  document.getElementById('earn-late-toggle').checked = !!e.late_fee_applied;
+  document.getElementById('earn-late-pct').value = e.late_fee_pct || 15;
+  document.getElementById('earn-extra-profit').value = e.extra_agency_profit || 0;
+  const lateRow = document.getElementById('earn-late-row');
+  if (lateRow) lateRow.style.display = e.late_fee_applied ? '' : 'none';
   togglePaidDate();
-  recalcOutstanding();
+  recalcEarning();
   openModal('earningModal');
+}
+
+function onLateToggle() {
+  const on = document.getElementById('earn-late-toggle').checked;
+  const row = document.getElementById('earn-late-row');
+  if (row) row.style.display = on ? '' : 'none';
+  recalcEarning();
 }
 
 function prefillEarningFromCampaign() {
@@ -7705,21 +7879,41 @@ function prefillEarningFromCampaign() {
   }
 }
 
+/**
+ * Recalculate creator payout & late fee amount.
+ *
+ * The brand pays `deal_value` total. Out of that:
+ *   1. Agency takes the standard cut (% or fixed)
+ *   2. Agency takes an "extra profit" amount (e.g. brand markup we kept)
+ *   3. If creator submitted late, agency takes an extra late_fee_pct of deal_value
+ *   4. Whatever's left goes to the creator
+ *
+ * All three agency portions are summed → total agency revenue from this deal.
+ */
 function recalcEarning() {
   const dv      = Number(document.getElementById('earn-deal-value').value) || 0;
   const cutType = document.getElementById('earn-cut-type').value;
   const cutVal  = Number(document.getElementById('earn-cut-value').value) || 0;
   const hint    = document.getElementById('earn-cut-hint');
+  const lateOn  = document.getElementById('earn-late-toggle')?.checked;
+  const latePct = Number(document.getElementById('earn-late-pct')?.value) || 0;
+  const extra   = Number(document.getElementById('earn-extra-profit')?.value) || 0;
 
-  let agencyAmount = 0;
+  let standardCut = 0;
   if (cutType === 'percent') {
-    agencyAmount = dv * cutVal / 100;
+    standardCut = dv * cutVal / 100;
     if (hint) hint.textContent = 'Enter % of deal value';
   } else {
-    agencyAmount = cutVal;
+    standardCut = cutVal;
     if (hint) hint.textContent = 'Enter fixed £ amount';
   }
-  const payout = Math.max(0, dv - agencyAmount);
+
+  const lateFee = lateOn ? (dv * latePct / 100) : 0;
+  const lateDisplay = document.getElementById('earn-late-amount');
+  if (lateDisplay) lateDisplay.textContent = fmtMoneyFull(lateFee);
+
+  // Creator gets what's left after standard cut + late fee + extra profit
+  const payout = Math.max(0, dv - standardCut - lateFee - extra);
   document.getElementById('earn-payout').value = payout.toFixed(2);
   recalcOutstanding();
 }
@@ -7773,12 +7967,18 @@ async function saveEarning() {
   const amtPaid    = Number(document.getElementById('earn-amount-paid').value) || 0;
   const paidDate   = document.getElementById('earn-paid-date').value || null;
   const notes      = document.getElementById('earn-notes').value.trim();
+  const lateOn     = !!document.getElementById('earn-late-toggle')?.checked;
+  const latePct    = Number(document.getElementById('earn-late-pct')?.value) || 0;
+  const extraProfit = Number(document.getElementById('earn-extra-profit')?.value) || 0;
+  const lateFeeAmt = lateOn ? (dealValue * latePct / 100) : 0;
 
   // ── Validate ──
   if (!creatorId)  { showEarnErr('Please select a creator.'); return; }
   if (!dealValue || dealValue <= 0) { showEarnErr('Deal value must be a positive number.'); return; }
   if (cutType === 'percent' && (cutVal < 0 || cutVal > 100)) { showEarnErr('Percent cut must be between 0 and 100.'); return; }
   if (cutType === 'fixed'   && cutVal > dealValue)           { showEarnErr('Fixed cut cannot exceed deal value.'); return; }
+  if (extraProfit < 0)     { showEarnErr('Extra profit cannot be negative.'); return; }
+  if (extraProfit > dealValue) { showEarnErr('Extra profit cannot exceed deal value.'); return; }
   if (amtPaid > payout)    { showEarnErr('Amount paid cannot exceed creator payout.'); return; }
 
   const creator  = creators.find(c => c.id === creatorId);
@@ -7800,6 +8000,10 @@ async function saveEarning() {
     amount_paid:      amtPaid,
     paid_at:          paidDate ? new Date(paidDate).toISOString() : null,
     notes:            notes || null,
+    late_fee_applied: lateOn,
+    late_fee_pct:     latePct,
+    late_fee_amount:  lateFeeAmt,
+    extra_agency_profit: extraProfit,
     created_by:       currentUser.id || null,
     updated_at:       new Date().toISOString(),
   };
@@ -7876,6 +8080,394 @@ function exportEarningsCSV() {
   a.download = 'blustu-earnings-' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
   showToast('CSV exported!');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ── AGENCY PROFIT (untied earnings) ──────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+
+let agencyProfit = Storage.get('agency_profit', []);
+
+async function loadAgencyProfit() {
+  const rows = await DB.select('agency_profit', '?order=entry_date.desc');
+  if (rows && rows.length !== undefined) {
+    agencyProfit = rows;
+    Storage.set('agency_profit', agencyProfit);
+  }
+  renderProfit();
+}
+
+function profitTotals() {
+  const standalone = agencyProfit.reduce((s, p) => s + Number(p.amount||0), 0);
+  const fromDeals  = earnings.reduce((s, e) => s + extraProfitFor(e), 0);
+  const fromLate   = earnings.reduce((s, e) => s + lateFeeFor(e), 0);
+  return { standalone, fromDeals, fromLate, total: standalone + fromDeals + fromLate };
+}
+
+function renderProfit() {
+  const canManage = can('manageEarnings');
+  const addBtn = document.getElementById('btn-add-profit');
+  if (addBtn) addBtn.style.display = canManage ? '' : 'none';
+
+  const t = profitTotals();
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmtMoneyFull(val); };
+  set('profit-stat-deal',       t.fromDeals);
+  set('profit-stat-standalone', t.standalone);
+  set('profit-stat-late',       t.fromLate);
+  set('profit-stat-total',      t.total);
+
+  // Standalone profit table
+  const tbody = document.getElementById('profitTableBody');
+  if (tbody) {
+    if (!agencyProfit.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-400)">No standalone profit entries yet. Click "+ Add Profit Entry" above.</td></tr>';
+    } else {
+      const TYPE_LABEL = { retainer:'Retainer', setup_fee:'Setup Fee', coordination:'Coordination', markup:'Brand Markup', bonus:'Bonus / Other' };
+      tbody.innerHTML = agencyProfit.map(p => {
+        const date = p.entry_date ? new Date(p.entry_date).toLocaleDateString('en-GB') : '—';
+        return `<tr>
+          <td style="font-size:12px;color:var(--gray-600)">${date}</td>
+          <td style="font-weight:600">${(p.source||'—').replace(/</g,'&lt;')}</td>
+          <td style="font-size:12px">${(p.description||'').replace(/</g,'&lt;')}</td>
+          <td><span class="badge badge-blue" style="font-size:10px">${TYPE_LABEL[p.entry_type]||p.entry_type||'—'}</span></td>
+          <td style="font-weight:600;color:var(--green)">${fmtMoneyFull(p.amount)}</td>
+          <td style="text-align:right">
+            ${canManage ? `<button class="btn btn-ghost btn-sm" onclick="openEditProfit('${p.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteProfitEntry('${p.id}')">Del</button>` : ''}
+          </td>
+        </tr>`;
+      }).join('');
+    }
+    const countEl = document.getElementById('profit-count-label');
+    if (countEl) countEl.textContent = agencyProfit.length + ' entr' + (agencyProfit.length === 1 ? 'y' : 'ies');
+  }
+
+  // From-deals table (auto-pulled)
+  const dealsBody = document.getElementById('profitFromDealsBody');
+  if (dealsBody) {
+    const rows = earnings
+      .map(e => ({ e, extra: extraProfitFor(e), late: lateFeeFor(e) }))
+      .filter(r => r.extra > 0 || r.late > 0)
+      .sort((a, b) => new Date(b.e.created_at || 0) - new Date(a.e.created_at || 0));
+    if (!rows.length) {
+      dealsBody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gray-400)">No tied profit yet. Add extras or late fees on Earnings records to see them here.</td></tr>';
+    } else {
+      dealsBody.innerHTML = rows.map(({e, extra, late}) => {
+        const date = e.created_at ? new Date(e.created_at).toLocaleDateString('en-GB') : '—';
+        return `<tr>
+          <td style="font-size:12px;color:var(--gray-600)">${date}</td>
+          <td style="font-size:13px;font-weight:500">${e.creator_name||'—'}</td>
+          <td>${(e.brand_name||'—').replace(/</g,'&lt;')}</td>
+          <td style="font-weight:600">${fmtMoneyFull(e.deal_value)}</td>
+          <td style="color:var(--blue);font-weight:600">${extra > 0 ? fmtMoneyFull(extra) : '—'}</td>
+          <td style="color:var(--amber);font-weight:600">${late > 0 ? fmtMoneyFull(late) : '—'}</td>
+          <td style="color:var(--green);font-weight:700">${fmtMoneyFull(extra + late)}</td>
+        </tr>`;
+      }).join('');
+    }
+  }
+}
+
+function openAddProfit() {
+  document.getElementById('profitModalTitle').textContent = 'Add Agency Profit Entry';
+  document.getElementById('profit-id').value = '';
+  document.getElementById('profit-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('profit-type').value = 'retainer';
+  document.getElementById('profit-source').value = '';
+  document.getElementById('profit-desc').value = '';
+  document.getElementById('profit-amount').value = '';
+  document.getElementById('profit-notes').value = '';
+  openModal('profitModal');
+  setTimeout(() => document.getElementById('profit-source')?.focus(), 100);
+}
+
+function openEditProfit(id) {
+  const p = agencyProfit.find(x => String(x.id) === String(id));
+  if (!p) return;
+  document.getElementById('profitModalTitle').textContent = 'Edit Agency Profit Entry';
+  document.getElementById('profit-id').value = p.id;
+  document.getElementById('profit-date').value = p.entry_date ? p.entry_date.slice(0,10) : '';
+  document.getElementById('profit-type').value = p.entry_type || 'retainer';
+  document.getElementById('profit-source').value = p.source || '';
+  document.getElementById('profit-desc').value = p.description || '';
+  document.getElementById('profit-amount').value = p.amount || '';
+  document.getElementById('profit-notes').value = p.notes || '';
+  openModal('profitModal');
+}
+
+async function saveProfitEntry() {
+  const id = document.getElementById('profit-id').value.trim();
+  const entryDate = document.getElementById('profit-date').value;
+  const entryType = document.getElementById('profit-type').value;
+  const source = document.getElementById('profit-source').value.trim();
+  const description = document.getElementById('profit-desc').value.trim();
+  const amount = Number(document.getElementById('profit-amount').value) || 0;
+  const notes = document.getElementById('profit-notes').value.trim();
+
+  if (!entryDate)      { showToast('Date is required'); return; }
+  if (!source)         { showToast('Brand / source is required'); return; }
+  if (!amount || amount <= 0) { showToast('Amount must be positive'); return; }
+
+  const row = {
+    entry_date:  new Date(entryDate).toISOString(),
+    entry_type:  entryType,
+    source:      source,
+    description: description || null,
+    amount:      amount,
+    notes:       notes || null,
+    created_by:  currentUser?.id || null,
+    updated_at:  new Date().toISOString(),
+  };
+
+  let result;
+  try {
+    if (id) {
+      row.id = id;
+      result = await DB._req('PATCH', 'agency_profit', row, '?id=eq.' + id);
+    } else {
+      row.created_at = new Date().toISOString();
+      result = await DB._req('POST', 'agency_profit', [row], '');
+    }
+  } catch (e) {
+    showToast('❌ Save failed: ' + e.message);
+    return;
+  }
+  if (result === null) {
+    showToast('❌ Save failed — make sure the agency_profit table exists in Supabase');
+    return;
+  }
+  closeModal('profitModal');
+  await loadAgencyProfit();
+  renderSpending();   // balance changes
+  showToast('✅ Profit entry saved');
+  addActivity(`Agency profit entry added: ${source} (${fmtMoneyFull(amount)})`);
+}
+
+async function deleteProfitEntry(id) {
+  showConfirm('Delete this profit entry?', 'It will be permanently removed.', async () => {
+    try {
+      await DB._req('DELETE', 'agency_profit', null, '?id=eq.' + id);
+      await loadAgencyProfit();
+      renderSpending();
+      showToast('Entry deleted');
+    } catch (e) { showToast('❌ ' + e.message); }
+  });
+}
+
+function exportProfitCSV() {
+  const t = profitTotals();
+  const lines = ['Date,Source,Description,Type,Amount'];
+  agencyProfit.forEach(p => {
+    const d = p.entry_date ? new Date(p.entry_date).toLocaleDateString('en-GB') : '';
+    lines.push([d, p.source, p.description, p.entry_type, p.amount].map(csvCell).join(','));
+  });
+  lines.push('');
+  lines.push('Summary');
+  lines.push('From deal extras,,,,' + t.fromDeals.toFixed(2));
+  lines.push('Late fees,,,,' + t.fromLate.toFixed(2));
+  lines.push('Standalone,,,,' + t.standalone.toFixed(2));
+  lines.push('TOTAL,,,,' + t.total.toFixed(2));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'blustu-agency-profit-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+function csvCell(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ── SPENDING ─────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+
+let spending = Storage.get('agency_spending', []);
+
+async function loadSpending() {
+  const rows = await DB.select('agency_spending', '?order=spend_date.desc');
+  if (rows && rows.length !== undefined) {
+    spending = rows;
+    Storage.set('agency_spending', spending);
+  }
+  renderSpending();
+}
+
+function getFilteredSpending() {
+  const q = (document.getElementById('spend-filter-text')?.value || '').toLowerCase();
+  const cat = document.getElementById('spend-filter-cat')?.value || '';
+  return spending.filter(s => {
+    if (cat && s.category !== cat) return false;
+    if (q) {
+      const hay = `${s.vendor||''} ${s.description||''} ${s.notes||''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderSpending() {
+  const canManage = can('manageEarnings');
+  const addBtn = document.getElementById('btn-add-spending');
+  if (addBtn) addBtn.style.display = canManage ? '' : 'none';
+
+  // Populate category filter
+  const catSel = document.getElementById('spend-filter-cat');
+  if (catSel && catSel.options.length <= 1) {
+    ['Software','Tools','Marketing','Salaries','Office','Travel','Other'].forEach(c => {
+      const o = document.createElement('option'); o.value = c; o.textContent = c; catSel.appendChild(o);
+    });
+  }
+
+  const t = profitTotals();
+  const totalSpent = spending.reduce((s, x) => s + Number(x.amount||0), 0);
+  const balance = t.total - totalSpent;
+
+  const set = (id, val, color) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = fmtMoneyFull(val);
+    if (color) el.style.color = color;
+  };
+  set('spend-stat-profit',  t.total,    'var(--green)');
+  set('spend-stat-spent',   totalSpent, 'var(--red)');
+  set('spend-stat-balance', balance,    balance >= 0 ? 'var(--green)' : 'var(--red)');
+
+  const tbody = document.getElementById('spendingTableBody');
+  if (!tbody) return;
+
+  const filtered = getFilteredSpending();
+  const countEl = document.getElementById('spend-count-label');
+  if (countEl) countEl.textContent = filtered.length + ' entr' + (filtered.length === 1 ? 'y' : 'ies');
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-400)">' +
+      (spending.length ? 'No entries match your filter.' : 'No spending entries yet. Click "+ Add Expense" above.') +
+      '</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(s => {
+    const d = s.spend_date ? new Date(s.spend_date).toLocaleDateString('en-GB') : '—';
+    return `<tr>
+      <td style="font-size:12px;color:var(--gray-600)">${d}</td>
+      <td><span class="badge badge-gray" style="font-size:10px">${s.category||'Other'}</span></td>
+      <td style="font-weight:500">${(s.vendor||'—').replace(/</g,'&lt;')}</td>
+      <td style="font-size:12px">${(s.description||'').replace(/</g,'&lt;')}</td>
+      <td style="font-weight:600;color:var(--red)">−${fmtMoneyFull(s.amount)}</td>
+      <td style="text-align:right">
+        ${canManage ? `<button class="btn btn-ghost btn-sm" onclick="openEditSpending('${s.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSpendingEntry('${s.id}')">Del</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openAddSpending() {
+  document.getElementById('spendingModalTitle').textContent = 'Add Spending Entry';
+  document.getElementById('spend-id').value = '';
+  document.getElementById('spend-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('spend-cat').value = 'Software';
+  document.getElementById('spend-vendor').value = '';
+  document.getElementById('spend-desc').value = '';
+  document.getElementById('spend-amount').value = '';
+  document.getElementById('spend-notes').value = '';
+  openModal('spendingModal');
+  setTimeout(() => document.getElementById('spend-vendor')?.focus(), 100);
+}
+
+function openEditSpending(id) {
+  const s = spending.find(x => String(x.id) === String(id));
+  if (!s) return;
+  document.getElementById('spendingModalTitle').textContent = 'Edit Spending Entry';
+  document.getElementById('spend-id').value = s.id;
+  document.getElementById('spend-date').value = s.spend_date ? s.spend_date.slice(0,10) : '';
+  document.getElementById('spend-cat').value = s.category || 'Other';
+  document.getElementById('spend-vendor').value = s.vendor || '';
+  document.getElementById('spend-desc').value = s.description || '';
+  document.getElementById('spend-amount').value = s.amount || '';
+  document.getElementById('spend-notes').value = s.notes || '';
+  openModal('spendingModal');
+}
+
+async function saveSpendingEntry() {
+  const id = document.getElementById('spend-id').value.trim();
+  const spendDate = document.getElementById('spend-date').value;
+  const category = document.getElementById('spend-cat').value;
+  const vendor = document.getElementById('spend-vendor').value.trim();
+  const description = document.getElementById('spend-desc').value.trim();
+  const amount = Number(document.getElementById('spend-amount').value) || 0;
+  const notes = document.getElementById('spend-notes').value.trim();
+
+  if (!spendDate)   { showToast('Date is required'); return; }
+  if (!description) { showToast('Description is required'); return; }
+  if (!amount || amount <= 0) { showToast('Amount must be positive'); return; }
+
+  const row = {
+    spend_date:  new Date(spendDate).toISOString(),
+    category:    category,
+    vendor:      vendor || null,
+    description: description,
+    amount:      amount,
+    notes:       notes || null,
+    created_by:  currentUser?.id || null,
+    updated_at:  new Date().toISOString(),
+  };
+
+  let result;
+  try {
+    if (id) {
+      row.id = id;
+      result = await DB._req('PATCH', 'agency_spending', row, '?id=eq.' + id);
+    } else {
+      row.created_at = new Date().toISOString();
+      result = await DB._req('POST', 'agency_spending', [row], '');
+    }
+  } catch (e) {
+    showToast('❌ Save failed: ' + e.message);
+    return;
+  }
+  if (result === null) {
+    showToast('❌ Save failed — make sure the agency_spending table exists in Supabase');
+    return;
+  }
+  closeModal('spendingModal');
+  await loadSpending();
+  showToast('✅ Spending entry saved');
+  addActivity(`Expense logged: ${vendor || description} (−${fmtMoneyFull(amount)})`);
+}
+
+async function deleteSpendingEntry(id) {
+  showConfirm('Delete this spending entry?', 'It will be permanently removed.', async () => {
+    try {
+      await DB._req('DELETE', 'agency_spending', null, '?id=eq.' + id);
+      await loadSpending();
+      showToast('Entry deleted');
+    } catch (e) { showToast('❌ ' + e.message); }
+  });
+}
+
+function exportSpendingCSV() {
+  const t = profitTotals();
+  const totalSpent = spending.reduce((s, x) => s + Number(x.amount||0), 0);
+  const balance = t.total - totalSpent;
+  const lines = ['Date,Category,Vendor,Description,Amount'];
+  spending.forEach(s => {
+    const d = s.spend_date ? new Date(s.spend_date).toLocaleDateString('en-GB') : '';
+    lines.push([d, s.category, s.vendor, s.description, s.amount].map(csvCell).join(','));
+  });
+  lines.push('');
+  lines.push('Summary');
+  lines.push('Total Pure Profit,,,,' + t.total.toFixed(2));
+  lines.push('Total Spent,,,,-' + totalSpent.toFixed(2));
+  lines.push('Available Balance,,,,' + balance.toFixed(2));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'blustu-spending-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
 }
 
 // Creator profile earnings summary card
@@ -9947,8 +10539,19 @@ function friendlyFromName(mailboxLocal) {
 // ─── EMAIL SETUP PAGE — admin/owner only ──────────────────────────────
 let _emailSetupRows = [];   // [{ mailbox_local, configured, updated_at, updated_by, linkedCreator }]
 
-function _emailIsAdmin() {
+function _emailCanManageCreds() {
+  // Setting/changing/removing mailbox passwords — admin/owner only
   return currentUser && (currentUser.systemRole === 'owner' || currentUser.systemRole === 'admin');
+}
+
+function _emailIsAdmin() {
+  // Kept as alias for backward-compat — used by the password modal gates
+  return _emailCanManageCreds();
+}
+
+function _emailCanUse() {
+  // Reading/sending from configured mailboxes — owner, admin, manager
+  return currentUser && ['owner', 'admin', 'manager'].includes(currentUser.systemRole);
 }
 
 // Hide the Email Setup nav item for non-admins (called from applyPermissionsUI hook below)
@@ -9957,8 +10560,16 @@ function _emailIsAdmin() {
   if (typeof origApply === 'function') {
     window.applyPermissionsUI = function() {
       const result = origApply.apply(this, arguments);
+      // Email Setup page = admin/owner only (manages credentials)
       const navES = document.getElementById('nav-emailsetup');
-      if (navES) navES.style.display = _emailIsAdmin() ? '' : 'none';
+      if (navES) navES.style.display = _emailCanManageCreds() ? '' : 'none';
+      // Team Inbox + Email tab = anyone who _emailCanUse (owner/admin/manager)
+      // The inbox nav button doesn't have an id — find by onclick
+      document.querySelectorAll('.nav-item').forEach(btn => {
+        if (btn.getAttribute('onclick')?.includes("showPage('inbox'")) {
+          btn.style.display = _emailCanUse() ? '' : 'none';
+        }
+      });
       return result;
     };
   }
@@ -10293,9 +10904,31 @@ async function deleteMailboxPassword() {
         </div>
         <div class="form-group">
           <label class="form-label">Creator Payout (£) *</label>
-          <input class="form-input" id="earn-payout" type="number" min="0" step="0.01" placeholder="Auto-calculated">
+          <input class="form-input" id="earn-payout" type="number" min="0" step="0.01" placeholder="Auto-calculated" oninput="recalcOutstanding()">
           <div class="form-hint">Auto-calculated. Override if needed.</div>
         </div>
+      </div>
+      <div class="card" style="padding:12px 14px;margin:8px 0;background:var(--gray-50);border:1px solid var(--gray-100)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="checkbox" id="earn-late-toggle" onchange="onLateToggle()" style="margin:0;cursor:pointer">
+          <label for="earn-late-toggle" style="font-size:13px;font-weight:600;cursor:pointer;margin:0">⚠️ Creator submitted late — apply late fee</label>
+        </div>
+        <div class="form-row" id="earn-late-row" style="display:none">
+          <div class="form-group" style="margin:0">
+            <label class="form-label" style="font-size:11px">Late fee %</label>
+            <input class="form-input" id="earn-late-pct" type="number" min="0" max="100" step="0.5" value="15" oninput="recalcEarning()">
+            <div class="form-hint" style="font-size:11px">Taken from creator's payout. Default 15%.</div>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label" style="font-size:11px">Late fee amount (auto)</label>
+            <div id="earn-late-amount" style="padding:9px 12px;background:var(--white);border:1px solid var(--gray-100);border-radius:10px;font-size:13px;font-weight:600;color:var(--amber)">£0.00</div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">💼 Extra agency profit on this deal (£) <span style="font-weight:400;color:var(--gray-400);font-size:11px">— optional, untied to creator</span></label>
+        <input class="form-input" id="earn-extra-profit" type="number" min="0" step="0.01" placeholder="0.00" value="0" oninput="recalcEarning()">
+        <div class="form-hint">Money the agency took from this deal that isn't part of the creator's cut. Appears on the Agency Profit page. Comes out of the brand's total, so creator gets less.</div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -10327,6 +10960,106 @@ async function deleteMailboxPassword() {
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('earningModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveEarning()">Save Record</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD / EDIT AGENCY PROFIT ENTRY MODAL ══ -->
+<div class="modal-overlay" id="profitModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="profitModalTitle">Add Agency Profit Entry</div>
+      <button class="modal-close" onclick="closeModal('profitModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="profit-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Date *</label>
+          <input class="form-input" id="profit-date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="profit-type">
+            <option value="retainer">Retainer</option>
+            <option value="setup_fee">Setup Fee</option>
+            <option value="coordination">Coordination Fee</option>
+            <option value="markup">Brand Markup</option>
+            <option value="bonus">Bonus / Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Brand / Source *</label>
+        <input class="form-input" id="profit-source" placeholder="e.g. Tooting Market, MediaMaxxing">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input class="form-input" id="profit-desc" placeholder="What was this for? (e.g. Q3 retainer, brand coordination fee)">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount (£) *</label>
+        <input class="form-input" id="profit-amount" type="number" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" id="profit-notes" placeholder="Invoice number, brand contact, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('profitModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProfitEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD / EDIT SPENDING MODAL ══ -->
+<div class="modal-overlay" id="spendingModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="spendingModalTitle">Add Spending Entry</div>
+      <button class="modal-close" onclick="closeModal('spendingModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="spend-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Date *</label>
+          <input class="form-input" id="spend-date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-select" id="spend-cat">
+            <option value="Software">Software</option>
+            <option value="Tools">Tools</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Salaries">Salaries</option>
+            <option value="Office">Office</option>
+            <option value="Travel">Travel</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Vendor</label>
+        <input class="form-input" id="spend-vendor" placeholder="e.g. Adobe, Cloudflare, AWS">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description *</label>
+        <input class="form-input" id="spend-desc" placeholder="What was this for?">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount (£) *</label>
+        <input class="form-input" id="spend-amount" type="number" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" id="spend-notes" placeholder="Receipt link, justification, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('spendingModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSpendingEntry()">Save Entry</button>
     </div>
   </div>
 </div>
