@@ -9730,14 +9730,19 @@ async function sendComposedEmail() {
   btn.disabled = true; btn.textContent = 'Sending…';
 
   try {
-    await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body, inReplyTo, references, fromName });
+    const res = await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body, inReplyTo, references, fromName });
     btn.disabled = false; btn.textContent = 'Send →';
     closeModal('composeEmailModal');
-    showToast('✅ Email sent!');
+    if (res.savedToSent) {
+      showToast('✅ Email sent + saved to Sent (' + res.sentFolder + ')');
+    } else {
+      showToast('✅ Email sent (⚠ not saved to Sent: ' + (res.saveError || 'unknown') + ')');
+      console.warn('Sent-save error:', res);
+    }
     addActivity('Email sent from <strong>' + fromName + '</strong> to ' + to);
     // Refresh whichever inbox is open
     if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
-      renderCreatorEmail(_currentInbox.creatorId);
+      renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder);
     } else if (_currentInbox.mailbox) {
       refreshTeamInbox();
     }
@@ -9745,6 +9750,29 @@ async function sendComposedEmail() {
     btn.disabled = false; btn.textContent = 'Send →';
     showErr('Send failed: ' + e.message);
   }
+}
+
+/**
+ * Show diagnostic info about what folders exist on the current mailbox.
+ * Useful when "Sent" tab is empty — you can see what the server actually calls its folders.
+ */
+async function debugFolders() {
+  if (!_currentInbox.mailbox) { alert('Open an inbox first'); return; }
+  try {
+    const data = await emailApi('/folders', { mailbox: _currentInbox.mailbox });
+    const lines = ['=== FOLDERS on ' + _currentInbox.mailbox + '@blustu.agency ===\n'];
+    (data.folders || []).forEach(f => {
+      lines.push(`  ${f.name}    [flags: ${f.flags || '—'}] [delim: "${f.delim || '—'}"]`);
+    });
+    if (!data.folders?.length) lines.push('  (no folders returned)');
+    const txt = lines.join('\n');
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(()=>{});
+    const w = window.open('', '_blank', 'width=700,height=500');
+    w.document.body.style.fontFamily = 'monospace';
+    w.document.body.style.padding = '20px';
+    w.document.body.style.whiteSpace = 'pre-wrap';
+    w.document.body.textContent = txt + '\n\n(Copied to clipboard)';
+  } catch(e) { alert('Folders fetch failed: ' + e.message); }
 }
 
 /**
