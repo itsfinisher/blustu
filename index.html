@@ -2360,7 +2360,8 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       <div id="compose-error" style="display:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500"></div>
       <div class="form-group">
         <label class="form-label">From</label>
-        <select class="form-select" id="compose-from"></select>
+        <select class="form-select" id="compose-from" onchange="updateFromPreview()"></select>
+        <div class="form-hint" id="compose-from-preview" style="margin-top:6px;font-size:11px;color:var(--gray-500)"></div>
       </div>
       <div class="form-group">
         <label class="form-label">To *</label>
@@ -9296,7 +9297,10 @@ async function openCompose(presetMailbox) {
   const accounts = await loadEmailAccounts();
   const sel = document.getElementById('compose-from');
   if (!sel) return;
-  sel.innerHTML = accounts.map(a => `<option value="${a.local}">${a.email}</option>`).join('');
+  sel.innerHTML = accounts.map(a => {
+    const name = friendlyFromName(a.local);
+    return `<option value="${a.local}">${name} &lt;${a.email}&gt;</option>`;
+  }).join('');
   if (presetMailbox && accounts.find(a => a.local === presetMailbox)) {
     sel.value = presetMailbox;
   } else if (_currentInbox.mailbox) {
@@ -9308,6 +9312,7 @@ async function openCompose(presetMailbox) {
   });
   document.getElementById('composeModalTitle').textContent = '✉ New Email';
   document.getElementById('compose-error').style.display = 'none';
+  updateFromPreview();
   openModal('composeEmailModal');
   setTimeout(() => document.getElementById('compose-to')?.focus(), 100);
 }
@@ -9316,7 +9321,10 @@ async function openReply(meta) {
   const accounts = await loadEmailAccounts();
   const sel = document.getElementById('compose-from');
   if (!sel) return;
-  sel.innerHTML = accounts.map(a => `<option value="${a.local}">${a.email}</option>`).join('');
+  sel.innerHTML = accounts.map(a => {
+    const name = friendlyFromName(a.local);
+    return `<option value="${a.local}">${name} &lt;${a.email}&gt;</option>`;
+  }).join('');
   if (_currentInbox.mailbox) sel.value = _currentInbox.mailbox;
 
   document.getElementById('compose-to').value = meta.from || '';
@@ -9335,8 +9343,18 @@ async function openReply(meta) {
 
   document.getElementById('composeModalTitle').textContent = '↩ Reply';
   document.getElementById('compose-error').style.display = 'none';
+  updateFromPreview();
   openModal('composeEmailModal');
   setTimeout(() => document.getElementById('compose-body')?.focus(), 100);
+}
+
+function updateFromPreview() {
+  const sel = document.getElementById('compose-from');
+  const preview = document.getElementById('compose-from-preview');
+  if (!sel || !preview) return;
+  const mailbox = sel.value;
+  if (!mailbox) { preview.textContent = ''; return; }
+  preview.innerHTML = `Recipients will see: <strong>${friendlyFromName(mailbox)}</strong> &lt;${mailbox}@blustu.agency&gt;`;
 }
 
 async function sendComposedEmail() {
@@ -9358,15 +9376,17 @@ async function sendComposedEmail() {
   if (!body)               { showErr('Enter a message'); return; }
   if (!/^[^@]+@[^@]+\.[^@]+/.test(to.split(',')[0].trim())) { showErr('Recipient email looks invalid'); return; }
 
+  const fromName = friendlyFromName(mailbox);
+
   const btn = document.getElementById('composeSendBtn');
   btn.disabled = true; btn.textContent = 'Sending…';
 
   try {
-    await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body, inReplyTo, references });
+    await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body, inReplyTo, references, fromName });
     btn.disabled = false; btn.textContent = 'Send →';
     closeModal('composeEmailModal');
     showToast('✅ Email sent!');
-    addActivity('Email sent from <strong>' + mailbox + '@blustu.agency</strong> to ' + to);
+    addActivity('Email sent from <strong>' + fromName + '</strong> to ' + to);
     // Refresh whichever inbox is open
     if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
       renderCreatorEmail(_currentInbox.creatorId);
@@ -9377,6 +9397,41 @@ async function sendComposedEmail() {
     btn.disabled = false; btn.textContent = 'Send →';
     showErr('Send failed: ' + e.message);
   }
+}
+
+/**
+ * Build the display name for outgoing emails.
+ * - Creator mailbox → "{Creator First Name} | BluStu Agency"
+ * - Agency mailbox  → custom mapping
+ *   - contact / info       → "BluStu Agency"
+ *   - partnerships         → "BluStu Partnerships"
+ *   - ugc                  → "BluStu UGC"
+ *   - ubayy                → "Ubayy | BluStu Agency"
+ *   - rayyan               → "Rayyan | BluStu Agency"
+ */
+function friendlyFromName(mailboxLocal) {
+  if (!mailboxLocal) return '';
+  const AGENCY = {
+    contact: 'BluStu Agency',
+    info: 'BluStu Agency',
+    partnerships: 'BluStu Partnerships',
+    ugc: 'BluStu UGC',
+  };
+  if (AGENCY[mailboxLocal]) return AGENCY[mailboxLocal];
+
+  // Try to match to a creator
+  const c = creators.find(cr => {
+    if (!cr.email) return false;
+    return cr.email.toLowerCase().split('@')[0] === mailboxLocal.toLowerCase();
+  });
+  if (c && c.name) {
+    const first = c.name.split(/\s+/)[0];
+    return `${first} | BluStu Agency`;
+  }
+
+  // Fallback: capitalise the mailbox part
+  const cap = mailboxLocal.charAt(0).toUpperCase() + mailboxLocal.slice(1);
+  return `${cap} | BluStu Agency`;
 }
 
 // Init team inbox dropdown when page is opened
