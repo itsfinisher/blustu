@@ -1796,7 +1796,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         </div>
       </div>
       <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
-        <div class="stat-card"><div class="stat-label">Total Earned</div><div class="stat-value" id="earn-stat-total">£0</div><div class="stat-change neutral">Gross creator payout</div></div>
+        <div class="stat-card"><div class="stat-label">Paid to Creators</div><div class="stat-value" id="earn-stat-total">£0</div><div class="stat-change neutral">Gross creator payouts owed</div></div>
         <div class="stat-card"><div class="stat-label">Total Paid</div><div class="stat-value" id="earn-stat-paid" style="color:var(--green)">£0</div><div class="stat-change up">Payments made</div></div>
         <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" id="earn-stat-outstanding" style="color:var(--red)">£0</div><div class="stat-change neutral">Awaiting payment</div></div>
         <div class="stat-card"><div class="stat-label">Agency Revenue</div><div class="stat-value" id="earn-stat-agency" style="color:var(--blue)">£0</div><div class="stat-change neutral">Cuts + late fees + extras</div></div>
@@ -7694,14 +7694,16 @@ function updateEarningsBadge() {
 
 function updateEarningsStats() {
   const filtered = getFilteredEarnings();
-  const totalEarned     = filtered.reduce((s,e) => s + Number(e.creator_payout||0), 0);
-  const totalPaid       = filtered.reduce((s,e) => s + Number(e.amount_paid||0), 0);
-  const totalOutstanding = totalEarned - totalPaid;
-  // Agency revenue = standard cut + late fee + extra profit, summed across all earnings
-  const agencyCut       = filtered.reduce((s,e) => s + agencyTotalFor(e), 0);
+  // Creator-side stats: exclude agency-only rows entirely (they don't represent money paid to a creator)
+  const creatorRows = filtered.filter(e => e.entry_type !== 'agency_only');
+  const totalPaidOutToCreators = creatorRows.reduce((s,e) => s + Number(e.creator_payout||0), 0);
+  const totalPaid              = creatorRows.reduce((s,e) => s + Number(e.amount_paid||0), 0);
+  const totalOutstanding       = Math.max(0, totalPaidOutToCreators - totalPaid);
+  // Agency revenue = standard cuts + late fees + per-deal extras + agency-only amounts
+  const agencyCut              = filtered.reduce((s,e) => s + agencyTotalFor(e), 0);
 
   const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=fmtMoneyFull(val); };
-  set('earn-stat-total',       totalEarned);
+  set('earn-stat-total',       totalPaidOutToCreators);
   set('earn-stat-paid',        totalPaid);
   set('earn-stat-outstanding', totalOutstanding);
   set('earn-stat-agency',      agencyCut);
@@ -7710,11 +7712,15 @@ function updateEarningsStats() {
 /**
  * Compute the agency's total cut from one earning record.
  * = standard cut + late fee + extra agency profit
+ * For agency-only rows: the whole amount IS agency revenue.
  */
 function agencyTotalFor(e) {
+  if (e.entry_type === 'agency_only') {
+    return Number(e.extra_agency_profit || e.deal_value || 0);
+  }
   const dv = Number(e.deal_value||0);
   const payout = Number(e.creator_payout||0);
-  // The simplest correct calc: anything that didn't go to the creator went to the agency.
+  // Anything that didn't go to the creator went to the agency.
   return Math.max(0, dv - payout);
 }
 
@@ -8296,8 +8302,10 @@ async function saveEarning() {
       agency_cut_value: 0,                            // no separate "20% cut" for agency-only
       creator_payout:   0,                            // no creator gets paid on this row
       payment_status:   status,
-      amount_paid:      status === 'paid' ? amount : 0,
-      paid_at:          status === 'paid' ? new Date().toISOString() : null,
+      // amount_paid / paid_at stay at 0/null — these fields only apply to creator payouts.
+      // Agency-only revenue is tracked separately as agency revenue, never as "paid to creator".
+      amount_paid:      0,
+      paid_at:          null,
       notes:            notes || null,
       late_fee_applied: false,
       late_fee_pct:     0,
