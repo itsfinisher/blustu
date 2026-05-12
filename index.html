@@ -1115,6 +1115,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <span id="profile-status-badge"></span>
+          <button class="btn btn-ghost btn-sm" id="profileEditBtn" onclick="openEditCreator()">✏️ Edit</button>
           <button class="btn btn-danger btn-sm" onclick="confirmDeleteCreator()">Delete</button>
         </div>
       </div>
@@ -2057,6 +2058,35 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="nc-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('addCreatorModal')">Cancel</button><button class="btn btn-primary" onclick="addCreator()">Add to Roster</button></div>
+  </div>
+</div>
+
+<!-- Edit Creator Modal -->
+<div class="modal-overlay" id="editCreatorModal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Edit Creator</div><button class="modal-close" onclick="closeModal('editCreatorModal')">✕</button></div>
+    <div class="modal-body">
+      <div id="ec-error" style="display:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="ec-name" placeholder="e.g. Parmita Achari"></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="ec-email" placeholder="name@blustu.agency"></div>
+      </div>
+      <div class="form-hint" style="margin-top:-8px;margin-bottom:12px;font-size:11px;color:var(--gray-400)">
+        ℹ️ Changing the email changes which blustu.agency mailbox shows in this creator's Email tab. The old mailbox's stored password stays linked to the old address.
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Niche</label><select class="form-select" id="ec-niche"><option>Lifestyle</option><option>Fashion</option><option>Fitness</option><option>Food</option><option>Tech</option><option>Travel</option><option>Entertainment</option></select></div>
+        <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="ec-loc" placeholder="e.g. UK"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="ec-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
+        <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="ec-status"><option>Active</option><option>Invited</option><option>Onboarded</option><option>Paused</option><option>Inactive</option></select></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editCreatorModal')">Cancel</button>
+      <button class="btn btn-primary" id="ec-save-btn" onclick="saveCreatorEdit()">💾 Save Changes</button>
+    </div>
   </div>
 </div>
 
@@ -3549,6 +3579,95 @@ async function addCreator(){
   addActivity(`<strong>${name}</strong> added to roster`);
   showToast(`${name} added!`);
   ['nc-name','nc-email','nc-loc'].forEach(id=>document.getElementById(id).value='');
+}
+
+// ── EDIT CREATOR ─────────────────────────────────────────────
+/**
+ * Open the Edit Creator modal, pre-filled with the current creator's info.
+ * Called from the ✏️ Edit button on the profile header.
+ */
+function openEditCreator(){
+  if (!currentCreatorId) { showToast('No creator selected'); return; }
+  if (!can('editCreator')) { showToast('You don\'t have permission to edit creators'); return; }
+  const c = creators.find(x => x.id === currentCreatorId);
+  if (!c) { showToast('Creator not found'); return; }
+
+  // Pre-fill fields
+  document.getElementById('ec-name').value     = c.name || '';
+  document.getElementById('ec-email').value    = c.email || '';
+  document.getElementById('ec-loc').value      = c.location === '—' ? '' : (c.location || '');
+  _setSelectIfPresent('ec-niche',  c.niche  || 'Lifestyle');
+  _setSelectIfPresent('ec-role',   c.role   || 'Creator');
+  _setSelectIfPresent('ec-status', c.status || 'Active');
+
+  document.getElementById('ec-error').style.display = 'none';
+  openModal('editCreatorModal');
+  setTimeout(() => document.getElementById('ec-name')?.focus(), 100);
+}
+
+/** Set a <select>'s value if that option exists; otherwise leave default. */
+function _setSelectIfPresent(id, val){
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const opt = Array.from(sel.options).find(o => o.value === val || o.textContent === val);
+  if (opt) sel.value = opt.value;
+}
+
+/** Persist creator edits to Supabase, refetch, refresh the profile UI. */
+async function saveCreatorEdit(){
+  if (!currentCreatorId) return;
+  const errEl = document.getElementById('ec-error');
+  const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
+  errEl.style.display = 'none';
+
+  const orig = creators.find(x => x.id === currentCreatorId);
+  if (!orig) { showErr('Creator vanished'); return; }
+
+  const name     = document.getElementById('ec-name').value.trim();
+  const email    = document.getElementById('ec-email').value.trim();
+  const niche    = document.getElementById('ec-niche').value;
+  const location = document.getElementById('ec-loc').value.trim() || '—';
+  const role     = document.getElementById('ec-role').value;
+  const status   = document.getElementById('ec-status').value;
+
+  if (!name) { showErr('Name is required'); return; }
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showErr('Email address looks invalid'); return; }
+
+  // Build update — preserve all existing fields not in this form (notes, onboarding, profile_image_url, etc.)
+  const update = { ...orig, name, email, niche, location, role, status };
+
+  const btn = document.getElementById('ec-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const result = await DB.upsertOne('creators', update);
+  if (!result) {
+    btn.disabled = false; btn.textContent = '💾 Save Changes';
+    showErr('Save failed — check your connection and try again');
+    return;
+  }
+
+  await refetch('creators');
+  btn.disabled = false; btn.textContent = '💾 Save Changes';
+  closeModal('editCreatorModal');
+
+  // Track what changed for the activity feed
+  const changes = [];
+  if (orig.name !== name)       changes.push('name');
+  if (orig.email !== email)     changes.push('email');
+  if (orig.niche !== niche)     changes.push('niche');
+  if (orig.location !== location) changes.push('location');
+  if (orig.role !== role)       changes.push('role');
+  if (orig.status !== status)   changes.push('status');
+  if (changes.length) addActivity(`<strong>${name}</strong>'s ${changes.join(', ')} updated`);
+
+  showToast(`✅ ${name} updated`);
+
+  // Re-render the profile to pick up the changes — including the email tab
+  openCreatorProfile(currentCreatorId);
+  // Refresh CRM list + dashboard counts
+  try { renderCRM(); } catch(e) {}
+  try { updateDashStats(); } catch(e) {}
+  try { populateSelects(); } catch(e) {}
 }
 
 function handleGlobalSearch(q){
