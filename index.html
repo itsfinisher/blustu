@@ -1792,6 +1792,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <div><h1>Earnings Tracker</h1><p>Creator payouts, agency cuts and outstanding balances</p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="exportEarningsCSV()">⬇ Export CSV</button>
+          <button class="btn btn-ghost btn-sm" id="btn-export-campaign-pdf" onclick="exportCampaignPDF()" disabled title="Filter by a specific campaign to enable">📄 Campaign PDF</button>
           <button class="btn btn-primary" id="btn-add-earning" onclick="openAddEarning()">+ Add Record</button>
         </div>
       </div>
@@ -1804,13 +1805,17 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       <div class="card" style="margin-bottom:16px;padding:14px 20px">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <input class="form-input" id="earn-filter-creator" placeholder="Filter by creator…" oninput="renderEarnings()" style="max-width:200px">
+          <select class="form-select" id="earn-filter-campaign" onchange="renderEarnings()" style="max-width:280px">
+            <option value="">All campaigns</option>
+            <option value="__none__">— No campaign linked —</option>
+          </select>
           <select class="form-select" id="earn-filter-status" onchange="renderEarnings()" style="max-width:160px">
             <option value="">All statuses</option>
             <option value="unpaid">Unpaid</option>
             <option value="part_paid">Part Paid</option>
             <option value="paid">Paid</option>
           </select>
-          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('earn-filter-creator').value='';document.getElementById('earn-filter-status').value='';renderEarnings()">Clear</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('earn-filter-creator').value='';document.getElementById('earn-filter-campaign').value='';document.getElementById('earn-filter-status').value='';renderEarnings()">Clear</button>
           <span style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="earn-count-label">0 records</span>
         </div>
       </div>
@@ -7754,13 +7759,41 @@ function fmtMoneyFull(v) {
 }
 
 function getFilteredEarnings() {
-  const creatorQ = (document.getElementById('earn-filter-creator')?.value||'').toLowerCase();
-  const statusQ  = document.getElementById('earn-filter-status')?.value||'';
+  const creatorQ  = (document.getElementById('earn-filter-creator')?.value||'').toLowerCase();
+  const statusQ   = document.getElementById('earn-filter-status')?.value||'';
+  const campaignQ = document.getElementById('earn-filter-campaign')?.value||'';
   return earnings.filter(e => {
     const matchCreator = !creatorQ || (e.creator_name||'').toLowerCase().includes(creatorQ);
     const matchStatus  = !statusQ  || e.payment_status === statusQ;
-    return matchCreator && matchStatus;
+    let matchCampaign = true;
+    if (campaignQ === '__none__') {
+      matchCampaign = !e.campaign_id;
+    } else if (campaignQ) {
+      matchCampaign = String(e.campaign_id) === String(campaignQ);
+    }
+    return matchCreator && matchStatus && matchCampaign;
   });
+}
+
+/** Populate the campaign filter dropdown with all known campaigns. Called when earnings/campaigns load. */
+function populateCampaignFilter() {
+  const sel = document.getElementById('earn-filter-campaign');
+  if (!sel) return;
+  const current = sel.value;
+  // Build options — keep "All" and "No campaign" sentinels, then list every campaign by name + brand
+  const sorted = [...campaigns].sort((a, b) =>
+    (a.brand || '').localeCompare(b.brand || '') ||
+    String(a.creator || '').localeCompare(String(b.creator || ''))
+  );
+  sel.innerHTML =
+    '<option value="">All campaigns</option>' +
+    '<option value="__none__">— No campaign linked —</option>' +
+    sorted.map(c => {
+      const label = `${c.brand || '(no brand)'} × ${c.creator || '?'}`;
+      return `<option value="${c.id}">${label}</option>`;
+    }).join('');
+  // Restore selection if still valid
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
 }
 
 function renderEarnings() {
@@ -7769,6 +7802,21 @@ function renderEarnings() {
   // Show/hide add button based on permission
   const addBtn = document.getElementById('btn-add-earning');
   if (addBtn) addBtn.style.display = canManage ? '' : 'none';
+
+  // Make sure the campaign filter dropdown is populated whenever we render
+  populateCampaignFilter();
+
+  // PDF button: only enabled when a specific campaign is selected
+  const campaignQ = document.getElementById('earn-filter-campaign')?.value || '';
+  const pdfBtn = document.getElementById('btn-export-campaign-pdf');
+  if (pdfBtn) {
+    const validCampaign = campaignQ && campaignQ !== '__none__';
+    pdfBtn.disabled = !validCampaign;
+    pdfBtn.title = validCampaign
+      ? 'Export this campaign as a PDF summary'
+      : 'Filter by a specific campaign to enable';
+  }
+
   const tbody = document.getElementById('earningsTableBody');
   if (!tbody) return;
 
@@ -7816,9 +7864,11 @@ function renderEarnings() {
         <td>${statusBadge}</td>
         <td style="color:var(--gray-300)">—</td>
         <td style="font-size:12px;color:var(--gray-400)">${dateStr}</td>
-        <td style="text-align:right">
-          ${canManage ? `<button class="btn btn-ghost btn-sm" onclick="openEditEarning('${e.id}')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteEarning('${e.id}')">Del</button>` : ''}
+        <td style="text-align:right;white-space:nowrap">
+          ${canManage ? `<div style="display:inline-flex;gap:6px;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="openEditEarning('${e.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteEarning('${e.id}')">Del</button>
+          </div>` : ''}
         </td>
       </tr>`;
     }
@@ -7854,9 +7904,11 @@ function renderEarnings() {
       <td><span class="badge ${STATUS_BADGE[e.payment_status]||'badge-gray'}">${STATUS_LABELS[e.payment_status]||e.payment_status}</span></td>
       <td style="font-size:12px;color:var(--gray-400)">${paidDate}</td>
       <td style="font-size:12px;color:var(--gray-400)">${createdDate}</td>
-      <td style="text-align:right">
-        ${canManage ? `<button class="btn btn-ghost btn-sm" onclick="openEditEarning('${e.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteEarning('${e.id}')">Del</button>` : ''}
+      <td style="text-align:right;white-space:nowrap">
+        ${canManage ? `<div style="display:inline-flex;gap:6px;justify-content:flex-end">
+          <button class="btn btn-ghost btn-sm" onclick="openEditEarning('${e.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteEarning('${e.id}')">Del</button>
+        </div>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -8005,15 +8057,25 @@ function computeCampaignTotals(campaignId, excludeEarningId) {
   const camp = campaigns.find(c => String(c.id) === String(campaignId));
   const dealTotal = camp ? Number(camp.value || 0) : 0;
 
-  // Match records by EITHER campaign_id OR campaign_brand (some legacy records
-  // were saved with brand text but no campaign_id, or with a string id that
-  // doesn't strict-equal the numeric one).
+  // Match records by any of:
+  //   1. campaign_id === campaignId (the clean match)
+  //   2. campaign_brand text matches this campaign's auto-generated label
+  //   3. campaign_id is null/empty AND brand_name matches this campaign's brand
+  //      (catches legacy or partial-save records — like one where the campaign
+  //      link was lost but brand was kept)
   const expectedBrand = camp ? (camp.brand + ' \u00d7 ' + camp.creator) : null;
+  const campBrandLower = camp && camp.brand ? camp.brand.toLowerCase().trim() : null;
   const rows = earnings.filter(e => {
     if (String(e.id) === String(excludeEarningId)) return false;
-    if (String(e.campaign_id) === String(campaignId)) return true;
-    // Fallback: campaign_brand text matches this campaign's auto-generated label
+    if (e.campaign_id != null && String(e.campaign_id) === String(campaignId)) return true;
     if (expectedBrand && e.campaign_brand === expectedBrand) return true;
+    // Third fallback: orphaned record with no campaign_id but matching brand_name
+    const noLink = e.campaign_id == null || e.campaign_id === '';
+    const noBrandLabel = !e.campaign_brand;
+    if (noLink && noBrandLabel && campBrandLower &&
+        e.brand_name && e.brand_name.toLowerCase().trim() === campBrandLower) {
+      return true;
+    }
     return false;
   });
 
@@ -8182,18 +8244,27 @@ function useRemainingForAgencyOnly() {
   // Show ALL earnings, indicating which got matched and which didn't (so we can spot orphan records)
   const camp = campaigns.find(c => String(c.id) === String(campId));
   const expectedBrand = camp ? (camp.brand + ' \u00d7 ' + camp.creator) : null;
+  const campBrandLower = camp && camp.brand ? camp.brand.toLowerCase().trim() : null;
   console.log('All earnings (matched vs not):');
   console.log('  Looking for campaign_id =', campId, '(type:', typeof campId + ')');
   console.log('  Or campaign_brand =', JSON.stringify(expectedBrand));
+  console.log('  Or brand_name =', JSON.stringify(camp?.brand), '(fallback for orphan records)');
   console.log('');
-  earnings.forEach((e, i) => {
-    const matchById    = String(e.campaign_id) === String(campId);
+  earnings.forEach((e) => {
+    const matchById    = e.campaign_id != null && String(e.campaign_id) === String(campId);
     const matchByBrand = expectedBrand && e.campaign_brand === expectedBrand;
-    const matched      = (matchById || matchByBrand) && String(e.id) !== String(editId);
-    const flag = matched ? '✅' : (matchById || matchByBrand ? '⏭️ (excluded as edit target)' : '❌');
+    const noLink       = e.campaign_id == null || e.campaign_id === '';
+    const noBrandLabel = !e.campaign_brand;
+    const matchByName  = noLink && noBrandLabel && campBrandLower &&
+                         e.brand_name && e.brand_name.toLowerCase().trim() === campBrandLower;
+    const anyMatch     = matchById || matchByBrand || matchByName;
+    const matched      = anyMatch && String(e.id) !== String(editId);
+    const reason       = matched
+      ? (matchById ? '✅ (by id)' : matchByBrand ? '✅ (by campaign_brand)' : matchByName ? '✅ (by brand_name fallback)' : '✅')
+      : (anyMatch ? '⏭️ (excluded as edit target)' : '❌');
     // Only show ones with similar brand to keep output short
     if (matched || (e.brand_name && e.brand_name.toLowerCase().includes((camp?.brand||'').toLowerCase())) || e.campaign_id == campId) {
-      console.log(`  ${flag} ${e.creator_name||'?'} | id=${e.id} | campaign_id=${e.campaign_id} (type:${typeof e.campaign_id}) | campaign_brand="${e.campaign_brand||''}" | deal=£${e.deal_value} | payout=£${e.creator_payout||0} | cut=${e.agency_cut_value||0}${e.agency_cut_type==='percent'?'%':'£'} | late_applied=${!!e.late_fee_applied} | late_amount=£${e.late_fee_amount||0} | extra=£${e.extra_agency_profit||0} | entry_type=${e.entry_type||'creator'}`);
+      console.log(`  ${reason} ${e.creator_name||'?'} | id=${e.id} | campaign_id=${e.campaign_id} (type:${typeof e.campaign_id}) | campaign_brand="${e.campaign_brand||''}" | brand_name="${e.brand_name||''}" | deal=£${e.deal_value} | payout=£${e.creator_payout||0} | cut=${e.agency_cut_value||0}${e.agency_cut_type==='percent'?'%':'£'} | late_applied=${!!e.late_fee_applied} | late_amount=£${e.late_fee_amount||0} | extra=£${e.extra_agency_profit||0} | entry_type=${e.entry_type||'creator'}`);
     }
   });
   console.log('═════════════════════════════════');
@@ -8481,32 +8552,338 @@ async function deleteEarning(id) {
 function exportEarningsCSV() {
   const filtered = getFilteredEarnings();
   if (!filtered.length) { showToast('No records to export'); return; }
+
   const STATUS_LABELS = { unpaid:'Unpaid', part_paid:'Part Paid', paid:'Paid' };
-  const headers = ['Creator','Brand/Campaign','Deal Value (£)','Agency Cut Type','Agency Cut Value','Creator Payout (£)','Amount Paid (£)','Outstanding (£)','Status','Paid Date','Notes','Created'];
+
+  // Detect if filter is set to one specific campaign — used for filename + summary
+  const campaignQ = document.getElementById('earn-filter-campaign')?.value || '';
+  const specificCamp = (campaignQ && campaignQ !== '__none__')
+    ? campaigns.find(c => String(c.id) === String(campaignQ))
+    : null;
+
+  const headers = [
+    'Entry Type', 'Creator', 'Brand', 'Campaign', 'Deal Value (£)',
+    'Agency Cut Type', 'Agency Cut Value', 'Agency Cut Amount (£)',
+    'Late Fee Applied', 'Late Fee % ', 'Late Fee Amount (£)',
+    'Extra Agency Profit (£)', 'Creator Payout (£)',
+    'Amount Paid (£)', 'Outstanding (£)', 'Status', 'Paid Date', 'Notes', 'Created'
+  ];
+
   const rows = filtered.map(e => {
-    const outstanding = Math.max(0, Number(e.creator_payout||0) - Number(e.amount_paid||0));
+    const outstanding = e.entry_type === 'agency_only'
+      ? 0
+      : Math.max(0, Number(e.creator_payout||0) - Number(e.amount_paid||0));
     return [
-      e.creator_name||'',
-      e.brand_name||e.campaign_brand||'',
-      e.deal_value||0,
-      e.agency_cut_type||'',
-      e.agency_cut_value||0,
-      e.creator_payout||0,
-      e.amount_paid||0,
+      e.entry_type === 'agency_only' ? 'Agency Only' : 'Creator',
+      e.creator_name || '',
+      e.brand_name || '',
+      e.campaign_brand || '',
+      Number(e.deal_value || 0).toFixed(2),
+      e.agency_cut_type || '',
+      e.agency_cut_value || 0,
+      agencyStandardCutFor(e).toFixed(2),
+      e.late_fee_applied ? 'Yes' : 'No',
+      e.late_fee_pct || 0,
+      lateFeeFor(e).toFixed(2),
+      Number(e.extra_agency_profit || 0).toFixed(2),
+      Number(e.creator_payout || 0).toFixed(2),
+      Number(e.amount_paid || 0).toFixed(2),
       outstanding.toFixed(2),
-      STATUS_LABELS[e.payment_status]||e.payment_status||'',
+      STATUS_LABELS[e.payment_status] || e.payment_status || '',
       e.paid_at ? new Date(e.paid_at).toLocaleDateString('en-GB') : '',
-      (e.notes||'').replace(/,/g,' '),
+      e.notes || '',
       e.created_at ? new Date(e.created_at).toLocaleDateString('en-GB') : ''
     ];
   });
-  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
+
+  // Summary block at the bottom — totals for the filtered set
+  const totals = filtered.reduce((acc, e) => {
+    const isAgencyOnly = e.entry_type === 'agency_only';
+    if (!isAgencyOnly) {
+      acc.creatorPayouts += Number(e.creator_payout || 0);
+      acc.amountPaid     += Number(e.amount_paid || 0);
+      acc.standardCuts   += agencyStandardCutFor(e);
+      acc.lateFees       += lateFeeFor(e);
+      acc.dealExtras     += Number(e.extra_agency_profit || 0);
+    } else {
+      acc.agencyOnly     += Number(e.extra_agency_profit || e.deal_value || 0);
+    }
+    return acc;
+  }, { creatorPayouts:0, amountPaid:0, standardCuts:0, lateFees:0, dealExtras:0, agencyOnly:0 });
+  totals.outstanding   = Math.max(0, totals.creatorPayouts - totals.amountPaid);
+  totals.agencyRevenue = totals.standardCuts + totals.lateFees + totals.dealExtras + totals.agencyOnly;
+
+  const summaryRows = [
+    [],
+    ['SUMMARY'],
+    ['Paid to Creators (£)', totals.creatorPayouts.toFixed(2)],
+    ['Amount Paid (£)',      totals.amountPaid.toFixed(2)],
+    ['Outstanding (£)',      totals.outstanding.toFixed(2)],
+    ['Standard Cuts (£)',    totals.standardCuts.toFixed(2)],
+    ['Late Fees (£)',        totals.lateFees.toFixed(2)],
+    ['Deal Extras (£)',      totals.dealExtras.toFixed(2)],
+    ['Agency-Only (£)',      totals.agencyOnly.toFixed(2)],
+    ['Agency Revenue (£)',   totals.agencyRevenue.toFixed(2)],
+  ];
+
+  if (specificCamp) {
+    summaryRows.push([]);
+    summaryRows.push(['Campaign Budget (£)', Number(specificCamp.value || 0).toFixed(2)]);
+    const used = totals.creatorPayouts + totals.standardCuts + totals.lateFees + totals.dealExtras + totals.agencyOnly;
+    const untied = Number(specificCamp.value || 0) - used;
+    summaryRows.push(['Accounted For (£)', used.toFixed(2)]);
+    summaryRows.push(['Untied Profit Left (£)', untied.toFixed(2)]);
+  }
+
+  const allRows = [headers, ...rows, ...summaryRows];
+  const csv = allRows.map(r => r.map(csvCell).join(',')).join('\n');
+
+  const slug = specificCamp
+    ? (specificCamp.brand || 'campaign').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    : 'all';
+  const filename = `blustu-earnings-${slug}-${new Date().toISOString().slice(0,10)}.csv`;
+
+  const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'blustu-earnings-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.download = filename;
   a.click();
-  showToast('CSV exported!');
+  showToast(specificCamp ? `CSV exported: ${specificCamp.brand}` : `CSV exported (${filtered.length} records)`);
+}
+
+/**
+ * Export a styled HTML/PDF summary for ONE campaign.
+ * Uses window.print() — user gets a print dialog where they can "Save as PDF".
+ * Includes: header, summary box with key totals, creator earnings table, agency-only table.
+ */
+function exportCampaignPDF() {
+  const campaignQ = document.getElementById('earn-filter-campaign')?.value || '';
+  if (!campaignQ || campaignQ === '__none__') {
+    showToast('Pick a specific campaign in the filter first');
+    return;
+  }
+  const camp = campaigns.find(c => String(c.id) === String(campaignQ));
+  if (!camp) { showToast('Campaign not found'); return; }
+
+  const rows = earnings.filter(e => String(e.campaign_id) === String(campaignQ));
+  if (!rows.length) { showToast('No earnings records on this campaign yet'); return; }
+
+  // Split rows
+  const creatorRows = rows.filter(e => e.entry_type !== 'agency_only');
+  const agencyRows  = rows.filter(e => e.entry_type === 'agency_only');
+
+  // Sums
+  let creatorPayouts = 0, amountPaid = 0, standardCuts = 0, lateFees = 0, dealExtras = 0, agencyOnly = 0;
+  for (const e of creatorRows) {
+    creatorPayouts += Number(e.creator_payout || 0);
+    amountPaid     += Number(e.amount_paid || 0);
+    standardCuts   += agencyStandardCutFor(e);
+    lateFees       += lateFeeFor(e);
+    dealExtras     += Number(e.extra_agency_profit || 0);
+  }
+  for (const e of agencyRows) {
+    agencyOnly += Number(e.extra_agency_profit || e.deal_value || 0);
+  }
+  const dealTotal      = Number(camp.value || 0);
+  const accountedFor   = creatorPayouts + standardCuts + lateFees + dealExtras + agencyOnly;
+  const untiedLeft     = dealTotal - accountedFor;
+  const outstanding    = Math.max(0, creatorPayouts - amountPaid);
+  const agencyRevenue  = standardCuts + lateFees + dealExtras + agencyOnly;
+  const today          = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+  const STATUS_LABELS  = { unpaid:'Unpaid', part_paid:'Part Paid', paid:'Paid' };
+
+  // Helpers
+  const fmt = v => '£' + Number(v||0).toLocaleString('en-GB', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const creatorRowsHtml = creatorRows.map(e => {
+    const out = Math.max(0, Number(e.creator_payout||0) - Number(e.amount_paid||0));
+    return `<tr>
+      <td>${esc(e.creator_name)}</td>
+      <td style="text-align:right">${fmt(e.deal_value)}</td>
+      <td style="text-align:right">${fmt(agencyStandardCutFor(e))}</td>
+      <td style="text-align:right;color:#b45309">${e.late_fee_applied ? fmt(lateFeeFor(e)) : '—'}</td>
+      <td style="text-align:right">${e.extra_agency_profit > 0 ? fmt(e.extra_agency_profit) : '—'}</td>
+      <td style="text-align:right;font-weight:600">${fmt(e.creator_payout)}</td>
+      <td style="text-align:right;color:#16a34a">${fmt(e.amount_paid)}</td>
+      <td style="text-align:right;color:${out > 0 ? '#dc2626' : '#16a34a'}">${fmt(out)}</td>
+      <td><span style="background:${e.payment_status==='paid'?'#dcfce7':e.payment_status==='part_paid'?'#fef3c7':'#fee2e2'};color:${e.payment_status==='paid'?'#166534':e.payment_status==='part_paid'?'#92400e':'#991b1b'};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${STATUS_LABELS[e.payment_status]||e.payment_status||'—'}</span></td>
+    </tr>`;
+  }).join('');
+
+  const agencyRowsHtml = agencyRows.map(e => {
+    const amt = Number(e.extra_agency_profit || e.deal_value || 0);
+    return `<tr>
+      <td>🏢 ${esc(e.brand_name || 'Agency')}</td>
+      <td>${esc(e.notes || '')}</td>
+      <td style="text-align:right;font-weight:600;color:#1d4ed8">${fmt(amt)}</td>
+      <td><span style="background:${e.payment_status==='paid'?'#dcfce7':'#fef3c7'};color:${e.payment_status==='paid'?'#166534':'#92400e'};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${e.payment_status==='paid'?'Received':'Awaiting'}</span></td>
+    </tr>`;
+  }).join('');
+
+  // Build full HTML for print
+  const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>BluStu Campaign Summary — ${esc(camp.brand)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', system-ui, sans-serif; color: #1a1a1a; margin: 0; padding: 40px; max-width: 900px; margin: 0 auto; background: white; }
+  h1 { font-family: 'DM Serif Display', serif; font-size: 32px; margin: 0 0 4px; color: #1a1a1a; font-weight: 400; }
+  h2 { font-family: 'DM Serif Display', serif; font-size: 20px; margin: 24px 0 12px; color: #1a1a1a; font-weight: 400; }
+  .header-meta { color: #6b7280; font-size: 13px; margin-bottom: 30px; }
+  .header-logo { font-family: 'DM Serif Display', serif; font-size: 16px; color: #2563eb; margin-bottom: 14px; letter-spacing: 0.5px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0; }
+  .stat-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+  .stat-card.highlight { background: #dcfce7; border-color: #16a34a; }
+  .stat-card.warn { background: #fee2e2; border-color: #dc2626; }
+  .stat-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600; }
+  .stat-value { font-family: 'DM Serif Display', serif; font-size: 22px; font-weight: 400; }
+  .stat-value.green { color: #16a34a; }
+  .stat-value.blue  { color: #2563eb; }
+  .stat-value.red   { color: #dc2626; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+  thead th { background: #f3f4f6; border-bottom: 2px solid #d1d5db; padding: 10px 8px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; }
+  tbody td { padding: 10px 8px; border-bottom: 1px solid #f3f4f6; }
+  tbody tr:nth-child(even) td { background: #fafafa; }
+  .totals-row td { font-weight: 700; border-top: 2px solid #1a1a1a; padding-top: 12px; background: #f9fafb !important; }
+  .summary-box { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-left: 4px solid #2563eb; border-radius: 8px; padding: 18px 22px; margin: 24px 0; }
+  .summary-box h3 { font-family: 'DM Serif Display', serif; margin: 0 0 8px; font-size: 16px; color: #1e40af; }
+  .summary-box .breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; font-size: 13px; margin-top: 10px; }
+  .summary-box .breakdown div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed rgba(37, 99, 235, 0.2); }
+  .summary-box .breakdown strong { color: #1e3a8a; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between; }
+  @media print {
+    body { padding: 20px; }
+    .no-print { display: none !important; }
+    .stats-grid { page-break-inside: avoid; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+  }
+  .print-btn { position: fixed; top: 20px; right: 20px; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .print-btn:hover { background: #1d4ed8; }
+</style>
+</head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">🖨 Save as PDF / Print</button>
+
+  <div class="header-logo">blustu™ agency</div>
+  <h1>Campaign Summary</h1>
+  <div class="header-meta">
+    <strong style="color:#1a1a1a">${esc(camp.brand)}</strong> × ${esc(camp.creator || 'Multi-creator')}<br>
+    Generated ${today} · ${creatorRows.length} creator earning${creatorRows.length===1?'':'s'}${agencyRows.length ? ` · ${agencyRows.length} agency entr${agencyRows.length===1?'y':'ies'}` : ''}
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Campaign Budget</div>
+      <div class="stat-value">${fmt(dealTotal)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Paid to Creators</div>
+      <div class="stat-value">${fmt(creatorPayouts)}</div>
+    </div>
+    <div class="stat-card highlight">
+      <div class="stat-label">Agency Revenue</div>
+      <div class="stat-value green">${fmt(agencyRevenue)}</div>
+    </div>
+    <div class="stat-card ${untiedLeft < 0 ? 'warn' : ''}">
+      <div class="stat-label">${untiedLeft < 0 ? 'Over Budget' : 'Untied Profit Left'}</div>
+      <div class="stat-value ${untiedLeft < 0 ? 'red' : 'blue'}">${fmt(untiedLeft)}</div>
+    </div>
+  </div>
+
+  <div class="summary-box">
+    <h3>💰 Money Flow Breakdown</h3>
+    <div class="breakdown">
+      <div><span>Campaign budget</span><strong>${fmt(dealTotal)}</strong></div>
+      <div><span>Creator payouts</span><strong>− ${fmt(creatorPayouts)}</strong></div>
+      <div><span>Standard agency cuts (20%)</span><strong>− ${fmt(standardCuts)}</strong></div>
+      <div><span>Late fees collected</span><strong>− ${fmt(lateFees)}</strong></div>
+      <div><span>Per-deal extra profit</span><strong>− ${fmt(dealExtras)}</strong></div>
+      <div><span>Agency-only entries</span><strong>− ${fmt(agencyOnly)}</strong></div>
+      <div style="grid-column:span 2;border-top:2px solid #1e3a8a;border-bottom:none;padding-top:10px;margin-top:6px;font-size:14px">
+        <span>Untied profit remaining</span>
+        <strong style="color:${untiedLeft < 0 ? '#dc2626' : '#16a34a'};font-size:16px">${fmt(untiedLeft)}</strong>
+      </div>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:#1e40af;opacity:.8">
+      Total agency profit on this campaign = Standard Cuts + Late Fees + Extras + Agency-Only entries + any untied amount = <strong>${fmt(agencyRevenue + Math.max(0, untiedLeft))}</strong>
+    </div>
+  </div>
+
+  ${creatorRows.length ? `
+  <h2>Creator Earnings</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Creator</th>
+        <th style="text-align:right">Deal</th>
+        <th style="text-align:right">Cut</th>
+        <th style="text-align:right">Late Fee</th>
+        <th style="text-align:right">Extra</th>
+        <th style="text-align:right">Payout</th>
+        <th style="text-align:right">Paid</th>
+        <th style="text-align:right">Outstanding</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${creatorRowsHtml}
+      <tr class="totals-row">
+        <td>TOTAL</td>
+        <td style="text-align:right">${fmt(creatorRows.reduce((s,e)=>s+Number(e.deal_value||0),0))}</td>
+        <td style="text-align:right">${fmt(standardCuts)}</td>
+        <td style="text-align:right;color:#b45309">${fmt(lateFees)}</td>
+        <td style="text-align:right">${fmt(dealExtras)}</td>
+        <td style="text-align:right">${fmt(creatorPayouts)}</td>
+        <td style="text-align:right;color:#16a34a">${fmt(amountPaid)}</td>
+        <td style="text-align:right;color:${outstanding>0?'#dc2626':'#16a34a'}">${fmt(outstanding)}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  ` : ''}
+
+  ${agencyRows.length ? `
+  <h2>Agency-Only Entries</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Source</th>
+        <th>Notes</th>
+        <th style="text-align:right">Amount</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${agencyRowsHtml}
+      <tr class="totals-row">
+        <td>TOTAL AGENCY-ONLY</td>
+        <td></td>
+        <td style="text-align:right;color:#1d4ed8">${fmt(agencyOnly)}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  ` : ''}
+
+  <div class="footer">
+    <div>BluStu Ltd · blustu.agency</div>
+    <div>Generated ${today}</div>
+  </div>
+</body></html>`;
+
+  // Open in new window and trigger print dialog
+  const w = window.open('', '_blank', 'width=1100,height=850');
+  if (!w) { showToast('Pop-up blocker stopped the PDF. Allow pop-ups for this site.'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  // Wait briefly for fonts/styling, then open print dialog
+  setTimeout(() => { try { w.focus(); w.print(); } catch(e){} }, 800);
+  showToast('📄 Campaign PDF ready — use the print dialog to save as PDF');
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -8566,9 +8943,11 @@ function renderProfit() {
           <td style="font-size:12px">${(p.description||'').replace(/</g,'&lt;')}</td>
           <td><span class="badge badge-blue" style="font-size:10px">${TYPE_LABEL[p.entry_type]||p.entry_type||'—'}</span></td>
           <td style="font-weight:600;color:var(--green)">${fmtMoneyFull(p.amount)}</td>
-          <td style="text-align:right">
-            ${canManage ? `<button class="btn btn-ghost btn-sm" onclick="openEditProfit('${p.id}')">Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteProfitEntry('${p.id}')">Del</button>` : ''}
+          <td style="text-align:right;white-space:nowrap">
+            ${canManage ? `<div style="display:inline-flex;gap:6px;justify-content:flex-end">
+              <button class="btn btn-ghost btn-sm" onclick="openEditProfit('${p.id}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteProfitEntry('${p.id}')">Del</button>
+            </div>` : ''}
           </td>
         </tr>`;
       }).join('');
@@ -8799,9 +9178,11 @@ function renderSpending() {
       <td style="font-weight:500">${(s.vendor||'—').replace(/</g,'&lt;')}</td>
       <td style="font-size:12px">${(s.description||'').replace(/</g,'&lt;')}</td>
       <td style="font-weight:600;color:var(--red)">−${fmtMoneyFull(s.amount)}</td>
-      <td style="text-align:right">
-        ${canManage ? `<button class="btn btn-ghost btn-sm" onclick="openEditSpending('${s.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteSpendingEntry('${s.id}')">Del</button>` : ''}
+      <td style="text-align:right;white-space:nowrap">
+        ${canManage ? `<div style="display:inline-flex;gap:6px;justify-content:flex-end">
+          <button class="btn btn-ghost btn-sm" onclick="openEditSpending('${s.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSpendingEntry('${s.id}')">Del</button>
+        </div>` : ''}
       </td>
     </tr>`;
   }).join('');
