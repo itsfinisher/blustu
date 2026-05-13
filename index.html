@@ -8005,10 +8005,17 @@ function computeCampaignTotals(campaignId, excludeEarningId) {
   const camp = campaigns.find(c => String(c.id) === String(campaignId));
   const dealTotal = camp ? Number(camp.value || 0) : 0;
 
-  const rows = earnings.filter(e =>
-    String(e.campaign_id) === String(campaignId) &&
-    String(e.id) !== String(excludeEarningId)
-  );
+  // Match records by EITHER campaign_id OR campaign_brand (some legacy records
+  // were saved with brand text but no campaign_id, or with a string id that
+  // doesn't strict-equal the numeric one).
+  const expectedBrand = camp ? (camp.brand + ' \u00d7 ' + camp.creator) : null;
+  const rows = earnings.filter(e => {
+    if (String(e.id) === String(excludeEarningId)) return false;
+    if (String(e.campaign_id) === String(campaignId)) return true;
+    // Fallback: campaign_brand text matches this campaign's auto-generated label
+    if (expectedBrand && e.campaign_brand === expectedBrand) return true;
+    return false;
+  });
 
   let creatorPayouts = 0, standardCuts = 0, lateFees = 0, dealExtras = 0, agencyOnly = 0;
   let creatorRecordCount = 0;
@@ -8159,8 +8166,41 @@ function useRemainingForAgencyOnly() {
   if (!campId) { showToast('Pick a campaign first'); return; }
   const t = computeCampaignTotals(campId, editId);
   const amt = Math.max(0, t.untiedLeft);
+
+  // Diagnostic dump — open browser console (F12) to see why the number is what it is
+  console.log('═══ Use Remaining calculation ═══');
+  console.log('Campaign id:', campId, '— value: £' + t.dealTotal.toFixed(2));
+  console.log('Creator payouts:       £' + t.creatorPayouts.toFixed(2));
+  console.log('Standard agency cuts:  £' + t.standardCuts.toFixed(2));
+  console.log('Late fees:             £' + t.lateFees.toFixed(2));
+  console.log('Per-deal extras:       £' + t.dealExtras.toFixed(2));
+  console.log('Existing agency-only:  £' + t.agencyOnly.toFixed(2));
+  console.log('────────────────────────────────');
+  console.log('Total accounted for:   £' + t.accountedFor.toFixed(2));
+  console.log('UNTIED LEFT:           £' + t.untiedLeft.toFixed(2));
+  console.log('');
+  // Show ALL earnings, indicating which got matched and which didn't (so we can spot orphan records)
+  const camp = campaigns.find(c => String(c.id) === String(campId));
+  const expectedBrand = camp ? (camp.brand + ' \u00d7 ' + camp.creator) : null;
+  console.log('All earnings (matched vs not):');
+  console.log('  Looking for campaign_id =', campId, '(type:', typeof campId + ')');
+  console.log('  Or campaign_brand =', JSON.stringify(expectedBrand));
+  console.log('');
+  earnings.forEach((e, i) => {
+    const matchById    = String(e.campaign_id) === String(campId);
+    const matchByBrand = expectedBrand && e.campaign_brand === expectedBrand;
+    const matched      = (matchById || matchByBrand) && String(e.id) !== String(editId);
+    const flag = matched ? '✅' : (matchById || matchByBrand ? '⏭️ (excluded as edit target)' : '❌');
+    // Only show ones with similar brand to keep output short
+    if (matched || (e.brand_name && e.brand_name.toLowerCase().includes((camp?.brand||'').toLowerCase())) || e.campaign_id == campId) {
+      console.log(`  ${flag} ${e.creator_name||'?'} | id=${e.id} | campaign_id=${e.campaign_id} (type:${typeof e.campaign_id}) | campaign_brand="${e.campaign_brand||''}" | deal=£${e.deal_value} | payout=£${e.creator_payout||0} | cut=${e.agency_cut_value||0}${e.agency_cut_type==='percent'?'%':'£'} | late_applied=${!!e.late_fee_applied} | late_amount=£${e.late_fee_amount||0} | extra=£${e.extra_agency_profit||0} | entry_type=${e.entry_type||'creator'}`);
+    }
+  });
+  console.log('═════════════════════════════════');
+
   document.getElementById('earn-agency-only-amount').value = amt.toFixed(2);
   updateCampaignBudgetBanner();
+  showToast('Use Remaining: ' + fmtMoneyFull(amt) + ' — see browser console (F12) for breakdown');
 }
 
 function onLateToggle() {
