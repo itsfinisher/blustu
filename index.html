@@ -930,6 +930,11 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
       Spending
     </button>
+    <button class="nav-item" id="nav-staffpayouts" onclick="showPage('staffpayouts',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Staff Payouts
+      <span class="nav-badge" id="staffPayoutsBadge" style="background:var(--amber);display:none">0</span>
+    </button>
     <button class="nav-item" onclick="showPage('calendar',this)">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       Calendar
@@ -1055,6 +1060,10 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
           <option value="Invited">Invited</option>
           <option value="Onboarded">Onboarded</option>
         </select>
+        <select class="form-select" style="width:180px" id="crmFilterManager" onchange="filterCRMManager(this.value)">
+          <option value="">All Managers</option>
+          <option value="__unassigned__">— Unassigned —</option>
+        </select>
         <div class="crm-view-toggle">
           <button class="crm-view-btn active" id="crmBtnList" onclick="setCRMView('list')" title="List view">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
@@ -1118,7 +1127,11 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
               </div>
               <input type="file" id="profilePicFile" accept="image/*" style="display:none" onchange="handleProfilePicUpload(event)">
             </div>
-            <div><h1 id="profile-name">Creator</h1><p id="profile-email"></p></div>
+            <div>
+              <h1 id="profile-name">Creator</h1>
+              <p id="profile-email"></p>
+              <div id="profile-managed-by" style="font-size:11px;color:var(--gray-500);margin-top:2px"></div>
+            </div>
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -1960,6 +1973,81 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       </div>
     </div>
 
+    <!-- ══ STAFF PAYOUTS PAGE ══ -->
+    <div class="page" id="page-staffpayouts">
+      <div class="page-header">
+        <div>
+          <h1>Staff Payouts</h1>
+          <p>Commission owed to staff for material contributions to creator deals. Calculated from <strong>agency fee received by BluStu</strong>, never total brand spend.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="exportStaffPayoutsCSV()">⬇ Export CSV</button>
+          <button class="btn btn-primary" id="btn-add-payout" onclick="openAddPayout()">+ Add Staff Payout</button>
+        </div>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+        <div class="stat-card"><div class="stat-label">Pending Brand Payment</div><div class="stat-value" id="payout-stat-pending" style="color:var(--amber)">£0</div><div class="stat-change neutral">Waiting on brand</div></div>
+        <div class="stat-card"><div class="stat-label">Ready to Pay</div><div class="stat-value" id="payout-stat-ready" style="color:var(--blue)">£0</div><div class="stat-change neutral">Brand paid us</div></div>
+        <div class="stat-card"><div class="stat-label">Total Paid Out</div><div class="stat-value" id="payout-stat-paid" style="color:var(--green)">£0</div><div class="stat-change up">All-time staff commission paid</div></div>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">
+        <div class="stat-card"><div class="stat-label">Total Due</div><div class="stat-value" id="payout-stat-due">£0</div><div class="stat-change neutral">All unpaid commission</div></div>
+        <div class="stat-card"><div class="stat-label">BluStu Retained</div><div class="stat-value" id="payout-stat-retained" style="color:var(--green)">£0</div><div class="stat-change up">From agency fees on these deals</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Commission %</div><div class="stat-value" id="payout-stat-avg-pct" style="color:var(--blue)">—</div><div class="stat-change neutral">Across all payouts</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px;padding:14px 20px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select class="form-select" id="payout-filter-staff" onchange="renderStaffPayouts()" style="max-width:200px">
+            <option value="">All staff</option>
+          </select>
+          <select class="form-select" id="payout-filter-creator" onchange="renderStaffPayouts()" style="max-width:200px">
+            <option value="">All creators</option>
+          </select>
+          <select class="form-select" id="payout-filter-brand-status" onchange="renderStaffPayouts()" style="max-width:200px">
+            <option value="">Any brand-payment status</option>
+            <option value="not_invoiced">Not invoiced</option>
+            <option value="invoiced">Invoiced</option>
+            <option value="payment_pending">Payment pending</option>
+            <option value="payment_received">Payment received</option>
+          </select>
+          <select class="form-select" id="payout-filter-payout-status" onchange="renderStaffPayouts()" style="max-width:200px">
+            <option value="">Any payout status</option>
+            <option value="draft">Draft</option>
+            <option value="pending_brand_payment">Pending brand payment</option>
+            <option value="ready_to_pay">Ready to pay</option>
+            <option value="paid">Paid</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="clearPayoutFilters()">Clear</button>
+          <span style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="payout-count-label">0 payouts</span>
+        </div>
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table id="staffPayoutsTable">
+            <thead>
+              <tr>
+                <th>Staff</th>
+                <th>Creator</th>
+                <th>Brand / Deal</th>
+                <th style="text-align:right">Agency Fee</th>
+                <th style="text-align:right">Commission %</th>
+                <th style="text-align:right">Staff Payout</th>
+                <th style="text-align:right">BluStu Retained</th>
+                <th>Contribution</th>
+                <th>Brand Payment</th>
+                <th>Payout Status</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="staffPayoutsTableBody">
+              <tr><td colspan="11" style="text-align:center;padding:36px;color:var(--gray-400)">No staff payouts yet. Click "+ Add Staff Payout" above to record one.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ TEAM CALENDAR PAGE ══ -->
     <div class="page" id="page-calendar">
       <div class="page-header">
@@ -2209,6 +2297,31 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       <div class="form-row">
         <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="ec-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="ec-status"><option>Active</option><option>Invited</option><option>Onboarded</option><option>Paused</option><option>Inactive</option></select></div>
+      </div>
+      <!-- Staff Assignment section -->
+      <div class="card" style="padding:14px 16px;margin-top:12px;background:var(--gray-50);border:1px solid var(--gray-100)">
+        <label class="form-label" style="margin:0 0 4px;font-size:13px">👥 Staff Assignment</label>
+        <div class="form-hint" style="margin-bottom:10px">Who on the team manages this creator. The Primary Manager auto-suggests for staff payouts.</div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:8px">
+            <label class="form-label" style="font-size:11px">Primary Manager</label>
+            <select class="form-select" id="ec-staff-primary"><option value="">— Unassigned —</option></select>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label class="form-label" style="font-size:11px">Secondary / Support</label>
+            <select class="form-select" id="ec-staff-secondary"><option value="">— None —</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:11px">Admin Support</label>
+            <select class="form-select" id="ec-staff-admin"><option value="">— None —</option></select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:11px">Notes</label>
+            <input class="form-input" id="ec-staff-notes" placeholder="Optional context (e.g. handover dates)">
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -3024,6 +3137,7 @@ async function syncAllFromDB() {
     loadEarnings(),
     loadAgencyProfit(),
     loadSpending(),
+    loadStaffPayouts(),
   ]).then(() => {
     try { updateDashStats(); } catch(e) { /* dashboard not on screen */ }
   });
@@ -3256,6 +3370,10 @@ function applyPermissionsUI() {
   const navUsers = document.getElementById('nav-users');
   if (navUsers) navUsers.style.display = (role==='owner'||role==='admin') ? '' : 'none';
 
+  // Staff Payouts nav — visible to owner/admin/manager (managers see only their own data)
+  const navSp = document.getElementById('nav-staffpayouts');
+  if (navSp) navSp.style.display = ['owner','admin','manager'].includes(role) ? '' : 'none';
+
   // Add creator button on CRM page
   const crmBtn = document.querySelector('#page-crm .btn-primary');
   if (crmBtn) crmBtn.style.display = caps.addCreator ? '' : 'none';
@@ -3309,7 +3427,7 @@ const pageTitles = {
   onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit',
   campaigns:'Campaigns', pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline',
   inbox:'Team Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
-  managers:'Team', emailsetup:'Email Setup', profit:'Agency Profit', spending:'Spending',
+  managers:'Team', emailsetup:'Email Setup', profit:'Agency Profit', spending:'Spending', staffpayouts:'Staff Payouts',
   creatorgrid:'Select Creators', earnings:'Earnings Tracker', calendar:'Team Calendar'
 };
 
@@ -3362,6 +3480,7 @@ function showPage(id, btn) {
   if (id === 'earnings')   { populateEarningSelects(); renderEarnings(); }
   if (id === 'profit')     { loadAgencyProfit(); }
   if (id === 'spending')   { loadSpending(); }
+  if (id === 'staffpayouts') { loadStaffPayouts(); }
   if (id === 'calendar')   { renderCalendar(); }
   if (id === 'managers')   { renderManagersPage(); }
 }
@@ -3467,6 +3586,7 @@ function renderCRMGrid(list) {
 }
 
 function renderCRM(list) {
+  populateCrmManagerFilter();
   _crmLastList = list;  // keep reference for grid sync
   const tbody = document.getElementById('crmTableBody');
   const empty = document.getElementById('crm-empty');
@@ -3624,29 +3744,66 @@ document.addEventListener('DOMContentLoaded', () => {
   if (localStorage.getItem('crmView') === 'grid') setCRMView('grid');
 });
 
-function filterCRM(q){
-  const s=(q||'').toLowerCase();
-  if(!s){renderCRM(creators);return;}
-  renderCRM(creators.filter(c=>
-    (c.name||'').toLowerCase().includes(s)||
-    (c.email||'').toLowerCase().includes(s)||
-    (c.location||'').toLowerCase().includes(s)||
-    (c.niche||'').toLowerCase().includes(s)
-  ));
+// Unified CRM filter state — all three filters compose together.
+let _crmFilters = { search: '', status: '', manager: '' };
+
+function _applyCrmFilters() {
+  let list = creators;
+  // Search
+  const s = (_crmFilters.search || '').toLowerCase();
+  if (s) {
+    list = list.filter(c =>
+      (c.name||'').toLowerCase().includes(s) ||
+      (c.email||'').toLowerCase().includes(s) ||
+      (c.location||'').toLowerCase().includes(s) ||
+      (c.niche||'').toLowerCase().includes(s)
+    );
+  }
+  // Status
+  const v = _crmFilters.status;
+  if (v === 'Onboarded')      list = list.filter(c => c.onboarding);
+  else if (v === 'Active')    list = list.filter(c => c.status === 'Active' || c.status === 'Onboarded');
+  else if (v)                 list = list.filter(c => c.status === v);
+  // Manager
+  const m = _crmFilters.manager;
+  if (m === '__unassigned__') {
+    list = list.filter(c => !creatorPrimaryStaffEmail(c));
+  } else if (m) {
+    list = list.filter(c => {
+      const primary = creatorPrimaryStaffEmail(c);
+      const secondary = c.assigned_staff?.secondary;
+      const admin = c.assigned_staff?.admin_support;
+      return primary === m || secondary === m || admin === m;
+    });
+  }
+  renderCRM(list);
 }
-function filterCRMStatus(v){
-  if (!v) { renderCRM(creators); return; }
-  if (v === 'Onboarded') {
-    // Show creators who have submitted onboarding data (regardless of status label)
-    renderCRM(creators.filter(c => c.onboarding));
-    return;
+
+/** Resolve a creator's primary staff email — checks new assigned_staff.primary, falls back to legacy managerAssignments. */
+function creatorPrimaryStaffEmail(c) {
+  if (c.assigned_staff?.primary) return c.assigned_staff.primary;
+  for (const [email, ids] of Object.entries(managerAssignments || {})) {
+    if ((ids || []).includes(c.id)) return email;
   }
-  if (v === 'Active') {
-    // Active = has no onboarding OR has onboarding, status is Active or Onboarded
-    renderCRM(creators.filter(c => c.status === 'Active' || c.status === 'Onboarded'));
-    return;
-  }
-  renderCRM(creators.filter(c => c.status === v));
+  return null;
+}
+
+function filterCRM(q){       _crmFilters.search = q || ''; _applyCrmFilters(); }
+function filterCRMStatus(v){ _crmFilters.status = v || ''; _applyCrmFilters(); }
+function filterCRMManager(v){_crmFilters.manager = v || ''; _applyCrmFilters(); }
+
+/** Populate the Manager filter dropdown with all eligible staff. */
+function populateCrmManagerFilter() {
+  const sel = document.getElementById('crmFilterManager');
+  if (!sel) return;
+  const current = sel.value;
+  const eligible = STAFF.filter(s => ['owner','admin','manager'].includes(s.systemRole))
+                        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  sel.innerHTML =
+    '<option value="">All Managers</option>' +
+    '<option value="__unassigned__">— Unassigned —</option>' +
+    eligible.map(s => `<option value="${s.email}">${s.name}</option>`).join('');
+  if (current) sel.value = current;
 }
 
 // ── DELETE CREATOR ────────────────────────────────────────────
@@ -3743,9 +3900,43 @@ function openEditCreator(){
   _setSelectIfPresent('ec-role',   c.role   || 'Creator');
   _setSelectIfPresent('ec-status', c.status || 'Active');
 
+  // Populate staff selects + pre-fill from assigned_staff (or legacy managerAssignments)
+  populateStaffSelects(['ec-staff-primary', 'ec-staff-secondary', 'ec-staff-admin']);
+  const a = (c.assigned_staff && typeof c.assigned_staff === 'object') ? c.assigned_staff : {};
+  // Legacy fallback: if no assigned_staff but managerAssignments has them
+  if (!a.primary) {
+    for (const [email, ids] of Object.entries(managerAssignments || {})) {
+      if ((ids || []).includes(c.id)) { a.primary = email; break; }
+    }
+  }
+  document.getElementById('ec-staff-primary').value   = a.primary || '';
+  document.getElementById('ec-staff-secondary').value = a.secondary || '';
+  document.getElementById('ec-staff-admin').value     = a.admin_support || '';
+  document.getElementById('ec-staff-notes').value     = a.notes || '';
+
   document.getElementById('ec-error').style.display = 'none';
   openModal('editCreatorModal');
   setTimeout(() => document.getElementById('ec-name')?.focus(), 100);
+}
+
+/** Populate the given select element ids with staff who can manage creators (owner/admin/manager). */
+function populateStaffSelects(ids) {
+  const eligibleStaff = STAFF.filter(s =>
+    ['owner','admin','manager'].includes(s.systemRole)
+  ).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  ids.forEach((id, idx) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const currentValue = sel.value;
+    const isPrimary = idx === 0;
+    const placeholder = isPrimary ? '— Unassigned —' : '— None —';
+    sel.innerHTML = `<option value="">${placeholder}</option>` +
+      eligibleStaff.map(s => {
+        const roleTag = (s.systemRole === 'owner') ? ' (Owner)' : (s.systemRole === 'admin' ? ' (Admin)' : '');
+        return `<option value="${s.email}">${s.name}${roleTag}</option>`;
+      }).join('');
+    if (currentValue) sel.value = currentValue;
+  });
 }
 
 /** Set a <select>'s value if that option exists; otherwise leave default. */
@@ -3773,11 +3964,19 @@ async function saveCreatorEdit(){
   const role     = document.getElementById('ec-role').value;
   const status   = document.getElementById('ec-status').value;
 
+  // Staff assignment
+  const assigned_staff = {
+    primary:       document.getElementById('ec-staff-primary').value || null,
+    secondary:     document.getElementById('ec-staff-secondary').value || null,
+    admin_support: document.getElementById('ec-staff-admin').value || null,
+    notes:         document.getElementById('ec-staff-notes').value.trim() || null,
+  };
+
   if (!name) { showErr('Name is required'); return; }
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showErr('Email address looks invalid'); return; }
 
   // Build update — preserve all existing fields not in this form (notes, onboarding, profile_image_url, etc.)
-  const update = { ...orig, name, email, niche, location, role, status };
+  const update = { ...orig, name, email, niche, location, role, status, assigned_staff };
 
   const btn = document.getElementById('ec-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -3788,6 +3987,9 @@ async function saveCreatorEdit(){
     showErr('Save failed — check your connection and try again');
     return;
   }
+
+  // Mirror primary into managerAssignments (legacy compatibility — keeps Team page in sync)
+  syncLegacyManagerAssignments(orig.id, assigned_staff.primary);
 
   await refetch('creators');
   btn.disabled = false; btn.textContent = '💾 Save Changes';
@@ -3801,6 +4003,8 @@ async function saveCreatorEdit(){
   if (orig.location !== location) changes.push('location');
   if (orig.role !== role)       changes.push('role');
   if (orig.status !== status)   changes.push('status');
+  const origPrimary = (orig.assigned_staff && orig.assigned_staff.primary) || null;
+  if (origPrimary !== assigned_staff.primary) changes.push('staff assignment');
   if (changes.length) addActivity(`<strong>${name}</strong>'s ${changes.join(', ')} updated`);
 
   showToast(`✅ ${name} updated`);
@@ -3811,6 +4015,26 @@ async function saveCreatorEdit(){
   try { renderCRM(); } catch(e) {}
   try { updateDashStats(); } catch(e) {}
   try { populateSelects(); } catch(e) {}
+}
+
+/**
+ * Keep the legacy managerAssignments map in sync with the new assigned_staff.primary,
+ * so the existing Team page roster keeps working without changes.
+ */
+function syncLegacyManagerAssignments(creatorId, newPrimaryEmail) {
+  managerAssignments = managerAssignments || {};
+  // Remove this creator from any other manager's list
+  for (const email of Object.keys(managerAssignments)) {
+    managerAssignments[email] = (managerAssignments[email] || []).filter(id => id !== creatorId);
+  }
+  // Add to the new primary's list
+  if (newPrimaryEmail) {
+    if (!managerAssignments[newPrimaryEmail]) managerAssignments[newPrimaryEmail] = [];
+    if (!managerAssignments[newPrimaryEmail].includes(creatorId)) {
+      managerAssignments[newPrimaryEmail].push(creatorId);
+    }
+  }
+  Storage.set('managerAssignments', managerAssignments);
 }
 
 function handleGlobalSearch(q){
@@ -3828,6 +4052,26 @@ function openCreatorProfile(id){
   document.getElementById('profile-name').textContent=c.name;
   document.getElementById('profile-email').textContent=c.email;
   document.getElementById('profile-status-badge').innerHTML=statusBadge(c.status);
+  // Show who manages this creator
+  const mbEl = document.getElementById('profile-managed-by');
+  if (mbEl) {
+    const a = c.assigned_staff || {};
+    const labels = [];
+    const primaryEmail = a.primary || creatorPrimaryStaffEmail(c);
+    if (primaryEmail) {
+      const s = STAFF.find(x => x.email === primaryEmail);
+      if (s) labels.push(`👤 ${s.name}`);
+    }
+    if (a.secondary) {
+      const s = STAFF.find(x => x.email === a.secondary);
+      if (s) labels.push(`+ ${s.name}`);
+    }
+    if (a.admin_support) {
+      const s = STAFF.find(x => x.email === a.admin_support);
+      if (s) labels.push(`+ ${s.name} (admin)`);
+    }
+    mbEl.textContent = labels.length ? 'Managed by ' + labels.join(' · ') : 'Managed by — Unassigned';
+  }
 
   // Render avatar / profile pic
   const avatarEl = document.getElementById('profile-avatar-circle');
@@ -9293,6 +9537,846 @@ function exportSpendingCSV() {
   a.click();
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// ── STAFF PAYOUTS (commission ledger) ────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+
+let staffPayouts = Storage.get('staff_payouts', []);
+
+// Constants — labels/colours for the two status enums
+const BRAND_STATUS_LABELS = {
+  not_invoiced:     'Not invoiced',
+  invoiced:         'Invoiced',
+  payment_pending:  'Payment pending',
+  payment_received: 'Payment received',
+};
+const BRAND_STATUS_BADGE = {
+  not_invoiced:     'badge-gray',
+  invoiced:         'badge-amber',
+  payment_pending:  'badge-amber',
+  payment_received: 'badge-green',
+};
+const PAYOUT_STATUS_LABELS = {
+  draft:                  'Draft',
+  pending_brand_payment:  'Pending brand payment',
+  ready_to_pay:           'Ready to pay',
+  paid:                   'Paid',
+  cancelled:              'Cancelled',
+};
+const PAYOUT_STATUS_BADGE = {
+  draft:                  'badge-gray',
+  pending_brand_payment:  'badge-amber',
+  ready_to_pay:           'badge-blue',
+  paid:                   'badge-green',
+  cancelled:              'badge-red',
+};
+
+// Contribution-level helpers
+function contributionCountFromForm() {
+  return [
+    'cb-creator-signed','cb-admin-process','cb-brand-liaison','cb-creator-comm',
+    'cb-content-review','cb-negotiation','cb-reporting-payment'
+  ].filter(id => document.getElementById(id)?.checked).length;
+}
+function contributionLevelFromCount(n) {
+  if (n >= 6) return 'full';
+  if (n >= 4) return 'strong';
+  if (n >= 2) return 'some';
+  return 'low';
+}
+function contributionLevelLabel(level) {
+  return {low:'Low contribution', some:'Some contribution', strong:'Strong contribution', full:'Full deal involvement'}[level] || '—';
+}
+function contributionLevelBadge(level) {
+  return {low:'badge-gray', some:'badge-amber', strong:'badge-blue', full:'badge-green'}[level] || 'badge-gray';
+}
+
+/** Compute suggested commission % from the ticked checklist boxes. Capped at 50%. */
+function suggestedCommissionFromForm() {
+  let pct = 0;
+  if (document.getElementById('cb-creator-signed')?.checked)     pct += 22.5; // mid of 20-25
+  if (document.getElementById('cb-admin-process')?.checked)      pct += 4;
+  if (document.getElementById('cb-brand-liaison')?.checked)      pct += 6;
+  if (document.getElementById('cb-creator-comm')?.checked)       pct += 4;
+  if (document.getElementById('cb-content-review')?.checked)     pct += 4;
+  if (document.getElementById('cb-negotiation')?.checked)        pct += 6;
+  if (document.getElementById('cb-reporting-payment')?.checked)  pct += 3.5;
+  return Math.min(50, Math.round(pct * 2) / 2); // round to nearest 0.5
+}
+
+/** Load from Supabase, fallback to cache. */
+async function loadStaffPayouts() {
+  const rows = await DB.select('staff_payouts', '?order=created_at.desc');
+  if (rows && rows.length !== undefined) {
+    staffPayouts = rows;
+    Storage.set('staff_payouts', staffPayouts);
+  }
+  renderStaffPayouts();
+}
+
+/** Filter list by the current dropdown selections + permission scope. */
+function getFilteredStaffPayouts() {
+  const staffQ      = document.getElementById('payout-filter-staff')?.value || '';
+  const creatorQ    = document.getElementById('payout-filter-creator')?.value || '';
+  const brandStatQ  = document.getElementById('payout-filter-brand-status')?.value || '';
+  const payoutStatQ = document.getElementById('payout-filter-payout-status')?.value || '';
+
+  return staffPayouts.filter(p => {
+    if (!_canSeePayout(p))                                          return false;
+    if (staffQ      && p.staff_email !== staffQ)                    return false;
+    if (creatorQ    && String(p.creator_id) !== String(creatorQ))   return false;
+    if (brandStatQ  && p.brand_payment_status !== brandStatQ)       return false;
+    if (payoutStatQ && p.payout_status !== payoutStatQ)             return false;
+    return true;
+  });
+}
+
+/**
+ * Managers only see their own payouts and creators assigned to them.
+ * Owners and admins see everything. Read-only/team users see nothing.
+ */
+function _canSeePayout(p) {
+  if (!currentUser) return false;
+  const role = currentUser.systemRole;
+  if (role === 'owner' || role === 'admin') return true;
+  if (role !== 'manager') return false;
+  // Manager: can see if payout's staff_email is them OR if creator is assigned to them
+  if (p.staff_email === currentUser.email) return true;
+  if (p.creator_id) {
+    const c = creators.find(x => Number(x.id) === Number(p.creator_id));
+    if (c) {
+      if (c.assigned_staff?.primary === currentUser.email) return true;
+      if (c.assigned_staff?.secondary === currentUser.email) return true;
+      if (c.assigned_staff?.admin_support === currentUser.email) return true;
+      // Legacy fallback
+      const ids = managerAssignments[currentUser.email] || [];
+      if (ids.includes(c.id)) return true;
+    }
+  }
+  return false;
+}
+function _canEditPayouts() {
+  return currentUser && ['owner','admin'].includes(currentUser.systemRole);
+}
+
+/** Populate the filter dropdowns above the table. */
+function _populatePayoutFilters() {
+  const staffSel   = document.getElementById('payout-filter-staff');
+  const creatorSel = document.getElementById('payout-filter-creator');
+  if (staffSel) {
+    const cur = staffSel.value;
+    const eligible = STAFF.filter(s => ['owner','admin','manager'].includes(s.systemRole))
+                          .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    staffSel.innerHTML = '<option value="">All staff</option>' +
+      eligible.map(s => `<option value="${s.email}">${s.name}</option>`).join('');
+    if (cur) staffSel.value = cur;
+  }
+  if (creatorSel) {
+    const cur = creatorSel.value;
+    const sorted = [...creators].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    creatorSel.innerHTML = '<option value="">All creators</option>' +
+      sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    if (cur) creatorSel.value = cur;
+  }
+}
+
+function clearPayoutFilters() {
+  ['payout-filter-staff','payout-filter-creator','payout-filter-brand-status','payout-filter-payout-status']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  renderStaffPayouts();
+}
+
+function renderStaffPayouts() {
+  _populatePayoutFilters();
+
+  const addBtn = document.getElementById('btn-add-payout');
+  if (addBtn) addBtn.style.display = _canEditPayouts() ? '' : 'none';
+
+  const filtered = getFilteredStaffPayouts();
+
+  // Stat cards
+  const sums = {
+    pending: 0,    // pending brand payment
+    ready:   0,
+    paid:    0,
+    due:     0,    // anything not paid, not cancelled
+    retained:0,
+    pctSum:  0,
+    pctCount:0,
+  };
+  for (const p of filtered) {
+    const ca = Number(p.commission_amount || 0);
+    const re = Number(p.blustu_retained_amount || 0);
+    sums.retained += re;
+    if (p.payout_status === 'pending_brand_payment') sums.pending += ca;
+    if (p.payout_status === 'ready_to_pay')          sums.ready   += ca;
+    if (p.payout_status === 'paid')                  sums.paid    += ca;
+    if (!['paid','cancelled'].includes(p.payout_status)) sums.due += ca;
+    if (p.commission_percentage > 0) {
+      sums.pctSum   += Number(p.commission_percentage);
+      sums.pctCount += 1;
+    }
+  }
+  const avgPct = sums.pctCount ? (sums.pctSum / sums.pctCount).toFixed(1) + '%' : '—';
+
+  const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent = v; };
+  set('payout-stat-pending',  fmtMoneyFull(sums.pending));
+  set('payout-stat-ready',    fmtMoneyFull(sums.ready));
+  set('payout-stat-paid',     fmtMoneyFull(sums.paid));
+  set('payout-stat-due',      fmtMoneyFull(sums.due));
+  set('payout-stat-retained', fmtMoneyFull(sums.retained));
+  set('payout-stat-avg-pct',  avgPct);
+
+  // Sidebar badge — count of "ready to pay" payouts
+  const badge = document.getElementById('staffPayoutsBadge');
+  if (badge) {
+    const readyCount = filtered.filter(p => p.payout_status === 'ready_to_pay').length;
+    badge.textContent = readyCount;
+    badge.style.display = readyCount > 0 ? '' : 'none';
+  }
+
+  // Count label
+  const label = document.getElementById('payout-count-label');
+  if (label) label.textContent = filtered.length + ' payout' + (filtered.length === 1 ? '' : 's');
+
+  // Table body
+  const tbody = document.getElementById('staffPayoutsTableBody');
+  if (!tbody) return;
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:36px;color:var(--gray-400)">No staff payouts match your filter.</td></tr>';
+    return;
+  }
+  const canEdit = _canEditPayouts();
+  tbody.innerHTML = filtered.map(p => {
+    const staffInitial = (p.staff_name || '?')[0].toUpperCase();
+    const staffColor   = AVATAR_COLORS[Math.abs((p.staff_email||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % AVATAR_COLORS.length];
+    const dealLabel = p.whole_campaign
+      ? '<span style="font-size:10px;font-weight:600;color:var(--blue)">Whole campaign</span>'
+      : (p.earning_id ? '<span style="font-size:10px;color:var(--gray-400)">Earning #' + p.earning_id + '</span>' : '<span style="font-size:10px;color:var(--gray-400)">—</span>');
+    const contLevel = p.contribution_level || contributionLevelFromCount(_contribCountOfRow(p));
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:26px;height:26px;border-radius:50%;background:${staffColor};color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${staffInitial}</div>
+          <div style="font-size:13px;font-weight:500">${p.staff_name||'—'}</div>
+        </div>
+      </td>
+      <td style="font-size:13px">${p.creator_name||'—'}</td>
+      <td>
+        <div style="font-size:13px;font-weight:500">${p.brand_name||'—'}</div>
+        ${dealLabel}
+      </td>
+      <td style="text-align:right;font-weight:600">${fmtMoneyFull(p.agency_fee)}</td>
+      <td style="text-align:right">${Number(p.commission_percentage||0).toFixed(1)}%</td>
+      <td style="text-align:right;font-weight:600;color:var(--amber)">${fmtMoneyFull(p.commission_amount)}</td>
+      <td style="text-align:right;font-weight:600;color:var(--green)">${fmtMoneyFull(p.blustu_retained_amount)}</td>
+      <td><span class="badge ${contributionLevelBadge(contLevel)}" style="font-size:10px">${contributionLevelLabel(contLevel)}</span></td>
+      <td><span class="badge ${BRAND_STATUS_BADGE[p.brand_payment_status]||'badge-gray'}" style="font-size:10px">${BRAND_STATUS_LABELS[p.brand_payment_status]||'—'}</span></td>
+      <td><span class="badge ${PAYOUT_STATUS_BADGE[p.payout_status]||'badge-gray'}" style="font-size:10px">${PAYOUT_STATUS_LABELS[p.payout_status]||'—'}</span></td>
+      <td style="text-align:right;white-space:nowrap">
+        ${canEdit ? `<div style="display:inline-flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="openEditPayout('${p.id}')">Edit</button>
+          ${p.payout_status === 'ready_to_pay' ? `<button class="btn btn-primary btn-sm" onclick="markPayoutPaid('${p.id}')">Mark Paid</button>` : ''}
+          ${p.payout_status === 'pending_brand_payment' && p.brand_payment_status === 'payment_received' ? `<button class="btn btn-primary btn-sm" onclick="markPayoutReady('${p.id}')">Ready</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="deletePayout('${p.id}')">Del</button>
+        </div>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function _contribCountOfRow(p) {
+  return ['contribution_creator_signed','contribution_admin_process','contribution_brand_liaison',
+          'contribution_creator_communication','contribution_content_review','contribution_negotiation',
+          'contribution_reporting_payment'].filter(k => p[k]).length;
+}
+
+// ── ADD / EDIT MODAL ────────────────────────────────────────────────
+
+function openAddPayout(prefill) {
+  if (!_canEditPayouts()) { showToast('Only owners/admins can add staff payouts'); return; }
+  // Reset form
+  document.getElementById('payoutModalTitle').textContent = 'Add Staff Payout';
+  document.getElementById('payout-id').value = '';
+  document.getElementById('payout-error').style.display = 'none';
+  document.getElementById('payout-locked-banner').style.display = 'none';
+
+  // Populate selects
+  _populatePayoutCreatorSelect();
+  _populatePayoutStaffSelect();
+  _populatePayoutCampaignSelect();
+
+  // Reset values
+  document.getElementById('payout-creator').value = prefill?.creator_id || '';
+  document.getElementById('payout-staff').value = prefill?.staff_email || '';
+  document.getElementById('payout-brand').value = prefill?.brand_name || '';
+  document.getElementById('payout-agency-fee').value = '';
+  document.getElementById('payout-brand-spend').value = '';
+  document.getElementById('payout-pct').value = '30';
+  document.getElementById('payout-brand-status').value = 'not_invoiced';
+  document.getElementById('payout-status').value = 'draft';
+  document.getElementById('payout-notes').value = '';
+  // Reset checklist
+  ['cb-creator-signed','cb-admin-process','cb-brand-liaison','cb-creator-comm','cb-content-review','cb-negotiation','cb-reporting-payment']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; });
+  // Scope default: earning
+  document.querySelectorAll('input[name="payout-scope"]').forEach(r => r.checked = (r.value === 'earning'));
+  onPayoutScopeChange();
+  // Make form fields editable
+  _setPayoutFormLocked(false);
+  // If a creator was prefilled, trigger downstream
+  if (prefill?.creator_id) onPayoutCreatorChange();
+
+  recalcPayoutMath();
+  openModal('payoutModal');
+  setTimeout(() => document.getElementById('payout-creator')?.focus(), 100);
+}
+
+function openEditPayout(id) {
+  const p = staffPayouts.find(x => String(x.id) === String(id));
+  if (!p) return;
+  if (!_canEditPayouts()) { showToast('Only owners/admins can edit payouts'); return; }
+
+  document.getElementById('payoutModalTitle').textContent = 'Edit Staff Payout';
+  document.getElementById('payout-id').value = p.id;
+  document.getElementById('payout-error').style.display = 'none';
+
+  _populatePayoutCreatorSelect();
+  _populatePayoutStaffSelect();
+  _populatePayoutCampaignSelect();
+
+  // Set scope first so the right field group is visible
+  document.querySelectorAll('input[name="payout-scope"]').forEach(r =>
+    r.checked = (r.value === (p.whole_campaign ? 'campaign' : 'earning'))
+  );
+  onPayoutScopeChange();
+
+  document.getElementById('payout-creator').value = p.creator_id || '';
+  _populatePayoutEarningSelect(p.creator_id);    // load earnings for this creator
+  document.getElementById('payout-earning').value = p.earning_id || '';
+  document.getElementById('payout-campaign').value = p.campaign_id || '';
+  document.getElementById('payout-staff').value = p.staff_email || '';
+  document.getElementById('payout-brand').value = p.brand_name || '';
+  document.getElementById('payout-agency-fee').value = Number(p.agency_fee||0).toFixed(2);
+  document.getElementById('payout-brand-spend').value = Number(p.total_brand_spend||0).toFixed(2);
+  document.getElementById('payout-pct').value = Number(p.commission_percentage||0).toFixed(1);
+  document.getElementById('payout-brand-status').value = p.brand_payment_status || 'not_invoiced';
+  document.getElementById('payout-status').value = p.payout_status || 'draft';
+  document.getElementById('payout-notes').value = p.notes || '';
+
+  // Checklist
+  document.getElementById('cb-creator-signed').checked     = !!p.contribution_creator_signed;
+  document.getElementById('cb-admin-process').checked      = !!p.contribution_admin_process;
+  document.getElementById('cb-brand-liaison').checked      = !!p.contribution_brand_liaison;
+  document.getElementById('cb-creator-comm').checked       = !!p.contribution_creator_communication;
+  document.getElementById('cb-content-review').checked     = !!p.contribution_content_review;
+  document.getElementById('cb-negotiation').checked        = !!p.contribution_negotiation;
+  document.getElementById('cb-reporting-payment').checked  = !!p.contribution_reporting_payment;
+
+  // Lock if paid
+  if (p.payout_status === 'paid') {
+    _setPayoutFormLocked(true);
+    document.getElementById('payout-locked-banner').style.display = '';
+  } else {
+    _setPayoutFormLocked(false);
+    document.getElementById('payout-locked-banner').style.display = 'none';
+  }
+
+  recalcPayoutMath();
+  openModal('payoutModal');
+}
+
+function unlockPaidPayout() {
+  if (!confirm('This payout is already marked Paid. Editing it may also require updating the linked Spending entry. Continue?')) return;
+  _setPayoutFormLocked(false);
+  document.getElementById('payout-locked-banner').style.display = 'none';
+}
+
+function _setPayoutFormLocked(locked) {
+  const fields = document.querySelectorAll('#payoutModal input, #payoutModal select, #payoutModal textarea');
+  fields.forEach(f => {
+    if (f.id === 'payout-id') return;
+    if (f.closest('#payout-locked-banner')) return;
+    f.disabled = locked;
+  });
+  const saveBtn = document.getElementById('payout-save-btn');
+  if (saveBtn) saveBtn.disabled = locked;
+}
+
+function _populatePayoutCreatorSelect() {
+  const sel = document.getElementById('payout-creator');
+  if (!sel) return;
+  const sorted = [...creators].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  sel.innerHTML = '<option value="">— Pick a creator —</option>' +
+    sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+function _populatePayoutStaffSelect() {
+  const sel = document.getElementById('payout-staff');
+  if (!sel) return;
+  const eligible = STAFF.filter(s => ['owner','admin','manager'].includes(s.systemRole))
+                        .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  sel.innerHTML = '<option value="">— Pick a staff member —</option>' +
+    eligible.map(s => {
+      const tag = s.systemRole === 'owner' ? ' (Owner)' : s.systemRole === 'admin' ? ' (Admin)' : '';
+      return `<option value="${s.email}">${s.name}${tag}</option>`;
+    }).join('');
+}
+function _populatePayoutCampaignSelect() {
+  const sel = document.getElementById('payout-campaign');
+  if (!sel) return;
+  const sorted = [...campaigns].sort((a,b)=>(a.brand||'').localeCompare(b.brand||''));
+  sel.innerHTML = '<option value="">— Pick a campaign —</option>' +
+    sorted.map(c => `<option value="${c.id}" data-value="${c.value||0}" data-brand="${c.brand||''}">${c.brand} × ${c.creator}</option>`).join('');
+}
+function _populatePayoutEarningSelect(creatorId) {
+  const sel = document.getElementById('payout-earning');
+  if (!sel) return;
+  if (!creatorId) {
+    sel.innerHTML = '<option value="">— Pick a creator first —</option>';
+    return;
+  }
+  const rows = earnings
+    .filter(e => Number(e.creator_id) === Number(creatorId) && e.entry_type !== 'agency_only')
+    .sort((a,b)=>new Date(b.created_at||0) - new Date(a.created_at||0));
+  if (!rows.length) {
+    sel.innerHTML = '<option value="">— No earnings records for this creator —</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— Pick an earnings record —</option>' +
+    rows.map(e => {
+      const dv = Number(e.deal_value||0);
+      const af = agencyStandardCutFor(e) + lateFeeFor(e) + extraProfitFor(e);
+      const date = e.created_at ? new Date(e.created_at).toLocaleDateString('en-GB') : '';
+      return `<option value="${e.id}" data-agency="${af.toFixed(2)}" data-deal="${dv.toFixed(2)}" data-brand="${e.brand_name||''}" data-campaign="${e.campaign_id||''}">${e.brand_name||'(no brand)'} — Deal £${dv.toFixed(0)}, Agency £${af.toFixed(2)} — ${date}</option>`;
+    }).join('');
+}
+
+function onPayoutScopeChange() {
+  const scope = document.querySelector('input[name="payout-scope"]:checked')?.value || 'earning';
+  document.getElementById('payout-earning-group').style.display  = scope === 'earning'  ? '' : 'none';
+  document.getElementById('payout-campaign-group').style.display = scope === 'campaign' ? '' : 'none';
+  // When toggling, clear the agency fee so user sees the new auto-fill
+  if (scope === 'earning')  onPayoutEarningChange();
+  if (scope === 'campaign') onPayoutCampaignChange();
+}
+
+function onPayoutCreatorChange() {
+  const sel = document.getElementById('payout-creator');
+  const creatorId = sel.value;
+  // Reload earnings dropdown
+  _populatePayoutEarningSelect(creatorId);
+  // Auto-suggest staff if this creator has an assigned manager
+  const hintEl = document.getElementById('payout-staff-suggestion');
+  if (creatorId) {
+    const c = creators.find(x => Number(x.id) === Number(creatorId));
+    const primary = c ? creatorPrimaryStaffEmail(c) : null;
+    if (primary) {
+      const s = STAFF.find(x => x.email === primary);
+      const staffSel = document.getElementById('payout-staff');
+      // Only override if staff field is empty (don't trample explicit picks)
+      if (s && !staffSel.value) staffSel.value = primary;
+      if (s && hintEl) {
+        hintEl.textContent = `💡 Suggested: ${s.name} (primary manager for this creator)`;
+        hintEl.style.display = '';
+      } else if (hintEl) hintEl.style.display = 'none';
+    } else if (hintEl) {
+      hintEl.textContent = '⚠ No staff assigned to this creator. Set assignment on the creator profile.';
+      hintEl.style.display = '';
+    }
+  } else if (hintEl) hintEl.style.display = 'none';
+  recalcPayoutMath();
+}
+
+function onPayoutEarningChange() {
+  const sel = document.getElementById('payout-earning');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) { return; }
+  const agencyFee = Number(opt.getAttribute('data-agency')) || 0;
+  const dealVal   = Number(opt.getAttribute('data-deal')) || 0;
+  const brand     = opt.getAttribute('data-brand') || '';
+  document.getElementById('payout-agency-fee').value = agencyFee.toFixed(2);
+  document.getElementById('payout-brand-spend').value = dealVal.toFixed(2);
+  if (brand) document.getElementById('payout-brand').value = brand;
+  recalcPayoutMath();
+}
+
+function onPayoutCampaignChange() {
+  const sel = document.getElementById('payout-campaign');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  const campId = opt.value;
+  const camp = campaigns.find(c => String(c.id) === String(campId));
+  if (!camp) return;
+  // Sum agency revenue from all creator earnings on this campaign
+  const rows = earnings.filter(e => String(e.campaign_id) === String(campId));
+  let agencyFee = 0;
+  for (const e of rows) {
+    if (e.entry_type === 'agency_only') {
+      agencyFee += Number(e.extra_agency_profit || e.deal_value || 0);
+    } else {
+      agencyFee += agencyStandardCutFor(e) + lateFeeFor(e) + extraProfitFor(e);
+    }
+  }
+  document.getElementById('payout-agency-fee').value = agencyFee.toFixed(2);
+  document.getElementById('payout-brand-spend').value = Number(camp.value||0).toFixed(2);
+  document.getElementById('payout-brand').value = camp.brand || '';
+  recalcPayoutMath();
+}
+
+function onBrandStatusChange() {
+  // If brand status changes away from "payment_received" and current payout status is paid/ready, downgrade it
+  const brand = document.getElementById('payout-brand-status').value;
+  const payoutSel = document.getElementById('payout-status');
+  if (brand !== 'payment_received') {
+    if (['ready_to_pay','paid'].includes(payoutSel.value)) {
+      payoutSel.value = 'pending_brand_payment';
+    }
+  }
+  recalcPayoutMath();
+}
+
+function useSuggestedPct() {
+  const p = suggestedCommissionFromForm();
+  document.getElementById('payout-pct').value = p.toFixed(1);
+  recalcPayoutMath();
+}
+
+/** Live math + warnings */
+function recalcPayoutMath() {
+  const agencyFee = Number(document.getElementById('payout-agency-fee').value) || 0;
+  const pct       = Number(document.getElementById('payout-pct').value) || 0;
+  const commission = agencyFee * pct / 100;
+  const retained   = agencyFee - commission;
+  const retainedPct = agencyFee > 0 ? (100 - pct) : 0;
+
+  document.getElementById('payout-calc-staff').textContent     = fmtMoneyFull(commission);
+  document.getElementById('payout-calc-retained').textContent  = fmtMoneyFull(retained);
+  document.getElementById('payout-calc-retained-pct').textContent = agencyFee > 0 ? '(' + retainedPct.toFixed(0) + '%)' : '';
+
+  // Contribution level + suggested
+  const count = contributionCountFromForm();
+  const level = contributionLevelFromCount(count);
+  const badge = document.getElementById('payout-contribution-badge');
+  if (badge) {
+    badge.textContent = contributionLevelLabel(level);
+    badge.className = 'badge ' + contributionLevelBadge(level);
+    badge.style.fontSize = '11px';
+    badge.style.fontWeight = '600';
+  }
+  document.getElementById('payout-suggested-pct').textContent = suggestedCommissionFromForm().toFixed(1) + '%';
+
+  // Warnings
+  const warnings = [];
+  if (pct > 50)                              warnings.push('⚠ Commission above 50% — BluStu retained falls below the 50% target. Use only if staff was involved throughout the entire deal.');
+  if (pct >= 25 && count === 0)              warnings.push('⚠ Commission ≥25% but no contribution boxes ticked. Tick the checklist to justify.');
+  if (count >= 4 && pct < 25 && agencyFee>0) warnings.push('💡 Strong contribution but commission under 25% — consider raising it.');
+  if (retained < agencyFee * 0.5 && agencyFee > 0) warnings.push('⚠ BluStu retained amount is below 50% of the agency fee.');
+  // Brand-payment gate
+  const brand = document.getElementById('payout-brand-status').value;
+  const stat  = document.getElementById('payout-status').value;
+  if (stat === 'paid' && brand !== 'payment_received') warnings.push('🚫 Cannot mark as Paid until brand payment is received.');
+
+  const wEl = document.getElementById('payout-warnings');
+  if (wEl) {
+    if (!warnings.length) { wEl.innerHTML = ''; }
+    else wEl.innerHTML = warnings.map(w =>
+      `<div style="background:#fef3c7;color:#92400e;border-left:3px solid #f59e0b;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:6px">${w}</div>`
+    ).join('');
+  }
+}
+
+/** Save (create or update) — handles auto-create of Spending entry on Paid */
+async function saveStaffPayout() {
+  const errEl = document.getElementById('payout-error');
+  const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
+  errEl.style.display = 'none';
+
+  const id           = document.getElementById('payout-id').value.trim();
+  const scope        = document.querySelector('input[name="payout-scope"]:checked')?.value || 'earning';
+  const creatorId    = document.getElementById('payout-creator').value;
+  const staffEmail   = document.getElementById('payout-staff').value;
+  const earningId    = scope === 'earning' ? document.getElementById('payout-earning').value : '';
+  const campaignId   = scope === 'campaign' ? document.getElementById('payout-campaign').value : '';
+  const brand        = document.getElementById('payout-brand').value.trim();
+  const agencyFee    = Number(document.getElementById('payout-agency-fee').value) || 0;
+  const totalSpend   = Number(document.getElementById('payout-brand-spend').value) || 0;
+  const pct          = Number(document.getElementById('payout-pct').value) || 0;
+  const brandStatus  = document.getElementById('payout-brand-status').value;
+  let   payoutStatus = document.getElementById('payout-status').value;
+  const notes        = document.getElementById('payout-notes').value.trim();
+
+  // Validation
+  if (!staffEmail)                                  { showErr('Staff member is required'); return; }
+  if (!creatorId)                                   { showErr('Creator is required'); return; }
+  if (!agencyFee || agencyFee < 0)                  { showErr('Agency fee must be ≥ 0 and > 0 typically'); return; }
+  if (pct < 0 || pct > 100)                         { showErr('Commission % must be between 0 and 100'); return; }
+  if (scope === 'earning'  && !earningId)           { showErr('Pick an earnings record (or switch scope to Whole campaign)'); return; }
+  if (scope === 'campaign' && !campaignId)          { showErr('Pick a campaign'); return; }
+  // Cannot mark paid until brand has paid
+  if (payoutStatus === 'paid' && brandStatus !== 'payment_received') {
+    showErr('Cannot mark as Paid until brand payment status is "Payment received".');
+    return;
+  }
+  // Auto-coerce: if brand hasn't paid, payout status downgrades
+  if (brandStatus !== 'payment_received' && payoutStatus === 'ready_to_pay') {
+    payoutStatus = 'pending_brand_payment';
+  }
+
+  const commission = agencyFee * pct / 100;
+  const retained   = agencyFee - commission;
+
+  const checklist = {
+    creator_signed:        !!document.getElementById('cb-creator-signed').checked,
+    admin_process:         !!document.getElementById('cb-admin-process').checked,
+    brand_liaison:         !!document.getElementById('cb-brand-liaison').checked,
+    creator_communication: !!document.getElementById('cb-creator-comm').checked,
+    content_review:        !!document.getElementById('cb-content-review').checked,
+    negotiation:           !!document.getElementById('cb-negotiation').checked,
+    reporting_payment:     !!document.getElementById('cb-reporting-payment').checked,
+  };
+  const contribCount = Object.values(checklist).filter(Boolean).length;
+  const contribLevel = contributionLevelFromCount(contribCount);
+
+  const staff   = STAFF.find(s => s.email === staffEmail);
+  const creator = creators.find(c => Number(c.id) === Number(creatorId));
+
+  const row = {
+    staff_email:                        staffEmail,
+    staff_name:                         staff ? staff.name : staffEmail,
+    creator_id:                         Number(creatorId),
+    creator_name:                       creator ? creator.name : null,
+    earning_id:                         earningId ? Number(earningId) : null,
+    campaign_id:                        campaignId ? Number(campaignId) : null,
+    whole_campaign:                     scope === 'campaign',
+    brand_name:                         brand || null,
+    total_brand_spend:                  totalSpend,
+    agency_fee:                         agencyFee,
+    commission_percentage:              pct,
+    commission_amount:                  Math.round(commission * 100) / 100,
+    blustu_retained_amount:             Math.round(retained * 100) / 100,
+    brand_payment_status:               brandStatus,
+    payout_status:                      payoutStatus,
+    contribution_creator_signed:        checklist.creator_signed,
+    contribution_admin_process:         checklist.admin_process,
+    contribution_brand_liaison:         checklist.brand_liaison,
+    contribution_creator_communication: checklist.creator_communication,
+    contribution_content_review:        checklist.content_review,
+    contribution_negotiation:           checklist.negotiation,
+    contribution_reporting_payment:     checklist.reporting_payment,
+    contribution_level:                 contribLevel,
+    notes:                              notes || null,
+    created_by:                         currentUser?.email || null,
+    updated_at:                         new Date().toISOString(),
+  };
+
+  const btn = document.getElementById('payout-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  // The previous version of this row (for spending sync logic)
+  const prev = id ? staffPayouts.find(x => String(x.id) === String(id)) : null;
+
+  // Mark paid_at when transitioning to Paid
+  if (payoutStatus === 'paid' && (!prev || prev.payout_status !== 'paid')) {
+    row.paid_at = new Date().toISOString();
+  } else if (prev && prev.paid_at && payoutStatus === 'paid') {
+    row.paid_at = prev.paid_at; // preserve
+  } else if (payoutStatus !== 'paid') {
+    row.paid_at = null;
+  }
+
+  let result;
+  try {
+    if (id) {
+      row.id = id;
+      // Preserve spending_id link
+      if (prev?.spending_id) row.spending_id = prev.spending_id;
+      result = await DB._req('PATCH', 'staff_payouts', row, '?id=eq.' + id);
+    } else {
+      row.created_at = new Date().toISOString();
+      result = await DB._req('POST', 'staff_payouts', [row], '');
+    }
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Save Payout';
+    showErr('Save failed: ' + e.message);
+    return;
+  }
+  if (result === null) {
+    btn.disabled = false; btn.textContent = 'Save Payout';
+    showErr('Save failed: ' + (DB._lastError || 'unknown — make sure you have run the staff_payouts SQL migration.'));
+    return;
+  }
+
+  // Get the saved row id (for POST it's in result[0])
+  const savedRow = Array.isArray(result) ? result[0] : (typeof result === 'object' && result ? result : prev);
+  const savedId  = savedRow?.id || id;
+
+  // ── Spending sync ──
+  // If payout transitioned TO paid → auto-create a Spending entry
+  // If payout was already paid and edited → update the linked Spending entry
+  // If payout transitions away from paid (rare) → delete the linked Spending entry
+  await _syncPayoutSpending(savedId, row, prev);
+
+  btn.disabled = false; btn.textContent = 'Save Payout';
+  closeModal('payoutModal');
+  await loadStaffPayouts();
+  try { await loadSpending(); } catch(e){}
+  addActivity(`Staff payout ${id ? 'updated' : 'added'}: <strong>${row.staff_name}</strong> — ${fmtMoneyFull(commission)}`);
+  showToast(id ? '✅ Staff payout updated' : '✅ Staff payout added');
+}
+
+/**
+ * Ensure the corresponding agency_spending row mirrors this payout's paid state.
+ * - Becomes paid     → create new spending row (or update existing if spending_id present)
+ * - Stays paid + edits → update existing spending row (idempotent)
+ * - Leaves paid      → delete spending row
+ */
+async function _syncPayoutSpending(payoutId, currentRow, prevRow) {
+  const wasPaid = prevRow?.payout_status === 'paid';
+  const isPaid  = currentRow.payout_status === 'paid';
+
+  if (!isPaid && !wasPaid) return; // nothing to do
+  if (!isPaid && wasPaid) {
+    // Delete the linked spending row
+    if (prevRow?.spending_id) {
+      try { await DB._req('DELETE', 'agency_spending', null, '?id=eq.' + prevRow.spending_id); } catch(e){}
+      // Clear the spending_id link on the payout
+      try { await DB._req('PATCH', 'staff_payouts', { spending_id: null }, '?id=eq.' + payoutId); } catch(e){}
+    }
+    return;
+  }
+  // isPaid = true
+  const spendingRow = {
+    spend_date:        currentRow.paid_at || new Date().toISOString(),
+    category:          'Staff Payouts',
+    vendor:            currentRow.staff_name,
+    description:       `Commission: ${currentRow.creator_name || 'creator'} × ${currentRow.brand_name || 'brand'} @ ${currentRow.commission_percentage}%`,
+    amount:            currentRow.commission_amount,
+    notes:             (currentRow.notes ? currentRow.notes + ' · ' : '') + 'Linked staff payout #' + payoutId,
+    linked_payout_id:  payoutId,
+    created_by:        currentUser?.email || null,
+    updated_at:        new Date().toISOString(),
+  };
+
+  if (prevRow?.spending_id) {
+    // Update existing
+    try {
+      await DB._req('PATCH', 'agency_spending', spendingRow, '?id=eq.' + prevRow.spending_id);
+    } catch (e) {
+      console.warn('Failed to update linked spending row:', e);
+    }
+  } else {
+    // Create new
+    try {
+      spendingRow.created_at = new Date().toISOString();
+      const created = await DB._req('POST', 'agency_spending', [spendingRow], '');
+      const newId = Array.isArray(created) ? created[0]?.id : created?.id;
+      if (newId) {
+        // Save back the spending_id link on the payout
+        await DB._req('PATCH', 'staff_payouts', { spending_id: newId }, '?id=eq.' + payoutId);
+      }
+    } catch (e) {
+      console.warn('Failed to create linked spending row:', e);
+    }
+  }
+}
+
+async function markPayoutPaid(id) {
+  const p = staffPayouts.find(x => String(x.id) === String(id));
+  if (!p) return;
+  if (p.brand_payment_status !== 'payment_received') {
+    showToast('🚫 Cannot mark Paid until brand payment is received');
+    return;
+  }
+  showConfirm('Mark as Paid?',
+    `This will record £${Number(p.commission_amount||0).toFixed(2)} as paid out to ${p.staff_name} and auto-create a Spending entry under "Staff Payouts" — keeping your Available Balance accurate.`,
+    async () => {
+      const update = { payout_status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      const result = await DB._req('PATCH', 'staff_payouts', update, '?id=eq.' + id);
+      if (result === null) return;
+      const newRow = { ...p, ...update };
+      await _syncPayoutSpending(id, newRow, p);
+      await loadStaffPayouts();
+      try { await loadSpending(); } catch(e){}
+      showToast('✅ Payout marked as paid');
+      addActivity(`Staff payout paid: ${p.staff_name} — ${fmtMoneyFull(p.commission_amount)}`);
+    }
+  );
+}
+
+async function markPayoutReady(id) {
+  const p = staffPayouts.find(x => String(x.id) === String(id));
+  if (!p) return;
+  if (p.brand_payment_status !== 'payment_received') {
+    showToast('🚫 Cannot mark Ready until brand payment is received');
+    return;
+  }
+  const update = { payout_status: 'ready_to_pay', updated_at: new Date().toISOString() };
+  const result = await DB._req('PATCH', 'staff_payouts', update, '?id=eq.' + id);
+  if (result === null) return;
+  await loadStaffPayouts();
+  showToast('✅ Payout marked as Ready to pay');
+}
+
+async function deletePayout(id) {
+  const p = staffPayouts.find(x => String(x.id) === String(id));
+  if (!p) return;
+  showConfirm('Delete this staff payout?',
+    `This permanently removes the payout to ${p.staff_name} (${fmtMoneyFull(p.commission_amount)}).${p.spending_id ? ' The linked Spending entry will also be removed.' : ''}`,
+    async () => {
+      // Remove linked spending if any
+      if (p.spending_id) {
+        try { await DB._req('DELETE', 'agency_spending', null, '?id=eq.' + p.spending_id); } catch(e){}
+      }
+      const result = await DB._req('DELETE', 'staff_payouts', null, '?id=eq.' + id);
+      if (result === null) return;
+      await loadStaffPayouts();
+      try { await loadSpending(); } catch(e){}
+      showToast('Payout deleted');
+    }
+  );
+}
+
+function exportStaffPayoutsCSV() {
+  const filtered = getFilteredStaffPayouts();
+  if (!filtered.length) { showToast('No payouts to export'); return; }
+  const headers = [
+    'Staff','Staff Email','Creator','Brand','Scope','Earning ID','Campaign ID',
+    'Agency Fee (£)','Commission %','Commission Amount (£)','BluStu Retained (£)',
+    'Contribution Level','Brand Payment Status','Payout Status',
+    'Creator Signed','Admin Process','Brand Liaison','Creator Comm','Content Review','Negotiation','Reporting',
+    'Notes','Created','Paid Date'
+  ];
+  const rows = filtered.map(p => [
+    p.staff_name, p.staff_email, p.creator_name, p.brand_name,
+    p.whole_campaign ? 'Whole campaign' : 'Single earning',
+    p.earning_id || '', p.campaign_id || '',
+    Number(p.agency_fee||0).toFixed(2),
+    Number(p.commission_percentage||0).toFixed(1),
+    Number(p.commission_amount||0).toFixed(2),
+    Number(p.blustu_retained_amount||0).toFixed(2),
+    contributionLevelLabel(p.contribution_level || contributionLevelFromCount(_contribCountOfRow(p))),
+    BRAND_STATUS_LABELS[p.brand_payment_status] || p.brand_payment_status || '',
+    PAYOUT_STATUS_LABELS[p.payout_status] || p.payout_status || '',
+    p.contribution_creator_signed ? 'Y' : '',
+    p.contribution_admin_process ? 'Y' : '',
+    p.contribution_brand_liaison ? 'Y' : '',
+    p.contribution_creator_communication ? 'Y' : '',
+    p.contribution_content_review ? 'Y' : '',
+    p.contribution_negotiation ? 'Y' : '',
+    p.contribution_reporting_payment ? 'Y' : '',
+    p.notes || '',
+    p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : '',
+    p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB') : '',
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'blustu-staff-payouts-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showToast('CSV exported');
+}
+
 // Creator profile earnings summary card
 function renderEarningsProfileCard() {
   const el = document.getElementById('profile-earnings-card');
@@ -11930,6 +13014,162 @@ async function deleteMailboxPassword() {
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('spendingModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveSpendingEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD / EDIT STAFF PAYOUT MODAL ══ -->
+<div class="modal-overlay" id="payoutModal">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-header">
+      <div class="modal-title" id="payoutModalTitle">Add Staff Payout</div>
+      <button class="modal-close" onclick="closeModal('payoutModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="payout-id">
+      <div id="payout-error" style="display:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500"></div>
+      <div id="payout-locked-banner" style="display:none;background:#f3f4f6;color:var(--gray-600);border-left:3px solid var(--gray-300);border-radius:6px;padding:10px 14px;font-size:12px;margin-bottom:12px">
+        🔒 This payout is marked Paid. <button type="button" class="btn btn-ghost btn-sm" onclick="unlockPaidPayout()" style="margin-left:8px">Edit anyway</button>
+      </div>
+
+      <!-- Creator + auto-suggested staff -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Creator *</label>
+          <select class="form-select" id="payout-creator" onchange="onPayoutCreatorChange()"></select>
+          <div class="form-hint" id="payout-creator-hint">Pick a creator to auto-suggest their assigned manager and fetch their earnings records.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Staff Member *</label>
+          <select class="form-select" id="payout-staff"></select>
+          <div class="form-hint" id="payout-staff-suggestion" style="color:var(--blue);display:none"></div>
+        </div>
+      </div>
+
+      <!-- Scope: single earning or whole campaign -->
+      <div class="card" style="padding:10px 14px;margin-bottom:14px;background:var(--gray-50);border:1px solid var(--gray-100)">
+        <label class="form-label" style="margin-bottom:8px;display:block">Commission scope</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 12px;border-radius:8px;background:var(--white);border:1px solid var(--gray-100);flex:1">
+            <input type="radio" name="payout-scope" value="earning" checked onchange="onPayoutScopeChange()" style="margin:0">
+            <span style="font-size:13px;font-weight:500">📄 Single earning record</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 12px;border-radius:8px;background:var(--white);border:1px solid var(--gray-100);flex:1">
+            <input type="radio" name="payout-scope" value="campaign" onchange="onPayoutScopeChange()" style="margin:0">
+            <span style="font-size:13px;font-weight:500">📊 Whole campaign</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Earning record picker (when scope=earning) -->
+      <div class="form-group" id="payout-earning-group">
+        <label class="form-label">Earnings Record *</label>
+        <select class="form-select" id="payout-earning" onchange="onPayoutEarningChange()"></select>
+        <div class="form-hint" id="payout-earning-hint">Pick an earnings record to auto-fill the agency fee from its agency cut + late fee + extras.</div>
+      </div>
+
+      <!-- Campaign picker (when scope=campaign) -->
+      <div class="form-group" id="payout-campaign-group" style="display:none">
+        <label class="form-label">Campaign *</label>
+        <select class="form-select" id="payout-campaign" onchange="onPayoutCampaignChange()"></select>
+        <div class="form-hint" id="payout-campaign-hint">Agency fee will be the sum of agency revenue across all earnings records on this campaign.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Brand / Client</label>
+        <input class="form-input" id="payout-brand" placeholder="e.g. oTime">
+      </div>
+
+      <!-- The money math, side by side -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Agency fee received by BluStu (£) *</label>
+          <input class="form-input" id="payout-agency-fee" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcPayoutMath()">
+          <div class="form-hint">Auto-filled from your selection. Editable in case you need to override.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Total brand spend (£) <span style="font-weight:400;color:var(--gray-400);font-size:11px">— reference only</span></label>
+          <input class="form-input" id="payout-brand-spend" type="number" min="0" step="0.01" placeholder="0.00">
+          <div class="form-hint">⚠ Commission is NOT calculated from this number.</div>
+        </div>
+      </div>
+
+      <!-- Material contribution checklist -->
+      <div class="card" style="padding:14px 16px;margin:8px 0 14px;background:#eff6ff;border:1px solid #bfdbfe">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+          <div>
+            <label class="form-label" style="margin:0;font-size:13px">📋 Material contribution checklist</label>
+            <div class="form-hint" style="margin-top:2px">Tick what this staff member did on the deal. Drives the suggested commission %.</div>
+          </div>
+          <span class="badge" id="payout-contribution-badge" style="font-size:11px;font-weight:600">Low contribution</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px" id="payout-contribution-grid">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-creator-signed" onchange="recalcPayoutMath()" style="margin:0">Creator signed/managed by staff (base)</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-admin-process" onchange="recalcPayoutMath()" style="margin:0">Admin process</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-brand-liaison" onchange="recalcPayoutMath()" style="margin:0">Brand liaison</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-creator-comm" onchange="recalcPayoutMath()" style="margin:0">Creator communication</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-content-review" onchange="recalcPayoutMath()" style="margin:0">Content drafting / reviewing</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-negotiation" onchange="recalcPayoutMath()" style="margin:0">Negotiation / pricing</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-reporting-payment" onchange="recalcPayoutMath()" style="margin:0">Reporting / payment chasing</label>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #bfdbfe;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="font-size:12px;color:var(--blue)">
+            Suggested commission: <strong id="payout-suggested-pct">20%</strong>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="useSuggestedPct()" style="margin-left:8px">Use suggested</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Commission % + math display -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Commission percentage (%) *</label>
+          <input class="form-input" id="payout-pct" type="number" min="0" max="100" step="0.5" value="30" oninput="recalcPayoutMath()">
+          <div class="form-hint">Usually 25–50%. Manually adjustable per payout.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Calculated</label>
+          <div style="padding:9px 12px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;font-size:13px">
+            Staff payout: <strong id="payout-calc-staff" style="color:var(--amber)">£0.00</strong><br>
+            BluStu retained: <strong id="payout-calc-retained" style="color:var(--green)">£0.00</strong> <span id="payout-calc-retained-pct" style="color:var(--gray-400);font-size:11px"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live warnings -->
+      <div id="payout-warnings"></div>
+
+      <!-- Statuses -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Brand payment status *</label>
+          <select class="form-select" id="payout-brand-status" onchange="onBrandStatusChange()">
+            <option value="not_invoiced">Not invoiced</option>
+            <option value="invoiced">Invoiced</option>
+            <option value="payment_pending">Payment pending</option>
+            <option value="payment_received">Payment received ✓</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payout status *</label>
+          <select class="form-select" id="payout-status">
+            <option value="draft">Draft</option>
+            <option value="pending_brand_payment">Pending brand payment</option>
+            <option value="ready_to_pay">Ready to pay</option>
+            <option value="paid">Paid</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Notes / evidence</label>
+        <textarea class="form-textarea" id="payout-notes" placeholder="Anything justifying the contribution: meeting dates, brand emails, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('payoutModal')">Cancel</button>
+      <button class="btn btn-primary" id="payout-save-btn" onclick="saveStaffPayout()">Save Payout</button>
     </div>
   </div>
 </div>
