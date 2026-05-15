@@ -10143,10 +10143,10 @@ async function saveStaffPayout() {
   const row = {
     staff_email:                        staffEmail,
     staff_name:                         staff ? staff.name : staffEmail,
-    creator_id:                         Number(creatorId),
+    creator_id:                         creatorId ? String(creatorId) : null,
     creator_name:                       creator ? creator.name : null,
-    earning_id:                         earningId ? Number(earningId) : null,
-    campaign_id:                        campaignId ? Number(campaignId) : null,
+    earning_id:                         earningId  ? String(earningId)  : null,
+    campaign_id:                        campaignId ? String(campaignId) : null,
     whole_campaign:                     scope === 'campaign',
     brand_name:                         brand || null,
     total_brand_spend:                  totalSpend,
@@ -10252,7 +10252,7 @@ async function _syncPayoutSpending(payoutId, currentRow, prevRow) {
     description:       `Commission: ${currentRow.creator_name || 'creator'} × ${currentRow.brand_name || 'brand'} @ ${currentRow.commission_percentage}%`,
     amount:            currentRow.commission_amount,
     notes:             (currentRow.notes ? currentRow.notes + ' · ' : '') + 'Linked staff payout #' + payoutId,
-    linked_payout_id:  payoutId,
+    linked_payout_id:  String(payoutId),
     created_by:        currentUser?.email || null,
     updated_at:        new Date().toISOString(),
   };
