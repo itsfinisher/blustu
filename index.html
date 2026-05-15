@@ -935,6 +935,11 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       Staff Payouts
       <span class="nav-badge" id="staffPayoutsBadge" style="background:var(--amber);display:none">0</span>
     </button>
+    <button class="nav-item" id="nav-invoices" onclick="showPage('invoices',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Invoices
+      <span class="nav-badge" id="invoicesBadge" style="background:var(--blue);display:none">0</span>
+    </button>
     <button class="nav-item" onclick="showPage('calendar',this)">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       Calendar
@@ -2048,6 +2053,62 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
       </div>
     </div>
 
+    <!-- ══ INVOICES PAGE ══ -->
+    <div class="page" id="page-invoices">
+      <div class="page-header">
+        <div>
+          <h1>Invoices</h1>
+          <p>Staff commission invoices — generated from Staff Payouts when Ready to Pay. Each contributor gets their own invoice.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="exportInvoicesCSV()">⬇ Export CSV</button>
+        </div>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
+        <div class="stat-card"><div class="stat-label">Drafts</div><div class="stat-value" id="inv-stat-drafts" style="color:var(--gray-500)">0</div><div class="stat-change neutral">Not yet sent</div></div>
+        <div class="stat-card"><div class="stat-label">Sent</div><div class="stat-value" id="inv-stat-sent" style="color:var(--blue)">£0</div><div class="stat-change neutral">Awaiting payment</div></div>
+        <div class="stat-card"><div class="stat-label">Paid</div><div class="stat-value" id="inv-stat-paid" style="color:var(--green)">£0</div><div class="stat-change up">All-time</div></div>
+        <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" id="inv-stat-outstanding" style="color:var(--amber)">£0</div><div class="stat-change neutral">Sent but not yet paid</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px;padding:14px 20px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select class="form-select" id="inv-filter-staff" onchange="renderInvoices()" style="max-width:200px">
+            <option value="">All staff</option>
+          </select>
+          <select class="form-select" id="inv-filter-status" onchange="renderInvoices()" style="max-width:160px">
+            <option value="">Any status</option>
+            <option value="draft">Draft</option>
+            <option value="sent">Sent</option>
+            <option value="paid">Paid</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="clearInvoiceFilters()">Clear</button>
+          <span style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="inv-count-label">0 invoices</span>
+        </div>
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table id="invoicesTable">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Staff</th>
+                <th>Brand</th>
+                <th style="text-align:right">Amount</th>
+                <th>Issue Date</th>
+                <th>Status</th>
+                <th>Paid Date</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="invoicesTableBody">
+              <tr><td colspan="8" style="text-align:center;padding:36px;color:var(--gray-400)">No invoices yet. Generate them from a "Ready to Pay" staff payout.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ TEAM CALENDAR PAGE ══ -->
     <div class="page" id="page-calendar">
       <div class="page-header">
@@ -2731,11 +2792,86 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="eu-role"><option value="owner">Owner</option><option value="admin">Admin</option><option value="manager">Manager</option><option value="team">Team</option><option value="readonly">Read Only</option></select></div>
       </div>
       <div class="form-group"><label class="form-label">Reset Password <span style="color:var(--gray-400);font-weight:400">(leave blank to keep current)</span></label><input class="form-input" id="eu-pass" type="password" placeholder="New password"></div>
+      <div style="border-top:1px solid var(--gray-100);margin:14px 0 12px;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:12px;color:var(--gray-500)">Invoice details for commission invoices</div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="openInvoiceDetailsModal(document.getElementById('eu-email').value)">📄 Edit invoice details</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" id="eu-delete-btn" onclick="deleteStaffUser()">Delete</button>
       <button class="btn btn-ghost" onclick="closeModal('editUserModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveStaffUser()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ INVOICE DETAILS MODAL ══ -->
+<div class="modal-overlay" id="invoiceDetailsModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="invoiceDetailsModalTitle">Invoice Details</div>
+      <button class="modal-close" onclick="closeModal('invoiceDetailsModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="invd-email">
+      <div id="invd-error" style="display:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500"></div>
+      <div style="background:var(--blue-light);color:var(--blue);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px">
+        ℹ️ These details appear on invoices that <strong>you</strong> issue to BluStu for your commission. Update anytime — past invoices keep their original snapshot.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Legal name *</label>
+        <input class="form-input" id="invd-legal-name" placeholder="As it should appear on the invoice">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Address</label>
+        <textarea class="form-textarea" id="invd-address" rows="3" placeholder="Street, City, Postcode, Country"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Invoice email</label>
+          <input class="form-input" id="invd-email-contact" type="email" placeholder="for correspondence">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tax number / UTR</label>
+          <input class="form-input" id="invd-tax" placeholder="Optional">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Payment method *</label>
+        <select class="form-select" id="invd-method" onchange="onInvoiceMethodChange()">
+          <option value="">— Pick a method —</option>
+          <option value="uk_bank">UK bank transfer</option>
+          <option value="iban">International (IBAN)</option>
+          <option value="paypal">PayPal</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div id="invd-uk-bank" style="display:none">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Sort code</label><input class="form-input" id="invd-sort-code" placeholder="00-00-00"></div>
+          <div class="form-group"><label class="form-label">Account number</label><input class="form-input" id="invd-account-number" placeholder="12345678"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Account name</label><input class="form-input" id="invd-account-name" placeholder="Name on account"></div>
+      </div>
+      <div id="invd-iban" style="display:none">
+        <div class="form-group"><label class="form-label">IBAN</label><input class="form-input" id="invd-iban-num" placeholder="GB29 NWBK..."></div>
+        <div class="form-group"><label class="form-label">SWIFT/BIC</label><input class="form-input" id="invd-swift" placeholder="Optional"></div>
+        <div class="form-group"><label class="form-label">Account name</label><input class="form-input" id="invd-iban-name"></div>
+      </div>
+      <div id="invd-paypal" style="display:none">
+        <div class="form-group"><label class="form-label">PayPal email</label><input class="form-input" id="invd-paypal-email" type="email"></div>
+      </div>
+      <div id="invd-other" style="display:none">
+        <div class="form-group"><label class="form-label">Payment instructions</label><textarea class="form-textarea" id="invd-other-info" rows="3" placeholder="Wise, Revolut, anything else..."></textarea></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <input class="form-input" id="invd-notes" placeholder="Anything that should appear on every invoice">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('invoiceDetailsModal')">Cancel</button>
+      <button class="btn btn-primary" id="invd-save-btn" onclick="saveInvoiceDetails()">Save Details</button>
     </div>
   </div>
 </div>
@@ -2750,6 +2886,9 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <div><div style="font-size:16px;font-weight:600" id="profile-modal-name">Ubayy</div><div style="font-size:12px;color:var(--gray-400)" id="profile-modal-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a5d0c7c4dcdce5c7c9d0d6d1d08bc4c2c0cbc6dc">[email&#160;protected]</a></div></div>
       </div>
       <div class="form-group"><label class="form-label">Display Name</label><input class="form-input" id="profile-modal-display" placeholder="Your name"></div>
+      <div style="border-top:1px solid var(--gray-100);margin-top:14px;padding-top:14px">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeModal('profileModal');openInvoiceDetailsModal(currentUser?.email)" style="width:100%">📄 Edit my invoice details</button>
+      </div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('profileModal')">Close</button><button class="btn btn-primary" onclick="saveProfile()">Save</button></div>
   </div>
@@ -3138,6 +3277,7 @@ async function syncAllFromDB() {
     loadAgencyProfit(),
     loadSpending(),
     loadStaffPayouts(),
+    loadInvoices(),
   ]).then(() => {
     try { updateDashStats(); } catch(e) { /* dashboard not on screen */ }
   });
@@ -3374,6 +3514,10 @@ function applyPermissionsUI() {
   const navSp = document.getElementById('nav-staffpayouts');
   if (navSp) navSp.style.display = ['owner','admin','manager'].includes(role) ? '' : 'none';
 
+  // Invoices nav — same scope as staff payouts
+  const navInv = document.getElementById('nav-invoices');
+  if (navInv) navInv.style.display = ['owner','admin','manager'].includes(role) ? '' : 'none';
+
   // Add creator button on CRM page
   const crmBtn = document.querySelector('#page-crm .btn-primary');
   if (crmBtn) crmBtn.style.display = caps.addCreator ? '' : 'none';
@@ -3427,7 +3571,7 @@ const pageTitles = {
   onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit',
   campaigns:'Campaigns', pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline',
   inbox:'Team Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
-  managers:'Team', emailsetup:'Email Setup', profit:'Agency Profit', spending:'Spending', staffpayouts:'Staff Payouts',
+  managers:'Team', emailsetup:'Email Setup', profit:'Agency Profit', spending:'Spending', staffpayouts:'Staff Payouts', invoices:'Invoices',
   creatorgrid:'Select Creators', earnings:'Earnings Tracker', calendar:'Team Calendar'
 };
 
@@ -3481,6 +3625,7 @@ function showPage(id, btn) {
   if (id === 'profit')     { loadAgencyProfit(); }
   if (id === 'spending')   { loadSpending(); }
   if (id === 'staffpayouts') { loadStaffPayouts(); }
+  if (id === 'invoices')   { loadInvoices(); }
   if (id === 'calendar')   { renderCalendar(); }
   if (id === 'managers')   { renderManagersPage(); }
 }
@@ -9827,9 +9972,11 @@ function renderStaffPayouts() {
       <td><span class="badge ${PAYOUT_STATUS_BADGE[p.payout_status]||'badge-gray'}" style="font-size:10px">${PAYOUT_STATUS_LABELS[p.payout_status]||'—'}</span></td>
       <td style="text-align:right;white-space:nowrap">
         ${canEdit ? `<div style="display:inline-flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="exportPayoutBreakdownPDF('${p.id}')" title="Save / share breakdown PDF">📄 PDF</button>
           <button class="btn btn-ghost btn-sm" onclick="openEditPayout('${p.id}')">Edit</button>
-          ${p.payout_status === 'ready_to_pay' ? `<button class="btn btn-primary btn-sm" onclick="markPayoutPaid('${p.id}')">Mark Paid</button>` : ''}
           ${p.payout_status === 'pending_brand_payment' && p.brand_payment_status === 'payment_received' ? `<button class="btn btn-primary btn-sm" onclick="markPayoutReady('${p.id}')">Ready</button>` : ''}
+          ${p.payout_status === 'ready_to_pay' ? `<button class="btn btn-primary btn-sm" onclick="generateInvoicesForPayout('${p.id}')" title="Create one invoice per contributor">🧾 Generate Invoices</button>` : ''}
+          ${p.payout_status === 'ready_to_pay' ? `<button class="btn btn-ghost btn-sm" onclick="markPayoutPaid('${p.id}')" title="Mark Paid without going through invoices">Skip → Paid</button>` : ''}
           <button class="btn btn-danger btn-sm" onclick="deletePayout('${p.id}')">Del</button>
         </div>` : ''}
       </td>
@@ -10881,6 +11028,776 @@ function exportStaffPayoutsCSV() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'blustu-staff-payouts-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showToast('CSV exported');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ── INVOICES & STAFF INVOICE DETAILS ─────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+
+let invoices = Storage.get('invoices', []);
+
+const INVOICE_STATUS_LABELS = { draft:'Draft', sent:'Sent', paid:'Paid', cancelled:'Cancelled' };
+const INVOICE_STATUS_BADGE  = { draft:'badge-gray', sent:'badge-blue', paid:'badge-green', cancelled:'badge-red' };
+
+async function loadInvoices() {
+  const rows = await DB.select('invoices', '?order=created_at.desc');
+  if (rows && rows.length !== undefined) {
+    invoices = rows;
+    Storage.set('invoices', invoices);
+  }
+  renderInvoices();
+}
+
+/** Find a staff member's invoice details (from STAFF cached row). */
+function getStaffInvoiceDetails(email) {
+  const s = STAFF.find(x => x.email === email);
+  if (!s) return null;
+  return s.invoice_details || null;
+}
+
+/** Permission: who can edit a given staff member's invoice details. */
+function _canEditInvoiceDetailsFor(email) {
+  if (!currentUser) return false;
+  if (currentUser.email === email) return true;          // owns their own
+  return ['owner','admin'].includes(currentUser.systemRole);
+}
+
+/** Permission: who can view a given invoice. */
+function _canSeeInvoice(inv) {
+  if (!currentUser) return false;
+  if (['owner','admin'].includes(currentUser.systemRole)) return true;
+  return inv.staff_email === currentUser.email;
+}
+
+/** Permission: who can mark invoices as sent/paid. */
+function _canManageInvoices() {
+  return currentUser && ['owner','admin'].includes(currentUser.systemRole);
+}
+
+// ── Invoice Details modal ──
+
+function openInvoiceDetailsModal(email) {
+  email = email || currentUser?.email;
+  if (!email) { showToast('No staff member selected'); return; }
+  if (!_canEditInvoiceDetailsFor(email)) {
+    showToast('You can only edit your own invoice details');
+    return;
+  }
+  const s = STAFF.find(x => x.email === email);
+  if (!s) { showToast('Staff not found'); return; }
+  const d = s.invoice_details || {};
+
+  document.getElementById('invd-email').value = email;
+  document.getElementById('invoiceDetailsModalTitle').textContent = `Invoice Details — ${s.name}`;
+  document.getElementById('invd-error').style.display = 'none';
+  document.getElementById('invd-legal-name').value    = d.legal_name || s.name || '';
+  document.getElementById('invd-address').value       = d.address || '';
+  document.getElementById('invd-email-contact').value = d.email || email;
+  document.getElementById('invd-tax').value           = d.tax_number || '';
+  document.getElementById('invd-method').value        = d.payment_method || '';
+  document.getElementById('invd-notes').value         = d.notes || '';
+
+  const p = d.payment_details || {};
+  document.getElementById('invd-sort-code').value      = p.sort_code || '';
+  document.getElementById('invd-account-number').value = p.account_number || '';
+  document.getElementById('invd-account-name').value   = p.account_name || '';
+  document.getElementById('invd-iban-num').value       = p.iban || '';
+  document.getElementById('invd-swift').value          = p.swift || '';
+  document.getElementById('invd-iban-name').value      = p.iban_name || '';
+  document.getElementById('invd-paypal-email').value   = p.paypal_email || '';
+  document.getElementById('invd-other-info').value     = p.other_info || '';
+
+  onInvoiceMethodChange();
+  openModal('invoiceDetailsModal');
+}
+
+function onInvoiceMethodChange() {
+  const m = document.getElementById('invd-method').value;
+  document.getElementById('invd-uk-bank').style.display = m === 'uk_bank' ? '' : 'none';
+  document.getElementById('invd-iban').style.display    = m === 'iban'    ? '' : 'none';
+  document.getElementById('invd-paypal').style.display  = m === 'paypal'  ? '' : 'none';
+  document.getElementById('invd-other').style.display   = m === 'other'   ? '' : 'none';
+}
+
+async function saveInvoiceDetails() {
+  const errEl = document.getElementById('invd-error');
+  const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
+  errEl.style.display = 'none';
+
+  const email = document.getElementById('invd-email').value;
+  const s = STAFF.find(x => x.email === email);
+  if (!s) { showErr('Staff not found'); return; }
+
+  const legal_name = document.getElementById('invd-legal-name').value.trim();
+  if (!legal_name) { showErr('Legal name is required'); return; }
+
+  const method = document.getElementById('invd-method').value;
+  const pd = {};
+  if (method === 'uk_bank') {
+    pd.sort_code      = document.getElementById('invd-sort-code').value.trim();
+    pd.account_number = document.getElementById('invd-account-number').value.trim();
+    pd.account_name   = document.getElementById('invd-account-name').value.trim();
+  } else if (method === 'iban') {
+    pd.iban      = document.getElementById('invd-iban-num').value.trim();
+    pd.swift     = document.getElementById('invd-swift').value.trim();
+    pd.iban_name = document.getElementById('invd-iban-name').value.trim();
+  } else if (method === 'paypal') {
+    pd.paypal_email = document.getElementById('invd-paypal-email').value.trim();
+  } else if (method === 'other') {
+    pd.other_info = document.getElementById('invd-other-info').value.trim();
+  }
+
+  const details = {
+    legal_name,
+    address:        document.getElementById('invd-address').value.trim(),
+    email:          document.getElementById('invd-email-contact').value.trim(),
+    tax_number:     document.getElementById('invd-tax').value.trim(),
+    payment_method: method,
+    payment_details: pd,
+    notes:          document.getElementById('invd-notes').value.trim(),
+  };
+
+  const btn = document.getElementById('invd-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  // Save into staff_accounts row
+  s.invoice_details = details;
+  let result;
+  try {
+    result = await DB._req('PATCH', 'staff_accounts',
+      { invoice_details: details, updated_at: new Date().toISOString() },
+      '?email=eq.' + encodeURIComponent(email));
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Save Details';
+    showErr('Save failed: ' + e.message);
+    return;
+  }
+  if (result === null) {
+    btn.disabled = false; btn.textContent = 'Save Details';
+    showErr('Save failed: ' + (DB._lastError || 'unknown — check the SQL migration has been run.'));
+    return;
+  }
+
+  Storage.set('staff', STAFF);
+  btn.disabled = false; btn.textContent = 'Save Details';
+  closeModal('invoiceDetailsModal');
+  showToast('✅ Invoice details saved');
+}
+
+// ── Invoices page rendering ──
+
+function clearInvoiceFilters() {
+  ['inv-filter-staff','inv-filter-status'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  renderInvoices();
+}
+
+function _populateInvoiceFilters() {
+  const sel = document.getElementById('inv-filter-staff');
+  if (!sel) return;
+  const cur = sel.value;
+  const eligible = STAFF.filter(s => ['owner','admin','manager'].includes(s.systemRole))
+                        .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  sel.innerHTML = '<option value="">All staff</option>' +
+    eligible.map(s => `<option value="${s.email}">${s.name}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+function getFilteredInvoices() {
+  const staffQ  = document.getElementById('inv-filter-staff')?.value || '';
+  const statusQ = document.getElementById('inv-filter-status')?.value || '';
+  return invoices.filter(i => {
+    if (!_canSeeInvoice(i)) return false;
+    if (staffQ && i.staff_email !== staffQ) return false;
+    if (statusQ && i.status !== statusQ) return false;
+    return true;
+  });
+}
+
+function renderInvoices() {
+  _populateInvoiceFilters();
+  const filtered = getFilteredInvoices();
+
+  // Stats
+  let draftCount = 0, sentSum = 0, paidSum = 0, outstandingSum = 0;
+  for (const i of filtered) {
+    if (i.status === 'draft')   draftCount++;
+    if (i.status === 'sent')    { sentSum += Number(i.amount||0); outstandingSum += Number(i.amount||0); }
+    if (i.status === 'paid')    paidSum += Number(i.amount||0);
+  }
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('inv-stat-drafts',      draftCount);
+  set('inv-stat-sent',        fmtMoneyFull(sentSum));
+  set('inv-stat-paid',        fmtMoneyFull(paidSum));
+  set('inv-stat-outstanding', fmtMoneyFull(outstandingSum));
+
+  // Sidebar badge — count of Sent (awaiting payment)
+  const badge = document.getElementById('invoicesBadge');
+  if (badge) {
+    const n = filtered.filter(i => i.status === 'sent').length;
+    badge.textContent = n;
+    badge.style.display = n > 0 ? '' : 'none';
+  }
+
+  const label = document.getElementById('inv-count-label');
+  if (label) label.textContent = filtered.length + ' invoice' + (filtered.length === 1 ? '' : 's');
+
+  const tbody = document.getElementById('invoicesTableBody');
+  if (!tbody) return;
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:36px;color:var(--gray-400)">No invoices match your filter.</td></tr>';
+    return;
+  }
+  const canManage = _canManageInvoices();
+  tbody.innerHTML = filtered.map(inv => {
+    const issueDate = inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('en-GB') : '—';
+    const paidDate  = inv.paid_at    ? new Date(inv.paid_at).toLocaleDateString('en-GB')    : '—';
+    return `<tr>
+      <td style="font-family:monospace;font-size:12px;font-weight:600">${inv.invoice_number || '—'}</td>
+      <td style="font-size:13px">${inv.staff_name||'—'}</td>
+      <td style="font-size:13px">${inv.brand_name||'—'}</td>
+      <td style="text-align:right;font-weight:600">${fmtMoneyFull(inv.amount)}</td>
+      <td style="font-size:12px;color:var(--gray-500)">${issueDate}</td>
+      <td><span class="badge ${INVOICE_STATUS_BADGE[inv.status]||'badge-gray'}" style="font-size:10px">${INVOICE_STATUS_LABELS[inv.status]||inv.status}</span></td>
+      <td style="font-size:12px;color:var(--gray-500)">${paidDate}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <div style="display:inline-flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="viewInvoicePDF('${inv.id}')">📄 PDF</button>
+          ${canManage && inv.status === 'draft' ? `<button class="btn btn-primary btn-sm" onclick="markInvoiceSent('${inv.id}')">Mark Sent</button>` : ''}
+          ${canManage && ['draft','sent'].includes(inv.status) ? `<button class="btn btn-primary btn-sm" onclick="markInvoicePaid('${inv.id}')">Mark Paid</button>` : ''}
+          ${canManage && inv.status !== 'paid' ? `<button class="btn btn-danger btn-sm" onclick="deleteInvoice('${inv.id}')">Del</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Invoice operations ──
+
+async function markInvoiceSent(id) {
+  if (!_canManageInvoices()) return;
+  const update = { status: 'sent', sent_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+  const r = await DB._req('PATCH', 'invoices', update, '?id=eq.' + id);
+  if (r === null) return;
+  await loadInvoices();
+  showToast('Invoice marked as Sent');
+}
+
+async function markInvoicePaid(id) {
+  if (!_canManageInvoices()) return;
+  const inv = invoices.find(x => String(x.id) === String(id));
+  if (!inv) return;
+  showConfirm('Mark invoice as Paid?',
+    `Mark invoice ${inv.invoice_number} (${fmtMoneyFull(inv.amount)}) to ${inv.staff_name} as paid. If all invoices for this payout are now paid, the staff payout itself will also be marked Paid and a Spending entry created.`,
+    async () => {
+      const update = { status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      const r = await DB._req('PATCH', 'invoices', update, '?id=eq.' + id);
+      if (r === null) return;
+      await loadInvoices();
+      // Check whether all invoices for this payout are now paid → cascade to payout
+      await _cascadePayoutIfAllInvoicesPaid(inv.payout_id);
+      showToast('✅ Invoice marked as Paid');
+    }
+  );
+}
+
+/**
+ * When the last invoice for a payout is paid, mark the payout itself as Paid
+ * (which in turn creates the linked Spending entries via _syncPayoutSpending).
+ */
+async function _cascadePayoutIfAllInvoicesPaid(payoutId) {
+  if (!payoutId) return;
+  const all = invoices.filter(i => String(i.payout_id) === String(payoutId));
+  if (!all.length) return;
+  const unpaid = all.filter(i => i.status !== 'paid' && i.status !== 'cancelled');
+  if (unpaid.length > 0) return;
+
+  const p = staffPayouts.find(x => String(x.id) === String(payoutId));
+  if (!p) return;
+  if (p.payout_status === 'paid') return;
+
+  // Cascade — mark payout as Paid + create Spending entries
+  const prev = { ...p };
+  const update = {
+    payout_status: 'paid',
+    paid_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  try {
+    await DB._req('PATCH', 'staff_payouts', update, '?id=eq.' + payoutId);
+    const newRow = { ...p, ...update };
+    await _syncPayoutSpending(payoutId, newRow, prev);
+    await loadStaffPayouts();
+    try { await loadSpending(); } catch(e){}
+    showToast('🎉 All invoices paid — staff payout marked Paid + Spending entries created');
+    addActivity(`Staff payout fully paid: ${p.brand_name || 'campaign'} — ${fmtMoneyFull(p.commission_amount)}`);
+  } catch (e) {
+    console.warn('Failed to cascade payout to Paid', e);
+  }
+}
+
+async function deleteInvoice(id) {
+  if (!_canManageInvoices()) return;
+  const inv = invoices.find(x => String(x.id) === String(id));
+  if (!inv) return;
+  showConfirm('Delete this invoice?',
+    `Delete invoice ${inv.invoice_number} (${fmtMoneyFull(inv.amount)})?`,
+    async () => {
+      const r = await DB._req('DELETE', 'invoices', null, '?id=eq.' + id);
+      if (r === null) return;
+      await loadInvoices();
+      showToast('Invoice deleted');
+    }
+  );
+}
+
+// ── Generate Invoices from a Staff Payout ──
+
+async function generateInvoicesForPayout(payoutId) {
+  if (!_canManageInvoices()) { showToast('Only owners/admins can generate invoices'); return; }
+  const p = staffPayouts.find(x => String(x.id) === String(payoutId));
+  if (!p) return;
+
+  // Check there isn't already an invoice for this payout
+  const existing = invoices.filter(i => String(i.payout_id) === String(payoutId) && i.status !== 'cancelled');
+  if (existing.length) {
+    if (!confirm(`This payout already has ${existing.length} invoice(s). Generate again anyway? (Existing invoices will be left as-is.)`)) return;
+  }
+
+  const contributors = Array.isArray(p.contributor_totals) ? p.contributor_totals : [];
+  if (!contributors.length) { showToast('No contributors on this payout'); return; }
+
+  // Check all contributors have invoice details
+  const missing = [];
+  for (const c of contributors) {
+    const d = getStaffInvoiceDetails(c.staff_email);
+    if (!d || !d.legal_name || !d.payment_method) {
+      missing.push(c.staff_name || c.staff_email);
+    }
+  }
+  if (missing.length) {
+    showToast(`Missing invoice details for: ${missing.join(', ')} — ask them to fill in their details first.`);
+    return;
+  }
+
+  // Build line items from creators_included items
+  const incl = Array.isArray(p.creators_included) ? p.creators_included : [];
+
+  let created = 0;
+  for (const c of contributors) {
+    const detail = getStaffInvoiceDetails(c.staff_email);
+    // Reserve an invoice number
+    let invoiceNumber;
+    try {
+      const fnResult = await DB._req('POST', 'rpc/reserve_invoice_number', {}, '');
+      // Supabase RPC returns the value directly
+      invoiceNumber = typeof fnResult === 'string' ? fnResult : (fnResult?.[0] ?? fnResult);
+    } catch (e) {
+      console.warn('Failed to reserve invoice number, falling back to client-side:', e);
+      invoiceNumber = `BLU-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+    }
+
+    // Build line items — one row per (creator, item) for this contributor
+    const lineItems = [];
+    for (const ci of incl) {
+      if (!ci.items) continue;
+      const contributorLines = [];
+      let creatorShare = 0;
+      for (const [itemKey, itemVal] of Object.entries(ci.items)) {
+        if (!itemVal.assignments) continue;
+        for (const a of itemVal.assignments) {
+          if (a.staff_email === c.staff_email) {
+            const lineAmount = Number(ci.agency_fee||0) * (itemVal.weight/100) * (Number(a.split)/100);
+            const def = PAYOUT_ITEM_DEFS.find(d => d.key === itemKey);
+            contributorLines.push({
+              item: def ? def.label : itemKey,
+              weight: itemVal.weight,
+              split: a.split,
+              amount: Math.round(lineAmount * 100) / 100,
+            });
+            creatorShare += lineAmount;
+          }
+        }
+      }
+      if (contributorLines.length) {
+        lineItems.push({
+          creator_name: ci.creator_name,
+          agency_fee:   Number(ci.agency_fee || 0),
+          items:        contributorLines,
+          share_amount: Math.round(creatorShare * 100) / 100,
+        });
+      }
+    }
+
+    const pd = detail.payment_details || {};
+    const row = {
+      invoice_number:        invoiceNumber,
+      payout_id:             String(payoutId),
+      staff_email:           c.staff_email,
+      staff_name:            c.staff_name,
+      invoice_to_legal_name: detail.legal_name,
+      invoice_to_address:    detail.address,
+      invoice_to_email:      detail.email,
+      invoice_to_tax_number: detail.tax_number,
+      payment_method:        detail.payment_method,
+      payment_details:       pd,
+      brand_name:            p.brand_name,
+      campaign_id:           p.campaign_id,
+      amount:                Number(c.amount || 0),
+      currency:              'GBP',
+      status:                'draft',
+      line_items:            lineItems,
+      notes:                 detail.notes || null,
+      issue_date:            new Date().toISOString().slice(0,10),
+      created_by:            currentUser?.email || null,
+      created_at:            new Date().toISOString(),
+      updated_at:            new Date().toISOString(),
+    };
+    try {
+      const result = await DB._req('POST', 'invoices', [row], '');
+      if (result !== null) created++;
+    } catch (e) {
+      console.warn('Failed to create invoice for', c.staff_name, e);
+    }
+  }
+
+  await loadInvoices();
+  await loadStaffPayouts();
+  if (created) {
+    showToast(`✅ Generated ${created} invoice${created===1?'':'s'} for this payout`);
+    addActivity(`${created} invoice${created===1?'':'s'} generated for ${p.brand_name || 'payout'} — total ${fmtMoneyFull(p.commission_amount)}`);
+  } else {
+    showToast('No invoices created — check the console for errors.');
+  }
+}
+
+// ── PDFs ──
+
+function _formatPaymentDetailsForPDF(method, pd) {
+  pd = pd || {};
+  switch (method) {
+    case 'uk_bank':
+      return `<strong>UK bank transfer</strong><br>
+              Account name: ${escapeHtml(pd.account_name || '')}<br>
+              Sort code: ${escapeHtml(pd.sort_code || '')}<br>
+              Account number: ${escapeHtml(pd.account_number || '')}`;
+    case 'iban':
+      return `<strong>International transfer</strong><br>
+              IBAN: ${escapeHtml(pd.iban || '')}<br>
+              SWIFT: ${escapeHtml(pd.swift || '')}<br>
+              Name: ${escapeHtml(pd.iban_name || '')}`;
+    case 'paypal':
+      return `<strong>PayPal</strong><br>${escapeHtml(pd.paypal_email || '')}`;
+    case 'other':
+      return `<strong>Other</strong><br>${escapeHtml(pd.other_info || '').replace(/\n/g,'<br>')}`;
+    default:
+      return '—';
+  }
+}
+
+function escapeHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/** Per-invoice PDF — proper invoice from staff member to BluStu. */
+function viewInvoicePDF(id) {
+  const inv = invoices.find(x => String(x.id) === String(id));
+  if (!inv) return;
+
+  const issueDate = inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) : '';
+  const lineItems = Array.isArray(inv.line_items) ? inv.line_items : [];
+  const total = Number(inv.amount || 0);
+
+  const lineRows = lineItems.map(li => {
+    const itemSummary = (li.items || []).map(x => `${x.item} <span style="color:#6b7280;font-size:10px">(${x.weight}% × ${x.split}% split)</span>`).join('<br>');
+    return `<tr>
+      <td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top">
+        <strong>${escapeHtml(li.creator_name)}</strong>
+        <div style="font-size:11px;color:#6b7280;margin-top:2px">Agency fee: ${fmtMoneyFull(li.agency_fee)}</div>
+      </td>
+      <td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top;font-size:12px">${itemSummary}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top;text-align:right;font-weight:600">${fmtMoneyFull(li.share_amount)}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>Invoice ${escapeHtml(inv.invoice_number)} — ${escapeHtml(inv.staff_name)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', system-ui, sans-serif; color: #1a1a1a; margin: 0; padding: 40px; max-width: 850px; margin: 0 auto; background: white; }
+  h1 { font-family: 'DM Serif Display', serif; font-size: 36px; margin: 0; color: #1a1a1a; font-weight: 400; letter-spacing: -0.5px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 2px solid #1a1a1a; }
+  .header-left h1 { margin-bottom: 4px; }
+  .header-left .number { font-family: monospace; color: #2563eb; font-weight: 600; font-size: 14px; }
+  .header-right { text-align: right; }
+  .header-right .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px; font-weight: 600; }
+  .header-right .date { font-size: 14px; font-weight: 500; }
+  .header-right .amount { font-family: 'DM Serif Display', serif; font-size: 32px; color: #16a34a; margin-top: 8px; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+  .party { background: #f9fafb; border-radius: 10px; padding: 16px 18px; }
+  .party-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 600; margin-bottom: 6px; }
+  .party-name { font-family: 'DM Serif Display', serif; font-size: 18px; margin-bottom: 8px; }
+  .party-details { font-size: 12px; line-height: 1.6; color: #374151; }
+  h2 { font-family: 'DM Serif Display', serif; font-size: 18px; margin: 24px 0 10px; font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: #f3f4f6; border-bottom: 2px solid #d1d5db; padding: 10px 8px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; }
+  thead th:last-child { text-align: right; }
+  .totals-row td { font-weight: 700; border-top: 2px solid #1a1a1a; padding-top: 12px; background: #f9fafb !important; }
+  .payment-box { background: #eff6ff; border-left: 4px solid #2563eb; border-radius: 8px; padding: 16px 20px; margin: 24px 0; }
+  .payment-box h3 { font-family: 'DM Serif Display', serif; margin: 0 0 8px; font-size: 16px; color: #1e40af; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 10px; color: #9ca3af; text-align: center; }
+  .print-btn { position: fixed; top: 20px; right: 20px; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  @media print { body { padding: 20px; } .no-print { display: none !important; } }
+</style></head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">🖨 Save as PDF / Print</button>
+
+  <div class="header">
+    <div class="header-left">
+      <h1>Invoice</h1>
+      <div class="number">${escapeHtml(inv.invoice_number)}</div>
+    </div>
+    <div class="header-right">
+      <div class="label">Issue Date</div>
+      <div class="date">${issueDate}</div>
+      <div class="label" style="margin-top:14px">Total Due</div>
+      <div class="amount">${fmtMoneyFull(total)}</div>
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="party">
+      <div class="party-label">From</div>
+      <div class="party-name">${escapeHtml(inv.invoice_to_legal_name || inv.staff_name)}</div>
+      <div class="party-details">${escapeHtml(inv.invoice_to_address || '').replace(/\n/g,'<br>')}
+        ${inv.invoice_to_email ? `<br>${escapeHtml(inv.invoice_to_email)}` : ''}
+        ${inv.invoice_to_tax_number ? `<br>Tax: ${escapeHtml(inv.invoice_to_tax_number)}` : ''}
+      </div>
+    </div>
+    <div class="party">
+      <div class="party-label">Bill to</div>
+      <div class="party-name">BluStu Ltd</div>
+      <div class="party-details">
+        Creator Talent Agency<br>
+        blustu.agency<br>
+        finance@blustu.agency
+      </div>
+    </div>
+  </div>
+
+  <h2>Commission Breakdown — ${escapeHtml(inv.brand_name || 'Campaign')}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Creator</th>
+        <th>Contribution</th>
+        <th style="text-align:right">Share</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${lineRows}
+      <tr class="totals-row">
+        <td colspan="2">TOTAL DUE</td>
+        <td style="text-align:right;font-size:16px;color:#16a34a">${fmtMoneyFull(total)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="payment-box">
+    <h3>💳 Payment Instructions</h3>
+    <div style="font-size:12px;line-height:1.7">
+      ${_formatPaymentDetailsForPDF(inv.payment_method, inv.payment_details)}
+    </div>
+    ${inv.notes ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed rgba(37, 99, 235, 0.3);font-size:11px;color:#6b7280">${escapeHtml(inv.notes)}</div>` : ''}
+  </div>
+
+  <div class="footer">
+    Invoice generated via blustu™ panel · ${new Date().toLocaleDateString('en-GB')}
+  </div>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=1000,height=800');
+  if (!w) { showToast('Pop-up blocker stopped the PDF. Allow pop-ups for this site.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(() => { try { w.focus(); } catch(e){} }, 500);
+}
+
+/** Per-payout breakdown PDF — full contribution matrix, suitable for sending to the team groupchat. */
+function exportPayoutBreakdownPDF(payoutId) {
+  const p = staffPayouts.find(x => String(x.id) === String(payoutId));
+  if (!p) return;
+
+  const today = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+  const incl = Array.isArray(p.creators_included) ? p.creators_included : [];
+  const ctrs = Array.isArray(p.contributor_totals) ? p.contributor_totals : [];
+  const agencyFee = Number(p.agency_fee || 0);
+  const totalCommission = Number(p.commission_amount || 0);
+  const retained = Number(p.blustu_retained_amount || 0);
+  const commissionPct = agencyFee > 0 ? (totalCommission/agencyFee*100) : 0;
+  const retainedPct = agencyFee > 0 ? (retained/agencyFee*100) : 0;
+  const retentionBadge = retainedPct >= 60 ? { label:'Healthy', color:'#16a34a', bg:'#dcfce7' }
+                       : retainedPct >= 50 ? { label:'Acceptable', color:'#92400e', bg:'#fef3c7' }
+                       :                     { label:'Below target', color:'#991b1b', bg:'#fee2e2' };
+
+  // Build per-creator breakdown HTML
+  const creatorBlocks = incl.map(ci => {
+    if (!ci.items) {
+      return `<tr><td style="padding:8px">${escapeHtml(ci.creator_name)}</td><td style="padding:8px;text-align:right">${fmtMoneyFull(ci.agency_fee)}</td><td colspan="3" style="padding:8px;color:#9ca3af">No contribution items assigned</td></tr>`;
+    }
+    let firstRow = true;
+    const rows = [];
+    let creatorRowspan = 0;
+    for (const [itemKey, itemVal] of Object.entries(ci.items)) {
+      if (!itemVal.assignments || !itemVal.assignments.length) continue;
+      const def = PAYOUT_ITEM_DEFS.find(d => d.key === itemKey);
+      const itemLabel = def ? def.label : itemKey;
+      for (const a of itemVal.assignments) {
+        const lineAmount = Number(ci.agency_fee||0) * (itemVal.weight/100) * (Number(a.split)/100);
+        creatorRowspan++;
+        rows.push({ itemLabel, itemPct: itemVal.weight, staffName: a.staff_name || a.staff_email, split: a.split, amount: lineAmount });
+      }
+    }
+    if (!rows.length) {
+      return `<tr><td style="padding:8px;border-top:1px solid #e5e7eb">${escapeHtml(ci.creator_name)}</td><td style="padding:8px;text-align:right;border-top:1px solid #e5e7eb">${fmtMoneyFull(ci.agency_fee)}</td><td colspan="3" style="padding:8px;color:#9ca3af;border-top:1px solid #e5e7eb;font-style:italic">No commission assigned</td></tr>`;
+    }
+    return rows.map((r, idx) => `<tr>
+      ${idx === 0 ? `<td rowspan="${rows.length}" style="padding:8px;border-top:1px solid #e5e7eb;vertical-align:top"><strong>${escapeHtml(ci.creator_name)}</strong></td>
+                    <td rowspan="${rows.length}" style="padding:8px;border-top:1px solid #e5e7eb;text-align:right;vertical-align:top;font-weight:600">${fmtMoneyFull(ci.agency_fee)}</td>` : ''}
+      <td style="padding:8px;border-top:${idx===0?'1px':'0'} solid #e5e7eb;font-size:12px">${escapeHtml(r.itemLabel)} <span style="color:#6b7280;font-size:10px">(${r.itemPct}%)</span></td>
+      <td style="padding:8px;border-top:${idx===0?'1px':'0'} solid #e5e7eb;font-size:12px">${escapeHtml(r.staffName)} <span style="color:#6b7280;font-size:10px">${r.split}%</span></td>
+      <td style="padding:8px;border-top:${idx===0?'1px':'0'} solid #e5e7eb;text-align:right;font-size:12px;font-weight:600">${fmtMoneyFull(r.amount)}</td>
+    </tr>`).join('');
+  }).join('');
+
+  const contributorRows = ctrs.map(c => `<tr>
+    <td style="padding:10px 8px;border-bottom:1px solid #f3f4f6">👤 ${escapeHtml(c.staff_name)}</td>
+    <td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right;font-weight:700">${fmtMoneyFull(c.amount)}</td>
+  </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>Staff Payout Breakdown — ${escapeHtml(p.brand_name || 'Campaign')}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', system-ui, sans-serif; color: #1a1a1a; margin: 0; padding: 40px; max-width: 900px; margin: 0 auto; background: white; }
+  h1 { font-family: 'DM Serif Display', serif; font-size: 32px; margin: 0 0 4px; font-weight: 400; }
+  .meta { color: #6b7280; font-size: 13px; margin-bottom: 30px; }
+  .logo { font-family: 'DM Serif Display', serif; font-size: 16px; color: #2563eb; margin-bottom: 14px; letter-spacing: 0.5px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0; }
+  .stat-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+  .stat-card.highlight { background: #fef3c7; border-color: #f59e0b; }
+  .stat-card.retain { background: #dcfce7; border-color: #16a34a; }
+  .stat-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600; }
+  .stat-value { font-family: 'DM Serif Display', serif; font-size: 22px; font-weight: 400; }
+  .stat-value.amber { color: #b45309; }
+  .stat-value.green { color: #16a34a; }
+  h2 { font-family: 'DM Serif Display', serif; font-size: 20px; margin: 24px 0 10px; font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: #f3f4f6; border-bottom: 2px solid #d1d5db; padding: 10px 8px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; }
+  thead th:last-child { text-align: right; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between; }
+  .print-btn { position: fixed; top: 20px; right: 20px; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  @media print { body { padding: 20px; } .no-print { display: none !important; } }
+</style></head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">🖨 Save as PDF / Print</button>
+
+  <div class="logo">blustu™ agency</div>
+  <h1>Staff Payout Breakdown</h1>
+  <div class="meta">
+    <strong style="color:#1a1a1a">${escapeHtml(p.brand_name || 'Campaign')}</strong> · ${incl.length} creator${incl.length===1?'':'s'} · ${ctrs.length} contributor${ctrs.length===1?'':'s'}<br>
+    Generated ${today}
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Agency Fee</div>
+      <div class="stat-value">${fmtMoneyFull(agencyFee)}</div>
+    </div>
+    <div class="stat-card highlight">
+      <div class="stat-label">Total Commission</div>
+      <div class="stat-value amber">${fmtMoneyFull(totalCommission)}</div>
+      <div style="font-size:11px;color:#6b7280">${commissionPct.toFixed(1)}% of agency fee</div>
+    </div>
+    <div class="stat-card retain">
+      <div class="stat-label">BluStu Retained</div>
+      <div class="stat-value green">${fmtMoneyFull(retained)}</div>
+      <div style="font-size:11px;color:#6b7280">${retainedPct.toFixed(1)}% of agency fee</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Retention Status</div>
+      <div><span class="badge" style="background:${retentionBadge.bg};color:${retentionBadge.color};margin-top:6px">${retentionBadge.label}</span></div>
+    </div>
+  </div>
+
+  <h2>Contributor Totals</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Staff Member</th>
+        <th style="text-align:right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>${contributorRows}
+      <tr style="background:#f9fafb">
+        <td style="padding:10px 8px;font-weight:700;border-top:2px solid #1a1a1a">TOTAL</td>
+        <td style="padding:10px 8px;text-align:right;font-weight:700;border-top:2px solid #1a1a1a;color:#b45309">${fmtMoneyFull(totalCommission)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Per-Creator Contribution Matrix</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Creator</th>
+        <th style="text-align:right">Agency Fee</th>
+        <th>Contribution Item</th>
+        <th>Staff</th>
+        <th style="text-align:right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>${creatorBlocks}</tbody>
+  </table>
+
+  <div class="footer">
+    <div>BluStu Ltd · blustu.agency</div>
+    <div>Generated ${today} · Payout #${p.id}</div>
+  </div>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=1100,height=900');
+  if (!w) { showToast('Pop-up blocker stopped the PDF. Allow pop-ups for this site.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(() => { try { w.focus(); } catch(e){} }, 500);
+}
+
+// ── CSV export ──
+
+function exportInvoicesCSV() {
+  const filtered = getFilteredInvoices();
+  if (!filtered.length) { showToast('No invoices to export'); return; }
+  const headers = ['Invoice #','Staff','Staff Email','Brand','Campaign ID','Amount (£)','Status','Issue Date','Sent Date','Paid Date','Payment Method','Notes'];
+  const rows = filtered.map(i => [
+    i.invoice_number, i.staff_name, i.staff_email, i.brand_name || '', i.campaign_id || '',
+    Number(i.amount||0).toFixed(2),
+    INVOICE_STATUS_LABELS[i.status] || i.status,
+    i.issue_date || '',
+    i.sent_at ? new Date(i.sent_at).toLocaleDateString('en-GB') : '',
+    i.paid_at ? new Date(i.paid_at).toLocaleDateString('en-GB') : '',
+    i.payment_method || '',
+    i.notes || '',
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'blustu-invoices-' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
   showToast('CSV exported');
 }
