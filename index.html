@@ -9640,15 +9640,34 @@ function _canSeePayout(p) {
   const role = currentUser.systemRole;
   if (role === 'owner' || role === 'admin') return true;
   if (role !== 'manager') return false;
-  // Manager: can see if payout's staff_email is them OR if creator is assigned to them
+
+  // New shape: manager can see if they appear in contributor_totals
+  if (Array.isArray(p.contributor_totals)) {
+    for (const c of p.contributor_totals) {
+      if (c.staff_email === currentUser.email) return true;
+    }
+  }
+  // Legacy single-staff shape
   if (p.staff_email === currentUser.email) return true;
+
+  // Or if any of the included creators is assigned to them
+  const incl = Array.isArray(p.creators_included) ? p.creators_included : [];
+  for (const ci of incl) {
+    const c = creators.find(x => String(x.id) === String(ci.creator_id));
+    if (!c) continue;
+    if (c.assigned_staff?.primary === currentUser.email) return true;
+    if (c.assigned_staff?.secondary === currentUser.email) return true;
+    if (c.assigned_staff?.admin_support === currentUser.email) return true;
+    const ids = managerAssignments[currentUser.email] || [];
+    if (ids.includes(c.id)) return true;
+  }
+  // Single-creator legacy fallback
   if (p.creator_id) {
     const c = creators.find(x => Number(x.id) === Number(p.creator_id));
     if (c) {
       if (c.assigned_staff?.primary === currentUser.email) return true;
       if (c.assigned_staff?.secondary === currentUser.email) return true;
       if (c.assigned_staff?.admin_support === currentUser.email) return true;
-      // Legacy fallback
       const ids = managerAssignments[currentUser.email] || [];
       if (ids.includes(c.id)) return true;
     }
@@ -9748,9 +9767,7 @@ function renderStaffPayouts() {
   }
   const canEdit = _canEditPayouts();
   tbody.innerHTML = filtered.map(p => {
-    const staffInitial = (p.staff_name || '?')[0].toUpperCase();
-    const staffColor   = AVATAR_COLORS[Math.abs((p.staff_email||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % AVATAR_COLORS.length];
-    // Build creator label — uses creators_included if present, else falls back to single creator_name
+    // Build creator label
     const incl = Array.isArray(p.creators_included) ? p.creators_included : [];
     const creatorCount = incl.length || (p.creator_id ? 1 : 0);
     const creatorLabel = creatorCount === 0
@@ -9760,33 +9777,46 @@ function renderStaffPayouts() {
         : `<div style="font-size:13px;font-weight:500">${creatorCount} creators</div>
            <button type="button" onclick="togglePayoutDetail('${p.id}')" style="background:none;border:none;color:var(--blue);font-size:10px;padding:0;cursor:pointer;text-decoration:underline">View breakdown</button>`;
 
+    // Contributor stack — show all contributors as avatars + names
+    const ctrs = Array.isArray(p.contributor_totals) && p.contributor_totals.length
+      ? p.contributor_totals
+      : [{ staff_email: p.staff_email, staff_name: p.staff_name, amount: p.commission_amount }];
+    const staffCell = ctrs.map(c => {
+      const initial = (c.staff_name || '?')[0].toUpperCase();
+      const color = AVATAR_COLORS[Math.abs((c.staff_email||'').split('').reduce((a, ch)=>a+ch.charCodeAt(0), 0)) % AVATAR_COLORS.length];
+      return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">
+        <div style="width:22px;height:22px;border-radius:50%;background:${color};color:white;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initial}</div>
+        <div style="font-size:12px"><span style="font-weight:500">${c.staff_name||'—'}</span> <span style="color:var(--gray-400);font-size:11px">${fmtMoneyFull(c.amount)}</span></div>
+      </div>`;
+    }).join('');
+
     const contLevel = p.contribution_level || contributionLevelFromCount(_contribCountOfRow(p));
 
-    // Optional breakdown row (hidden by default)
+    // Per-creator + contributor breakdown row
     let breakdownRow = '';
-    if (creatorCount > 1) {
-      const items = incl.map(c => `
-        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px">
-          <span>• ${c.creator_name || '?'}</span>
-          <span>Agency: <strong>${fmtMoneyFull(c.agency_fee)}</strong> · Share: ${fmtMoneyFull(c.commission_amount_share)}</span>
-        </div>`).join('');
+    if (creatorCount > 1 || ctrs.length > 1) {
+      const creatorItems = incl.map(c => {
+        const itemSum = c.items ? Object.entries(c.items).map(([k, v]) => {
+          if (!v.assignments?.length) return null;
+          const def = PAYOUT_ITEM_DEFS.find(d => d.key === k);
+          return def ? def.label : k;
+        }).filter(Boolean).join(', ') : '';
+        return `<div style="padding:4px 0;font-size:11px;border-bottom:1px dashed var(--gray-100)">
+          <span style="font-weight:500">${c.creator_name || '?'}</span> — Agency: <strong>${fmtMoneyFull(c.agency_fee)}</strong>
+          ${itemSum ? `<div style="font-size:10px;color:var(--gray-500);margin-top:2px">${itemSum}</div>` : ''}
+        </div>`;
+      }).join('');
       breakdownRow = `<tr id="payout-detail-${p.id}" style="display:none;background:#f9fafb"><td colspan="11" style="padding:10px 18px">
-        <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px;font-weight:600">Creator breakdown</div>
-        ${items}
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px;font-weight:600">Creator + contribution breakdown</div>
+        ${creatorItems}
       </td></tr>`;
     }
 
     return `<tr>
-      <td>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:26px;height:26px;border-radius:50%;background:${staffColor};color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${staffInitial}</div>
-          <div style="font-size:13px;font-weight:500">${p.staff_name||'—'}</div>
-        </div>
-      </td>
+      <td>${staffCell}</td>
       <td>${creatorLabel}</td>
       <td>
         <div style="font-size:13px;font-weight:500">${p.brand_name||'—'}</div>
-        ${p.whole_campaign ? '<span style="font-size:10px;font-weight:600;color:var(--blue)">Whole campaign</span>' : ''}
       </td>
       <td style="text-align:right;font-weight:600">${fmtMoneyFull(p.agency_fee)}</td>
       <td style="text-align:right">${Number(p.commission_percentage||0).toFixed(1)}%</td>
@@ -9820,22 +9850,66 @@ function _contribCountOfRow(p) {
           'contribution_reporting_payment'].filter(k => p[k]).length;
 }
 
-// ── ADD / EDIT MODAL (campaign-first, grouped creators) ────────────
+// ── ADD / EDIT MODAL (campaign-first, per-creator contribution matrix) ────
 
-// In-modal state — built up as the user picks campaign + creators
+// In-modal state — keyed by creator_id, each value carries items{}
 let _payoutModalState = {
   campaignId: null,
   brand: null,
-  // creators: { creatorId: { creator_id, creator_name, earning_id, agency_fee, staff_email, manualAgency } }
-  // Keyed for fast toggle; agency_fee is the auto-computed value, manualAgency is an optional override.
   creators: {},
-  editingId: null,        // when editing a single existing payout
-  editingStaffEmail: null, // when editing, restrict creator selection to this staff group
+  editingId: null,
 };
+
+// ────────────────────────────────────────────────────────────────────
+// MODAL JS — Per-creator contribution matrix
+//
+// Model:
+//   _payoutModalState.creators is keyed by creator_id and contains:
+//   {
+//     creator_id, creator_name, agency_fee, earning_id,
+//     items: {
+//       creator_signed:  { weight: 22.5, assignments: [{staff_email, split}] },
+//       admin_process:   { weight: 4,    assignments: [...] },
+//       brand_liaison:   { weight: 6,    assignments: [...] },
+//       creator_comm:    { weight: 4,    assignments: [...] },
+//       content_review:  { weight: 4,    assignments: [...] },
+//       negotiation:     { weight: 6,    assignments: [...] },
+//       reporting:       { weight: 3.5,  assignments: [...] }
+//     }
+//   }
+//
+// An "item" is "ticked" when its assignments array is non-empty.
+// Each assignment's split is a percentage of THAT item's value.
+// Sum of all splits in one item should = 100 if ticked.
+//
+// Calculation (per creator):
+//   item_value_for_staff = (agency_fee × weight%) × (split%)
+//   creator_commission   = sum across items×staff
+// Calculation (overall):
+//   total_commission_amount = sum of creator_commissions
+//   contributor_totals      = sum per staff_email across all creators
+//   blustu_retained         = total_agency_fee − total_commission
+// ────────────────────────────────────────────────────────────────────
+
+// Default weights for the 7 checklist items. These can be edited centrally here.
+const PAYOUT_ITEM_DEFS = [
+  { key: 'creator_signed', label: 'Creator signed / managed by staff', weight: 22.5, desc: 'Base — for whoever signed or owns the creator relationship' },
+  { key: 'admin_process',  label: 'Admin process',                     weight: 4,    desc: 'Onboarding, contracts, paperwork' },
+  { key: 'brand_liaison',  label: 'Brand liaison',                     weight: 6,    desc: 'Talking to the brand, managing the relationship' },
+  { key: 'creator_comm',   label: 'Creator communication',             weight: 4,    desc: 'Chasing creators, briefing, handovers' },
+  { key: 'content_review', label: 'Content drafting / reviewing',      weight: 4,    desc: 'Drafting briefs, reviewing scripts/edits' },
+  { key: 'negotiation',    label: 'Negotiation / pricing',             weight: 6,    desc: 'Setting rates, negotiating deal terms' },
+  { key: 'reporting',      label: 'Reporting / payment chasing',       weight: 3.5,  desc: 'Post-campaign reports, payment follow-up' },
+];
+
+function emptyItems() {
+  const o = {};
+  for (const def of PAYOUT_ITEM_DEFS) o[def.key] = { weight: def.weight, assignments: [] };
+  return o;
+}
 
 function openAddPayout(prefill) {
   if (!_canEditPayouts()) { showToast('Only owners/admins can add staff payouts'); return; }
-  // Reset form + state
   document.getElementById('payoutModalTitle').textContent = 'Add Staff Payout';
   document.getElementById('payout-id').value = '';
   document.getElementById('payout-error').style.display = 'none';
@@ -9844,27 +9918,21 @@ function openAddPayout(prefill) {
   _payoutModalState = {
     campaignId: prefill?.campaignId || null,
     brand:      prefill?.brand      || null,
-    creators:   {},
+    creators:   {},          // creator_id -> { creator_id, creator_name, agency_fee, earning_id, items }
     editingId:  null,
-    editingStaffEmail: null,
   };
 
   _populatePayoutCampaignSelect();
   document.getElementById('payout-campaign').value = _payoutModalState.campaignId || '';
   document.getElementById('payout-brand').value = '';
-  document.getElementById('payout-agency-fee').value = '';
   document.getElementById('payout-brand-spend').value = '';
-  document.getElementById('payout-pct').value = '30';
   document.getElementById('payout-brand-status').value = 'not_invoiced';
   document.getElementById('payout-status').value = 'draft';
   document.getElementById('payout-notes').value = '';
-  ['cb-creator-signed','cb-admin-process','cb-brand-liaison','cb-creator-comm','cb-content-review','cb-negotiation','cb-reporting-payment']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; });
 
   _setPayoutFormLocked(false);
-  onPayoutCampaignChange();   // will hide subsequent sections until a campaign is picked
+  onPayoutCampaignChange();   // hides downstream steps when no campaign
   recalcPayoutMath();
-
   openModal('payoutModal');
   setTimeout(() => document.getElementById('payout-campaign')?.focus(), 100);
 }
@@ -9878,56 +9946,80 @@ function openEditPayout(id) {
   document.getElementById('payout-id').value = p.id;
   document.getElementById('payout-error').style.display = 'none';
 
-  // Build creators map from the saved row
-  const list = (p.creators_included && p.creators_included.length)
-    ? p.creators_included
-    : (p.creator_id ? [{
-        creator_id:   p.creator_id,
-        creator_name: p.creator_name,
-        earning_id:   p.earning_id,
-        agency_fee:   p.agency_fee,
-        commission_amount_share: p.commission_amount,
-      }] : []);
+  // Build creators state from creators_included (new matrix shape) or legacy single-creator data
+  const inclArr = Array.isArray(p.creators_included) ? p.creators_included : [];
+  const creatorsMap = {};
+
+  if (inclArr.length && inclArr[0].items) {
+    // New shape — already has items
+    for (const c of inclArr) {
+      const cid = String(c.creator_id);
+      creatorsMap[cid] = {
+        creator_id:   cid,
+        creator_name: c.creator_name,
+        agency_fee:   Number(c.agency_fee || 0),
+        earning_id:   c.earning_id ? String(c.earning_id) : null,
+        items:        c.items && typeof c.items === 'object' ? _normaliseItems(c.items) : emptyItems(),
+      };
+    }
+  } else if (inclArr.length) {
+    // Legacy grouped shape (one staff per row) — migrate to matrix on the fly
+    for (const c of inclArr) {
+      const cid = String(c.creator_id);
+      const items = emptyItems();
+      // Re-create items from the row's checklist booleans + give 100% to the primary staff
+      for (const def of PAYOUT_ITEM_DEFS) {
+        const col = 'contribution_' + def.key.replace('creator_comm','creator_communication').replace('reporting','reporting_payment');
+        if (p[col]) {
+          items[def.key].assignments = [{ staff_email: p.staff_email, staff_name: p.staff_name, split: 100 }];
+        }
+      }
+      creatorsMap[cid] = {
+        creator_id:   cid,
+        creator_name: c.creator_name,
+        agency_fee:   Number(c.agency_fee || 0),
+        earning_id:   c.earning_id ? String(c.earning_id) : null,
+        items,
+      };
+    }
+  } else if (p.creator_id) {
+    // Truly legacy single-creator row
+    const items = emptyItems();
+    for (const def of PAYOUT_ITEM_DEFS) {
+      const col = 'contribution_' + def.key.replace('creator_comm','creator_communication').replace('reporting','reporting_payment');
+      if (p[col]) {
+        items[def.key].assignments = [{ staff_email: p.staff_email, staff_name: p.staff_name, split: 100 }];
+      }
+    }
+    const cid = String(p.creator_id);
+    creatorsMap[cid] = {
+      creator_id:   cid,
+      creator_name: p.creator_name,
+      agency_fee:   Number(p.agency_fee || 0),
+      earning_id:   p.earning_id ? String(p.earning_id) : null,
+      items,
+    };
+  }
 
   _payoutModalState = {
     campaignId: p.campaign_id || null,
     brand:      p.brand_name  || null,
-    creators:   {},
+    creators:   creatorsMap,
     editingId:  p.id,
-    editingStaffEmail: p.staff_email,
   };
-  for (const c of list) {
-    _payoutModalState.creators[String(c.creator_id)] = {
-      creator_id:   String(c.creator_id),
-      creator_name: c.creator_name,
-      earning_id:   c.earning_id ? String(c.earning_id) : null,
-      agency_fee:   Number(c.agency_fee || 0),
-      manualAgency: false,
-      staff_email:  p.staff_email,
-    };
-  }
 
   _populatePayoutCampaignSelect();
   document.getElementById('payout-campaign').value = p.campaign_id || '';
   document.getElementById('payout-brand').value = p.brand_name || '';
-  document.getElementById('payout-agency-fee').value = Number(p.agency_fee || 0).toFixed(2);
   document.getElementById('payout-brand-spend').value = Number(p.total_brand_spend || 0).toFixed(2);
-  document.getElementById('payout-pct').value = Number(p.commission_percentage || 0).toFixed(1);
   document.getElementById('payout-brand-status').value = p.brand_payment_status || 'not_invoiced';
   document.getElementById('payout-status').value = p.payout_status || 'draft';
   document.getElementById('payout-notes').value = p.notes || '';
 
-  document.getElementById('cb-creator-signed').checked    = !!p.contribution_creator_signed;
-  document.getElementById('cb-admin-process').checked     = !!p.contribution_admin_process;
-  document.getElementById('cb-brand-liaison').checked     = !!p.contribution_brand_liaison;
-  document.getElementById('cb-creator-comm').checked      = !!p.contribution_creator_communication;
-  document.getElementById('cb-content-review').checked    = !!p.contribution_content_review;
-  document.getElementById('cb-negotiation').checked       = !!p.contribution_negotiation;
-  document.getElementById('cb-reporting-payment').checked = !!p.contribution_reporting_payment;
-
-  // Render creator groups for THIS campaign with the saved staff group locked-in
-  _renderPayoutCreatorGroups();
-  _showSelectionSections(true);
+  document.getElementById('payout-step-creators').style.display = '';
+  document.getElementById('payout-brand-group').style.display = '';
+  _renderCreatorList();
+  _renderMatrix();
 
   if (p.payout_status === 'paid') {
     _setPayoutFormLocked(true);
@@ -9941,8 +10033,25 @@ function openEditPayout(id) {
   openModal('payoutModal');
 }
 
+function _normaliseItems(items) {
+  const out = emptyItems();
+  for (const def of PAYOUT_ITEM_DEFS) {
+    if (items[def.key]) {
+      out[def.key].weight = Number(items[def.key].weight ?? def.weight);
+      out[def.key].assignments = Array.isArray(items[def.key].assignments)
+        ? items[def.key].assignments.map(a => ({
+            staff_email: a.staff_email,
+            staff_name:  a.staff_name || (STAFF.find(s => s.email === a.staff_email)?.name) || a.staff_email,
+            split:       Number(a.split) || 0,
+          }))
+        : [];
+    }
+  }
+  return out;
+}
+
 function unlockPaidPayout() {
-  if (!confirm('This payout is already marked Paid. Editing it may also update the linked Spending entry. Continue?')) return;
+  if (!confirm('This payout is already marked Paid. Editing it may also update the linked Spending entries. Continue?')) return;
   _setPayoutFormLocked(false);
   document.getElementById('payout-locked-banner').style.display = 'none';
 }
@@ -9972,7 +10081,6 @@ function onPayoutCampaignChange() {
   const newCampId = opt?.value || '';
   const brand     = opt?.getAttribute('data-brand') || '';
 
-  // When campaign changes, reset creator selection (unless we're editing — then preserve)
   if (newCampId !== _payoutModalState.campaignId && !_payoutModalState.editingId) {
     _payoutModalState.campaignId = newCampId;
     _payoutModalState.brand      = brand;
@@ -9982,208 +10090,395 @@ function onPayoutCampaignChange() {
     if (brand && !_payoutModalState.brand) _payoutModalState.brand = brand;
   }
 
-  // Brand field auto-fill
   const brandField = document.getElementById('payout-brand');
-  if (brandField && (!brandField.value || brandField.value !== brand)) brandField.value = _payoutModalState.brand || brand || '';
+  if (brandField && !brandField.value && brand) brandField.value = brand;
 
   if (newCampId) {
     document.getElementById('payout-step-creators').style.display = '';
     document.getElementById('payout-brand-group').style.display   = '';
-    _renderPayoutCreatorGroups();
-    _showSelectionSections(_hasAnySelection());
+    _renderCreatorList();
+    _renderMatrix();
   } else {
     document.getElementById('payout-step-creators').style.display = 'none';
     document.getElementById('payout-brand-group').style.display   = 'none';
-    _showSelectionSections(false);
+    document.getElementById('payout-matrix-section').style.display = 'none';
+    document.getElementById('payout-finalize-section').style.display = 'none';
   }
+  recalcPayoutMath();
 }
 
-/**
- * Render the grouped creator selector for the currently-picked campaign.
- * Groups creators by their assigned primary manager (or "Unassigned" / "Other staff").
- * Each row shows the creator's auto-computed agency fee from their earnings record(s).
- */
-function _renderPayoutCreatorGroups() {
-  const container = document.getElementById('payout-creator-groups');
+/** Render the flat list of creators on this campaign with select checkboxes. */
+function _renderCreatorList() {
+  const container = document.getElementById('payout-creator-list');
   if (!container) return;
   const campId = _payoutModalState.campaignId;
   if (!campId) { container.innerHTML = ''; return; }
 
-  // Find all creators on this campaign (via earnings records linked to the campaign)
+  // Gather creators from earnings on this campaign
   const rowsOnCampaign = earnings.filter(e => String(e.campaign_id) === String(campId) && e.entry_type !== 'agency_only');
-  const byCreator = {};   // creatorId -> { creator, earnings: [], agencyTotal }
+  const byCreator = {};
   for (const e of rowsOnCampaign) {
     const cid = String(e.creator_id);
     if (!cid) continue;
     if (!byCreator[cid]) {
       const c = creators.find(x => String(x.id) === cid);
-      byCreator[cid] = { creator: c || { id: cid, name: e.creator_name || '?' }, earnings: [], agencyTotal: 0, earningIdToUse: null };
+      byCreator[cid] = { creator: c || { id: cid, name: e.creator_name || '?' }, agency_fee: 0, earning_id: null };
     }
-    const agency = agencyStandardCutFor(e) + lateFeeFor(e) + extraProfitFor(e);
-    byCreator[cid].earnings.push({ id: e.id, agency_fee: agency });
-    byCreator[cid].agencyTotal += agency;
-    if (!byCreator[cid].earningIdToUse) byCreator[cid].earningIdToUse = e.id;
+    byCreator[cid].agency_fee += agencyStandardCutFor(e) + lateFeeFor(e) + extraProfitFor(e);
+    if (!byCreator[cid].earning_id) byCreator[cid].earning_id = e.id;
   }
 
-  const creatorIds = Object.keys(byCreator);
-  if (!creatorIds.length) {
+  const cids = Object.keys(byCreator).sort((a, b) =>
+    (byCreator[a].creator.name || '').localeCompare(byCreator[b].creator.name || '')
+  );
+
+  if (!cids.length) {
     container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">No earnings records on this campaign yet. Add earnings in the Earnings Tracker first.</div>';
     return;
   }
 
-  // Bucket creators by assigned primary staff
-  const buckets = {}; // staffEmail -> [{cid, info}]
-  for (const cid of creatorIds) {
-    const info  = byCreator[cid];
-    const primary = info.creator ? creatorPrimaryStaffEmail(info.creator) : null;
-    const key = primary || '__unassigned__';
-    if (!buckets[key]) buckets[key] = [];
-    buckets[key].push({ cid, info });
-  }
-
-  // Sort buckets: assigned staff alphabetically, unassigned last
-  const sortedKeys = Object.keys(buckets).sort((a, b) => {
-    if (a === '__unassigned__') return 1;
-    if (b === '__unassigned__') return -1;
-    const sa = STAFF.find(s => s.email === a);
-    const sb = STAFF.find(s => s.email === b);
-    return (sa?.name || a).localeCompare(sb?.name || b);
-  });
-
-  let html = '';
-  for (const key of sortedKeys) {
-    const staff = key === '__unassigned__' ? null : STAFF.find(s => s.email === key);
-    const groupLabel = staff ? staff.name : '— Unassigned —';
-    const isEditingOtherGroup = _payoutModalState.editingId && _payoutModalState.editingStaffEmail && key !== _payoutModalState.editingStaffEmail;
-    const groupColor = staff
-      ? AVATAR_COLORS[Math.abs(staff.email.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % AVATAR_COLORS.length]
-      : '#9ca3af';
-
-    html += `<div class="payout-staff-group" style="margin-bottom:6px;background:white;border-radius:8px;border:1px solid var(--gray-100);overflow:hidden${isEditingOtherGroup ? ';opacity:.5' : ''}">
-      <div style="padding:8px 12px;background:var(--gray-50);display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;border-bottom:1px solid var(--gray-100)">
-        <div style="width:20px;height:20px;border-radius:50%;background:${groupColor};color:white;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">${(groupLabel[0]||'?').toUpperCase()}</div>
-        <span>${groupLabel}</span>
-        ${staff ? `<span style="font-weight:400;color:var(--gray-400);font-size:11px">${staff.systemRole === 'owner' ? 'Owner' : staff.systemRole === 'admin' ? 'Admin' : 'Manager'}</span>` : ''}
-        ${isEditingOtherGroup ? '<span style="margin-left:auto;font-size:11px;color:var(--gray-400)">(locked while editing)</span>' : ''}
-      </div>
-      <div style="padding:6px 12px">`;
-    for (const { cid, info } of buckets[key]) {
-      const checked = !!_payoutModalState.creators[cid];
-      const af = info.agencyTotal;
-      html += `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:${isEditingOtherGroup ? 'not-allowed' : 'pointer'};border-radius:6px;font-size:13px${checked ? ';background:#dbeafe' : ''}">
-        <input type="checkbox" data-cid="${cid}" data-staff="${staff ? staff.email : ''}" data-name="${(info.creator.name||'').replace(/"/g,'&quot;')}" data-agency="${af.toFixed(2)}" data-earning="${info.earningIdToUse || ''}" onchange="onPayoutCreatorToggle(this)" ${checked ? 'checked' : ''} ${isEditingOtherGroup ? 'disabled' : ''} style="margin:0">
-        <div style="flex:1;display:flex;align-items:center;gap:8px">
-          <span style="font-weight:500">${info.creator.name || '?'}</span>
-          <span style="margin-left:auto;font-size:12px;color:var(--gray-500)">Agency: <strong style="color:var(--blue)">${fmtMoneyFull(af)}</strong></span>
-        </div>
-      </label>`;
-    }
-    html += `</div></div>`;
-  }
-  container.innerHTML = html;
+  container.innerHTML = cids.map(cid => {
+    const info = byCreator[cid];
+    const selected = !!_payoutModalState.creators[cid];
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-radius:6px;font-size:13px${selected ? ';background:#dbeafe' : ''}">
+      <input type="checkbox" data-cid="${cid}" data-name="${(info.creator.name||'').replace(/"/g,'&quot;')}" data-agency="${info.agency_fee.toFixed(2)}" data-earning="${info.earning_id || ''}" onchange="onPayoutCreatorSelect(this)" ${selected ? 'checked' : ''} style="margin:0">
+      <span style="flex:1">${info.creator.name || '?'}</span>
+      <span style="font-size:11px;color:var(--gray-500)">Agency: <strong style="color:var(--blue)">${fmtMoneyFull(info.agency_fee)}</strong></span>
+    </label>`;
+  }).join('');
 }
 
-function _hasAnySelection() {
-  return Object.keys(_payoutModalState.creators).length > 0;
-}
-
-function _showSelectionSections(show) {
-  document.getElementById('payout-selection-summary').style.display = show ? '' : 'none';
-  document.getElementById('payout-money-row').style.display          = show ? '' : 'none';
-  document.getElementById('payout-finalize-section').style.display   = show ? '' : 'none';
-}
-
-function onPayoutCreatorToggle(cb) {
+function onPayoutCreatorSelect(cb) {
   const cid    = cb.dataset.cid;
   const name   = cb.dataset.name;
-  const staff  = cb.dataset.staff || null;
   const agency = Number(cb.dataset.agency) || 0;
   const eid    = cb.dataset.earning || null;
+
   if (cb.checked) {
     _payoutModalState.creators[cid] = {
       creator_id:   cid,
       creator_name: name,
-      earning_id:   eid,
       agency_fee:   agency,
-      manualAgency: false,
-      staff_email:  staff || null,
+      earning_id:   eid,
+      items:        emptyItems(),
     };
   } else {
     delete _payoutModalState.creators[cid];
   }
-  // Re-render to update the highlight + summary
-  _renderPayoutCreatorGroups();
-  _refreshPayoutSelectionSummary();
-  _showSelectionSections(_hasAnySelection());
+  _renderCreatorList();
+  _renderMatrix();
+  recalcPayoutMath();
 }
 
-/** Manually adjust a creator's agency fee inside the selection summary. */
-function setCreatorAgencyOverride(cid, val) {
-  const v = Math.max(0, Number(val) || 0);
-  if (_payoutModalState.creators[cid]) {
-    _payoutModalState.creators[cid].agency_fee = v;
-    _payoutModalState.creators[cid].manualAgency = true;
-    _refreshPayoutSelectionSummary();
+/** Render the per-creator contribution matrix. */
+function _renderMatrix() {
+  const container = document.getElementById('payout-matrix-list');
+  const section   = document.getElementById('payout-matrix-section');
+  const final     = document.getElementById('payout-finalize-section');
+  if (!container) return;
+  const cids = Object.keys(_payoutModalState.creators);
+  if (!cids.length) {
+    section.style.display = 'none';
+    final.style.display = 'none';
+    container.innerHTML = '';
+    return;
   }
+  section.style.display = '';
+  final.style.display = '';
+
+  // Eligible staff dropdown options (reusable HTML)
+  const eligibleStaff = STAFF.filter(s => ['owner','admin','manager'].includes(s.systemRole))
+                             .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const staffOpts = eligibleStaff.map(s => `<option value="${s.email}">${s.name}</option>`).join('');
+
+  container.innerHTML = cids.map(cid => {
+    const cdata = _payoutModalState.creators[cid];
+    const c = creators.find(x => String(x.id) === cid);
+    const primaryEmail = c ? creatorPrimaryStaffEmail(c) : null;
+    const primary = primaryEmail ? STAFF.find(s => s.email === primaryEmail) : null;
+
+    // Compute creator's subtotal commission
+    let creatorCommission = 0;
+    for (const def of PAYOUT_ITEM_DEFS) {
+      const item = cdata.items[def.key];
+      const totalSplit = item.assignments.reduce((s, a) => s + Number(a.split || 0), 0);
+      if (totalSplit > 0) {
+        // The item's % contributes regardless of who, in proportion to split
+        creatorCommission += cdata.agency_fee * (item.weight / 100) * (totalSplit / 100);
+      }
+    }
+
+    const itemRows = PAYOUT_ITEM_DEFS.map(def => {
+      const item = cdata.items[def.key];
+      const isAssigned = item.assignments.length > 0;
+      const totalSplit = item.assignments.reduce((s, a) => s + Number(a.split || 0), 0);
+      const splitOk = !isAssigned || Math.abs(totalSplit - 100) < 0.01;
+
+      const assignRows = item.assignments.map((a, idx) => {
+        const staffName = a.staff_name || (STAFF.find(s => s.email === a.staff_email)?.name) || a.staff_email;
+        return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px">
+          <select onchange="onMatrixStaffChange('${cid}','${def.key}',${idx},this.value)" style="flex:1;padding:2px 6px;border:1px solid var(--gray-100);border-radius:4px;font-size:11px">
+            <option value="">— Pick staff —</option>
+            ${eligibleStaff.map(s => `<option value="${s.email}" ${s.email===a.staff_email?'selected':''}>${s.name}</option>`).join('')}
+          </select>
+          <input type="number" min="0" max="100" step="1" value="${a.split}" oninput="onMatrixSplitChange('${cid}','${def.key}',${idx},this.value)" style="width:54px;padding:2px 6px;border:1px solid var(--gray-100);border-radius:4px;font-size:11px;text-align:right">
+          <span style="color:var(--gray-400);font-size:10px">%</span>
+          <button type="button" onclick="onMatrixRemoveAssign('${cid}','${def.key}',${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0 4px;font-size:13px">×</button>
+        </div>`;
+      }).join('');
+
+      return `<div style="border-bottom:1px solid var(--gray-100);padding:6px 8px;${isAssigned ? 'background:#f0f9ff' : ''}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="cb-${cid}-${def.key}" ${isAssigned ? 'checked' : ''} onchange="onMatrixToggleItem('${cid}','${def.key}',this.checked)" style="margin:0">
+          <label for="cb-${cid}-${def.key}" style="flex:1;font-size:12px;cursor:pointer">
+            <span style="font-weight:500">${def.label}</span>
+            <span style="color:var(--gray-400);font-size:11px;margin-left:6px">${def.weight}%</span>
+          </label>
+          ${isAssigned ? `<button type="button" onclick="onMatrixAddAssign('${cid}','${def.key}')" class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:10px">+ Staff</button>` : ''}
+        </div>
+        ${isAssigned ? `<div style="margin-top:4px;margin-left:24px">${assignRows}
+          ${!splitOk ? `<div style="font-size:10px;color:#dc2626;margin-top:2px">⚠ Splits must total 100% (currently ${totalSplit.toFixed(0)}%)</div>` : ''}
+        </div>` : ''}
+      </div>`;
+    }).join('');
+
+    return `<div class="card" style="margin-bottom:10px;padding:0;border:1px solid var(--gray-100)">
+      <div style="padding:10px 14px;background:var(--gray-50);border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="font-weight:600;font-size:13px">${cdata.creator_name}</div>
+          ${primary ? `<div style="font-size:11px;color:var(--gray-500)">Primary manager: <strong>${primary.name}</strong></div>` : '<div style="font-size:11px;color:var(--amber)">No primary manager assigned</div>'}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--gray-500)">Agency fee</div>
+          <div style="font-size:14px;font-weight:700;color:var(--blue)">${fmtMoneyFull(cdata.agency_fee)}</div>
+        </div>
+        <div style="text-align:right;border-left:1px solid var(--gray-200);padding-left:10px">
+          <div style="font-size:11px;color:var(--gray-500)">Subtotal commission</div>
+          <div style="font-size:14px;font-weight:700;color:var(--amber)">${fmtMoneyFull(creatorCommission)}</div>
+        </div>
+      </div>
+      <div>${itemRows}</div>
+    </div>`;
+  }).join('');
 }
 
-/** Group the current selection by staff_email and show a live summary. */
-function _refreshPayoutSelectionSummary() {
-  const list = Object.values(_payoutModalState.creators);
-  if (!list.length) return;
-
-  // Group by staff_email
-  const groups = {};
-  for (const c of list) {
-    const key = c.staff_email || '__unassigned__';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(c);
+// ── Matrix interactions ──
+function onMatrixToggleItem(cid, itemKey, checked) {
+  const item = _payoutModalState.creators[cid]?.items[itemKey];
+  if (!item) return;
+  if (checked) {
+    // Default: 100% to the primary manager if known, else just an empty placeholder
+    const c = creators.find(x => String(x.id) === cid);
+    const primaryEmail = c ? creatorPrimaryStaffEmail(c) : null;
+    const primary = primaryEmail ? STAFF.find(s => s.email === primaryEmail) : null;
+    item.assignments = [{
+      staff_email: primaryEmail || '',
+      staff_name:  primary ? primary.name : '',
+      split:       100,
+    }];
+  } else {
+    item.assignments = [];
   }
-  const groupCount = Object.keys(groups).length;
-
-  // Total agency fee (sum across all selected)
-  const totalAgency = list.reduce((s, c) => s + Number(c.agency_fee || 0), 0);
-
-  // Build summary HTML
-  let html = '';
-  for (const [key, creators_] of Object.entries(groups)) {
-    const staff = key === '__unassigned__' ? null : STAFF.find(s => s.email === key);
-    const groupAgency = creators_.reduce((s, c) => s + Number(c.agency_fee || 0), 0);
-    html += `<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed rgba(59,130,246,.2)">
-      <div style="font-weight:600;color:var(--gray-900);margin-bottom:3px">
-        ${staff ? '👤 ' + staff.name : '⚠️ Unassigned staff'}
-        <span style="font-weight:400;color:var(--gray-400);font-size:11px;margin-left:6px">${creators_.length} creator${creators_.length===1?'':'s'} · ${fmtMoneyFull(groupAgency)}</span>
-      </div>`;
-    for (const c of creators_) {
-      html += `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px">
-        <span style="flex:1">• ${c.creator_name || '?'}</span>
-        <span style="color:var(--gray-500)">Agency:</span>
-        <input type="number" min="0" step="0.01" value="${Number(c.agency_fee||0).toFixed(2)}" oninput="setCreatorAgencyOverride('${c.creator_id}', this.value)" style="width:90px;padding:2px 6px;border:1px solid var(--gray-100);border-radius:4px;font-size:11px;text-align:right">
-        ${c.manualAgency ? '<span title="Manually overridden" style="color:var(--amber);font-size:10px">✎</span>' : ''}
-      </div>`;
-    }
-    if (!staff) {
-      html += `<div style="font-size:10px;color:var(--amber);margin-top:2px;padding:2px 0">⚠ Assign a staff member to ${creators_.length === 1 ? 'this creator' : 'these creators'} on the CRM, or selection will be skipped on save.</div>`;
-    }
-    html += '</div>';
+  _renderMatrix();
+  recalcPayoutMath();
+}
+function onMatrixStaffChange(cid, itemKey, idx, newEmail) {
+  const item = _payoutModalState.creators[cid]?.items[itemKey];
+  if (!item || !item.assignments[idx]) return;
+  const s = STAFF.find(x => x.email === newEmail);
+  item.assignments[idx].staff_email = newEmail;
+  item.assignments[idx].staff_name = s ? s.name : newEmail;
+  recalcPayoutMath();
+}
+function onMatrixSplitChange(cid, itemKey, idx, val) {
+  const item = _payoutModalState.creators[cid]?.items[itemKey];
+  if (!item || !item.assignments[idx]) return;
+  const v = Math.max(0, Math.min(100, Number(val) || 0));
+  item.assignments[idx].split = v;
+  recalcPayoutMath();
+  // Don't re-render — would steal cursor focus from input
+  _refreshMatrixSubtotal(cid, itemKey);
+}
+function onMatrixAddAssign(cid, itemKey) {
+  const item = _payoutModalState.creators[cid]?.items[itemKey];
+  if (!item) return;
+  // Split evenly: if currently 100% to one person and we add a second, re-balance
+  const n = item.assignments.length;
+  if (n === 1 && Math.abs(item.assignments[0].split - 100) < 0.01) {
+    item.assignments[0].split = 50;
+    item.assignments.push({ staff_email: '', staff_name: '', split: 50 });
+  } else {
+    // Otherwise add at 0% so user picks the value
+    item.assignments.push({ staff_email: '', staff_name: '', split: 0 });
   }
-  document.getElementById('payout-summary-list').innerHTML = html;
+  _renderMatrix();
+  recalcPayoutMath();
+}
+function onMatrixRemoveAssign(cid, itemKey, idx) {
+  const item = _payoutModalState.creators[cid]?.items[itemKey];
+  if (!item || !item.assignments[idx]) return;
+  item.assignments.splice(idx, 1);
+  // If now empty, treat as un-ticked
+  _renderMatrix();
+  recalcPayoutMath();
+}
 
-  // Multi-group warning
-  const mwEl = document.getElementById('payout-summary-multi-warning');
-  if (mwEl) {
-    if (groupCount > 1) {
-      mwEl.textContent = `→ ${groupCount} grouped payouts will be created on save`;
-      mwEl.style.display = '';
+/** Update only the per-creator subtotal pills, without rebuilding the matrix (avoids stealing input focus). */
+function _refreshMatrixSubtotal(cid /*, itemKey */) {
+  // Recompute creator subtotal — easiest is full recalc on next render. For now,
+  // a partial pass would require DOM lookup; recalcPayoutMath updates the global
+  // summary which is the most important thing.
+  // Skipping per-card update for input focus stability.
+}
+
+// ── Shortcuts ──
+function autoAssignPrimaryManagers() {
+  for (const cid of Object.keys(_payoutModalState.creators)) {
+    const c = creators.find(x => String(x.id) === cid);
+    if (!c) continue;
+    const primaryEmail = creatorPrimaryStaffEmail(c);
+    if (!primaryEmail) continue;
+    const primary = STAFF.find(s => s.email === primaryEmail);
+    if (!primary) continue;
+    // Set creator_signed to 100% primary (overwriting whatever was there)
+    _payoutModalState.creators[cid].items.creator_signed.assignments = [{
+      staff_email: primaryEmail, staff_name: primary.name, split: 100
+    }];
+  }
+  _renderMatrix();
+  recalcPayoutMath();
+  showToast('Primary managers auto-assigned for "Creator signed" on every creator');
+}
+
+function copyMatrixToAll() {
+  const cids = Object.keys(_payoutModalState.creators);
+  if (cids.length < 2) { showToast('Need at least 2 creators to copy across'); return; }
+  const sourceCid = cids[0];
+  const source = _payoutModalState.creators[sourceCid];
+  if (!confirm(`Copy the contribution matrix from "${source.creator_name}" to all other ${cids.length - 1} creator(s)? This will overwrite their current assignments.`)) return;
+  for (let i = 1; i < cids.length; i++) {
+    // Deep clone items
+    _payoutModalState.creators[cids[i]].items = JSON.parse(JSON.stringify(source.items));
+  }
+  _renderMatrix();
+  recalcPayoutMath();
+  showToast('Matrix copied to ' + (cids.length - 1) + ' other creator(s)');
+}
+
+/** Compute all derived totals from the matrix and update the summary UI. */
+function recalcPayoutMath() {
+  if (!document.getElementById('payout-summary-agency')) return;
+
+  let totalAgency = 0;
+  let totalCommission = 0;
+  const contributorMap = {};  // staff_email -> { name, amount }
+
+  for (const cdata of Object.values(_payoutModalState.creators)) {
+    totalAgency += Number(cdata.agency_fee || 0);
+    for (const def of PAYOUT_ITEM_DEFS) {
+      const item = cdata.items[def.key];
+      for (const a of item.assignments) {
+        if (!a.staff_email) continue;
+        const amount = Number(cdata.agency_fee || 0) * (item.weight / 100) * (Number(a.split) / 100);
+        totalCommission += amount;
+        if (!contributorMap[a.staff_email]) {
+          contributorMap[a.staff_email] = { staff_name: a.staff_name || a.staff_email, amount: 0 };
+        }
+        contributorMap[a.staff_email].amount += amount;
+      }
+    }
+  }
+
+  const retained    = totalAgency - totalCommission;
+  const retainedPct = totalAgency > 0 ? (retained / totalAgency * 100) : 0;
+  const commissionPct = totalAgency > 0 ? (totalCommission / totalAgency * 100) : 0;
+
+  document.getElementById('payout-summary-agency').textContent     = fmtMoneyFull(totalAgency);
+  document.getElementById('payout-summary-commission').textContent = fmtMoneyFull(totalCommission);
+  document.getElementById('payout-summary-commission-pct').textContent = totalAgency > 0 ? `(${commissionPct.toFixed(1)}%)` : '(0%)';
+  document.getElementById('payout-summary-retained').textContent   = fmtMoneyFull(retained);
+  document.getElementById('payout-summary-retained-pct').textContent = totalAgency > 0 ? `(${retainedPct.toFixed(1)}%)` : '(0%)';
+
+  // Retention badge
+  const badge = document.getElementById('payout-retention-badge');
+  if (badge) {
+    if (totalAgency <= 0) {
+      badge.textContent = '—';
+      badge.className = 'badge badge-gray';
+    } else if (retainedPct >= 60) {
+      badge.textContent = '✓ Healthy';
+      badge.className = 'badge badge-green';
+    } else if (retainedPct >= 50) {
+      badge.textContent = 'Acceptable';
+      badge.className = 'badge badge-amber';
     } else {
-      mwEl.style.display = 'none';
+      badge.textContent = '⚠ Below target';
+      badge.className = 'badge badge-red';
+    }
+    badge.style.fontSize = '10px';
+  }
+
+  // Contributor totals
+  const cEl = document.getElementById('payout-contributor-totals');
+  if (cEl) {
+    const list = Object.entries(contributorMap)
+      .map(([email, info]) => ({ email, ...info }))
+      .sort((a, b) => b.amount - a.amount);
+    if (!list.length) {
+      cEl.innerHTML = '<div style="color:var(--gray-400);font-style:italic">No contributors assigned yet — tick at least one checklist item.</div>';
+    } else {
+      cEl.innerHTML = '<div style="font-weight:600;margin-bottom:4px;font-size:11px;color:var(--blue)">Contributors:</div>' +
+        list.map(x => `<div style="display:flex;justify-content:space-between;padding:2px 0">
+          <span>👤 ${x.staff_name}</span>
+          <strong>${fmtMoneyFull(x.amount)}</strong>
+        </div>`).join('');
     }
   }
 
-  // Auto-fill total agency fee (don't override if user has typed there manually since)
-  const feeField = document.getElementById('payout-agency-fee');
-  feeField.value = totalAgency.toFixed(2);
+  // Warnings
+  const warnings = [];
+  if (commissionPct > 50)                                  warnings.push('⚠ Total commission above 50% — BluStu retained falls below 50%.');
+  if (commissionPct > 40 && commissionPct <= 50)           warnings.push('💡 Commission between 40–50%. Make sure the contribution items justify this level.');
+  // Check for invalid splits (any item with assignments not summing to 100)
+  let badSplitFound = false;
+  for (const cdata of Object.values(_payoutModalState.creators)) {
+    for (const def of PAYOUT_ITEM_DEFS) {
+      const item = cdata.items[def.key];
+      if (item.assignments.length === 0) continue;
+      const sum = item.assignments.reduce((s, a) => s + Number(a.split || 0), 0);
+      if (Math.abs(sum - 100) > 0.01) {
+        warnings.push(`⚠ "${def.label}" on ${cdata.creator_name}: splits total ${sum.toFixed(0)}% (should be 100%).`);
+        badSplitFound = true;
+        if (warnings.length >= 5) break;
+      }
+    }
+    if (badSplitFound && warnings.length >= 5) break;
+  }
+  const brand = document.getElementById('payout-brand-status')?.value;
+  const stat  = document.getElementById('payout-status')?.value;
+  if (stat === 'paid' && brand !== 'payment_received') warnings.push('🚫 Cannot mark as Paid until brand payment is received.');
 
+  const wEl = document.getElementById('payout-warnings');
+  if (wEl) {
+    wEl.innerHTML = !warnings.length ? '' : warnings.map(w =>
+      `<div style="background:#fef3c7;color:#92400e;border-left:3px solid #f59e0b;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:6px">${w}</div>`
+    ).join('');
+  }
+
+  // Stash totals for save()
+  _payoutModalState._totalAgency      = totalAgency;
+  _payoutModalState._totalCommission  = totalCommission;
+  _payoutModalState._retained         = retained;
+  _payoutModalState._commissionPct    = commissionPct;
+  _payoutModalState._contributorMap   = contributorMap;
+}
+
+function onBrandStatusChange() {
+  const brand = document.getElementById('payout-brand-status').value;
+  const payoutSel = document.getElementById('payout-status');
+  if (brand !== 'payment_received' && ['ready_to_pay','paid'].includes(payoutSel.value)) {
+    payoutSel.value = 'pending_brand_payment';
+  }
   recalcPayoutMath();
 }
 
@@ -10196,16 +10491,34 @@ async function saveStaffPayout() {
   const campaignId   = _payoutModalState.campaignId;
   const brand        = document.getElementById('payout-brand').value.trim();
   const totalSpend   = Number(document.getElementById('payout-brand-spend').value) || 0;
-  const pct          = Number(document.getElementById('payout-pct').value) || 0;
   const brandStatus  = document.getElementById('payout-brand-status').value;
   let   payoutStatus = document.getElementById('payout-status').value;
   const notes        = document.getElementById('payout-notes').value.trim();
 
-  // Validation
+  if (!campaignId)                          { showErr('Pick a brand deal / campaign first.'); return; }
   const selectedList = Object.values(_payoutModalState.creators);
-  if (!campaignId)                                  { showErr('Pick a brand deal / campaign first.'); return; }
-  if (!selectedList.length)                         { showErr('Pick at least one creator.'); return; }
-  if (pct < 0 || pct > 100)                         { showErr('Commission % must be between 0 and 100'); return; }
+  if (!selectedList.length)                 { showErr('Pick at least one creator.'); return; }
+
+  // Validate split sums
+  for (const cdata of selectedList) {
+    for (const def of PAYOUT_ITEM_DEFS) {
+      const item = cdata.items[def.key];
+      if (item.assignments.length === 0) continue;
+      const sum = item.assignments.reduce((s, a) => s + Number(a.split || 0), 0);
+      if (Math.abs(sum - 100) > 0.01) {
+        showErr(`"${def.label}" on ${cdata.creator_name}: splits must total exactly 100% (currently ${sum.toFixed(0)}%).`);
+        return;
+      }
+      // Every assignment must have a staff member
+      for (const a of item.assignments) {
+        if (!a.staff_email) {
+          showErr(`"${def.label}" on ${cdata.creator_name}: pick a staff member for each split.`);
+          return;
+        }
+      }
+    }
+  }
+
   if (payoutStatus === 'paid' && brandStatus !== 'payment_received') {
     showErr('Cannot mark as Paid until brand payment status is "Payment received".');
     return;
@@ -10214,205 +10527,126 @@ async function saveStaffPayout() {
     payoutStatus = 'pending_brand_payment';
   }
 
-  // Group selected creators by staff_email (skip those without staff)
-  const groups = {};
-  for (const c of selectedList) {
-    if (!c.staff_email) continue; // skip unassigned — already warned in summary
-    if (!groups[c.staff_email]) groups[c.staff_email] = [];
-    groups[c.staff_email].push(c);
-  }
-  if (!Object.keys(groups).length) {
-    showErr('All selected creators are unassigned. Assign a primary manager on each creator profile first.');
-    return;
-  }
+  // Recalc to make sure stash values are fresh
+  recalcPayoutMath();
+  const totalAgency     = _payoutModalState._totalAgency;
+  const totalCommission = _payoutModalState._totalCommission;
+  const retained        = _payoutModalState._retained;
+  const commissionPct   = _payoutModalState._commissionPct;
+  const contributorMap  = _payoutModalState._contributorMap;
 
-  const checklist = {
-    creator_signed:        !!document.getElementById('cb-creator-signed').checked,
-    admin_process:         !!document.getElementById('cb-admin-process').checked,
-    brand_liaison:         !!document.getElementById('cb-brand-liaison').checked,
-    creator_communication: !!document.getElementById('cb-creator-comm').checked,
-    content_review:        !!document.getElementById('cb-content-review').checked,
-    negotiation:           !!document.getElementById('cb-negotiation').checked,
-    reporting_payment:     !!document.getElementById('cb-reporting-payment').checked,
+  // Build creators_included with items embedded
+  const creatorsIncluded = selectedList.map(c => ({
+    creator_id:   c.creator_id,
+    creator_name: c.creator_name,
+    earning_id:   c.earning_id,
+    agency_fee:   Number(c.agency_fee || 0),
+    items:        c.items,
+  }));
+
+  // Build contributor_totals
+  const contributorTotals = Object.entries(contributorMap).map(([email, info]) => ({
+    staff_email: email,
+    staff_name:  info.staff_name,
+    amount:      Math.round(info.amount * 100) / 100,
+  }));
+
+  // Pick a "primary" staff_email for the row (backward-compat): the contributor with the largest share
+  const top = contributorTotals.slice().sort((a, b) => b.amount - a.amount)[0];
+
+  const row = {
+    staff_email:                top?.staff_email || (currentUser?.email) || '',
+    staff_name:                 top?.staff_name || (currentUser?.name)   || '',
+    creator_id:                 null,
+    creator_name:               selectedList.length === 1 ? selectedList[0].creator_name : `${selectedList.length} creators`,
+    earning_id:                 null,
+    campaign_id:                campaignId ? String(campaignId) : null,
+    whole_campaign:             false,
+    brand_name:                 brand || null,
+    total_brand_spend:          totalSpend,
+    agency_fee:                 Math.round(totalAgency * 100) / 100,
+    commission_percentage:      Math.round(commissionPct * 100) / 100,
+    total_commission_percentage:Math.round(commissionPct * 100) / 100,
+    commission_amount:          Math.round(totalCommission * 100) / 100,
+    blustu_retained_amount:     Math.round(retained * 100) / 100,
+    brand_payment_status:       brandStatus,
+    payout_status:              payoutStatus,
+    notes:                      notes || null,
+    creators_included:          creatorsIncluded,
+    contributor_totals:         contributorTotals,
+    created_by:                 currentUser?.email || null,
+    updated_at:                 new Date().toISOString(),
   };
-  const contribCount = Object.values(checklist).filter(Boolean).length;
-  const contribLevel = contributionLevelFromCount(contribCount);
+
+  // Old checklist columns — kept in sync so legacy code doesn't break.
+  // Set true if ANY creator has that item ticked.
+  for (const def of PAYOUT_ITEM_DEFS) {
+    const colKey = def.key === 'creator_signed' ? 'contribution_creator_signed'
+                 : def.key === 'admin_process'  ? 'contribution_admin_process'
+                 : def.key === 'brand_liaison'  ? 'contribution_brand_liaison'
+                 : def.key === 'creator_comm'   ? 'contribution_creator_communication'
+                 : def.key === 'content_review' ? 'contribution_content_review'
+                 : def.key === 'negotiation'    ? 'contribution_negotiation'
+                 :                                'contribution_reporting_payment';
+    row[colKey] = selectedList.some(c => c.items[def.key].assignments.length > 0);
+  }
+  row.contribution_level = contributionLevelFromCount(
+    PAYOUT_ITEM_DEFS.filter(d => row['contribution_' + (
+      d.key === 'creator_signed' ? 'creator_signed'
+      : d.key === 'admin_process' ? 'admin_process'
+      : d.key === 'brand_liaison' ? 'brand_liaison'
+      : d.key === 'creator_comm'  ? 'creator_communication'
+      : d.key === 'content_review'? 'content_review'
+      : d.key === 'negotiation'   ? 'negotiation'
+      :                             'reporting_payment'
+    )]).length
+  );
 
   const btn = document.getElementById('payout-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
 
-  // ── Build one row per staff group ──
-  let savedCount = 0;
-  let errorEncountered = null;
-
-  for (const [staffEmail, creators_] of Object.entries(groups)) {
-    const staff = STAFF.find(s => s.email === staffEmail);
-    const groupAgencyFee = creators_.reduce((s, c) => s + Number(c.agency_fee || 0), 0);
-    const commission     = groupAgencyFee * pct / 100;
-    const retained       = groupAgencyFee - commission;
-
-    // Build the creators_included JSONB array
-    const creatorsIncluded = creators_.map(c => ({
-      creator_id:              c.creator_id,
-      creator_name:            c.creator_name,
-      earning_id:              c.earning_id,
-      agency_fee:              Number(c.agency_fee || 0),
-      commission_amount_share: Math.round((Number(c.agency_fee||0) * pct / 100) * 100) / 100,
-    }));
-
-    const row = {
-      staff_email:                        staffEmail,
-      staff_name:                         staff ? staff.name : staffEmail,
-      // Backward-compat: store the FIRST creator/earning as the row's primary
-      // (the JSONB array has the full list).
-      creator_id:                         creators_[0].creator_id ? String(creators_[0].creator_id) : null,
-      creator_name:                       creators_.length === 1 ? creators_[0].creator_name : `${creators_.length} creators`,
-      earning_id:                         creators_[0].earning_id ? String(creators_[0].earning_id) : null,
-      campaign_id:                        campaignId ? String(campaignId) : null,
-      whole_campaign:                     false,
-      brand_name:                         brand || null,
-      total_brand_spend:                  totalSpend,
-      agency_fee:                         groupAgencyFee,
-      commission_percentage:              pct,
-      commission_amount:                  Math.round(commission * 100) / 100,
-      blustu_retained_amount:             Math.round(retained * 100) / 100,
-      brand_payment_status:               brandStatus,
-      payout_status:                      payoutStatus,
-      contribution_creator_signed:        checklist.creator_signed,
-      contribution_admin_process:         checklist.admin_process,
-      contribution_brand_liaison:         checklist.brand_liaison,
-      contribution_creator_communication: checklist.creator_communication,
-      contribution_content_review:        checklist.content_review,
-      contribution_negotiation:           checklist.negotiation,
-      contribution_reporting_payment:     checklist.reporting_payment,
-      contribution_level:                 contribLevel,
-      notes:                              notes || null,
-      created_by:                         currentUser?.email || null,
-      updated_at:                         new Date().toISOString(),
-      creators_included:                  creatorsIncluded,
-    };
-
-    // Editing only ever touches the one existing row, even if multi-group
-    const isEditingThisGroup = id && _payoutModalState.editingStaffEmail === staffEmail;
-    const prev = isEditingThisGroup
-      ? staffPayouts.find(x => String(x.id) === String(id))
-      : null;
-
-    // Manage paid_at
-    if (payoutStatus === 'paid' && (!prev || prev.payout_status !== 'paid')) {
-      row.paid_at = new Date().toISOString();
-    } else if (prev && prev.paid_at && payoutStatus === 'paid') {
-      row.paid_at = prev.paid_at;
-    } else if (payoutStatus !== 'paid') {
-      row.paid_at = null;
-    }
-
-    let result;
-    try {
-      if (isEditingThisGroup) {
-        row.id = id;
-        if (prev?.spending_id) row.spending_id = prev.spending_id;
-        result = await DB._req('PATCH', 'staff_payouts', row, '?id=eq.' + id);
-      } else {
-        row.created_at = new Date().toISOString();
-        result = await DB._req('POST', 'staff_payouts', [row], '');
-      }
-    } catch (e) {
-      errorEncountered = e.message;
-      continue;
-    }
-    if (result === null) {
-      errorEncountered = DB._lastError || 'Save failed';
-      continue;
-    }
-
-    const savedRow = Array.isArray(result) ? result[0] : (typeof result === 'object' && result ? result : prev);
-    const savedId  = savedRow?.id || id;
-    await _syncPayoutSpending(savedId, row, prev);
-    savedCount++;
+  const prev = id ? staffPayouts.find(x => String(x.id) === String(id)) : null;
+  if (payoutStatus === 'paid' && (!prev || prev.payout_status !== 'paid')) {
+    row.paid_at = new Date().toISOString();
+  } else if (prev && prev.paid_at && payoutStatus === 'paid') {
+    row.paid_at = prev.paid_at;
+  } else if (payoutStatus !== 'paid') {
+    row.paid_at = null;
   }
 
-  btn.disabled = false; btn.textContent = 'Save Payout(s)';
-
-  if (errorEncountered && savedCount === 0) {
-    showErr('Save failed: ' + errorEncountered);
+  let result;
+  try {
+    if (id) {
+      row.id = id;
+      if (prev?.spending_id) row.spending_id = prev.spending_id;
+      result = await DB._req('PATCH', 'staff_payouts', row, '?id=eq.' + id);
+    } else {
+      row.created_at = new Date().toISOString();
+      result = await DB._req('POST', 'staff_payouts', [row], '');
+    }
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Save Payout';
+    showErr('Save failed: ' + e.message);
+    return;
+  }
+  if (result === null) {
+    btn.disabled = false; btn.textContent = 'Save Payout';
+    showErr('Save failed: ' + (DB._lastError || 'unknown — make sure the SQL migration has been run.'));
     return;
   }
 
+  const savedRow = Array.isArray(result) ? result[0] : (typeof result === 'object' && result ? result : prev);
+  const savedId  = savedRow?.id || id;
+
+  // Spending sync — one entry per contributor (if marked Paid)
+  await _syncPayoutSpending(savedId, row, prev);
+
+  btn.disabled = false; btn.textContent = 'Save Payout';
   closeModal('payoutModal');
   await loadStaffPayouts();
   try { await loadSpending(); } catch(e){}
-
-  if (errorEncountered) {
-    showToast(`⚠ Saved ${savedCount}, but errors occurred: ${errorEncountered}`);
-  } else if (savedCount === 1) {
-    showToast(id ? '✅ Payout updated' : '✅ Payout added');
-    addActivity(`Staff payout ${id ? 'updated' : 'added'} for ${campaigns.find(c=>String(c.id)===String(campaignId))?.brand || 'campaign'}`);
-  } else {
-    showToast(`✅ ${savedCount} grouped payouts created`);
-    addActivity(`${savedCount} grouped staff payouts created for ${campaigns.find(c=>String(c.id)===String(campaignId))?.brand || 'campaign'}`);
-  }
-}
-
-/** Live math + warnings inside the payout modal. Safe to call when modal isn't open (no-ops then). */
-function recalcPayoutMath() {
-  const feeEl = document.getElementById('payout-agency-fee');
-  if (!feeEl) return; // modal not in DOM yet
-  const agencyFee = Number(feeEl.value) || 0;
-  const pct       = Number(document.getElementById('payout-pct').value) || 0;
-  const commission = agencyFee * pct / 100;
-  const retained   = agencyFee - commission;
-  const retainedPct = agencyFee > 0 ? (100 - pct) : 0;
-
-  document.getElementById('payout-calc-staff').textContent     = fmtMoneyFull(commission);
-  document.getElementById('payout-calc-retained').textContent  = fmtMoneyFull(retained);
-  document.getElementById('payout-calc-retained-pct').textContent = agencyFee > 0 ? '(' + retainedPct.toFixed(0) + '%)' : '';
-
-  // Contribution badge + suggested %
-  const count = contributionCountFromForm();
-  const level = contributionLevelFromCount(count);
-  const badge = document.getElementById('payout-contribution-badge');
-  if (badge) {
-    badge.textContent = contributionLevelLabel(level);
-    badge.className = 'badge ' + contributionLevelBadge(level);
-    badge.style.fontSize = '11px';
-    badge.style.fontWeight = '600';
-  }
-  const sugEl = document.getElementById('payout-suggested-pct');
-  if (sugEl) sugEl.textContent = suggestedCommissionFromForm().toFixed(1) + '%';
-
-  // Warnings
-  const warnings = [];
-  if (pct > 50)                                  warnings.push('⚠ Commission above 50% — BluStu retained falls below the 50% target. Use only if staff was involved throughout the entire deal.');
-  if (pct >= 25 && count === 0)                  warnings.push('⚠ Commission ≥25% but no contribution boxes ticked. Tick the checklist to justify.');
-  if (count >= 4 && pct < 25 && agencyFee > 0)   warnings.push('💡 Strong contribution but commission under 25% — consider raising it.');
-  if (retained < agencyFee * 0.5 && agencyFee > 0) warnings.push('⚠ BluStu retained amount is below 50% of the agency fee.');
-  const brand = document.getElementById('payout-brand-status')?.value;
-  const stat  = document.getElementById('payout-status')?.value;
-  if (stat === 'paid' && brand !== 'payment_received') warnings.push('🚫 Cannot mark as Paid until brand payment is received.');
-
-  const wEl = document.getElementById('payout-warnings');
-  if (wEl) {
-    wEl.innerHTML = !warnings.length ? '' : warnings.map(w =>
-      `<div style="background:#fef3c7;color:#92400e;border-left:3px solid #f59e0b;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:6px">${w}</div>`
-    ).join('');
-  }
-}
-
-function useSuggestedPct() {
-  const p = suggestedCommissionFromForm();
-  document.getElementById('payout-pct').value = p.toFixed(1);
-  recalcPayoutMath();
-}
-
-function onBrandStatusChange() {
-  // If brand status changes away from "payment_received" and current payout status is ready/paid, downgrade it
-  const brand = document.getElementById('payout-brand-status').value;
-  const payoutSel = document.getElementById('payout-status');
-  if (brand !== 'payment_received' && ['ready_to_pay','paid'].includes(payoutSel.value)) {
-    payoutSel.value = 'pending_brand_payment';
-  }
-  recalcPayoutMath();
+  addActivity(`Staff payout ${id ? 'updated' : 'added'} for ${campaigns.find(c=>String(c.id)===String(campaignId))?.brand || 'campaign'} — ${fmtMoneyFull(totalCommission)} across ${contributorTotals.length} contributor(s)`);
+  showToast(id ? '✅ Payout updated' : '✅ Payout added');
 }
 
 
@@ -10422,59 +10656,94 @@ function onBrandStatusChange() {
  * - Stays paid + edits → update existing spending row (idempotent)
  * - Leaves paid      → delete spending row
  */
+/**
+ * Mirror the payout's Paid state into agency_spending — one row per contributor.
+ * Stores the array of created spending IDs back on the payout so future
+ * updates / cancellations can find and update/delete them.
+ *
+ * - Becomes paid → delete any stale linked rows, create one row per contributor
+ * - Stays paid + edits → delete + recreate (simpler and correct for split changes)
+ * - Leaves paid → delete all linked rows
+ */
 async function _syncPayoutSpending(payoutId, currentRow, prevRow) {
   const wasPaid = prevRow?.payout_status === 'paid';
   const isPaid  = currentRow.payout_status === 'paid';
 
-  if (!isPaid && !wasPaid) return; // nothing to do
-  if (!isPaid && wasPaid) {
-    // Delete the linked spending row
-    if (prevRow?.spending_id) {
-      try { await DB._req('DELETE', 'agency_spending', null, '?id=eq.' + prevRow.spending_id); } catch(e){}
-      // Clear the spending_id link on the payout
+  // Collect all spending IDs the previous version of this payout linked to
+  const prevIds = [];
+  if (prevRow?.spending_ids) {
+    try {
+      const arr = typeof prevRow.spending_ids === 'string' ? JSON.parse(prevRow.spending_ids) : prevRow.spending_ids;
+      if (Array.isArray(arr)) prevIds.push(...arr);
+    } catch(e){}
+  }
+  if (prevRow?.spending_id && !prevIds.includes(prevRow.spending_id)) {
+    prevIds.push(prevRow.spending_id);
+  }
+
+  // Always wipe previous linked rows when state changes (cleanest)
+  if (prevIds.length && (wasPaid || isPaid)) {
+    for (const sid of prevIds) {
+      try { await DB._req('DELETE', 'agency_spending', null, '?id=eq.' + sid); } catch(e){}
+    }
+  }
+
+  if (!isPaid) {
+    // Leaving paid → clear all links on the payout
+    if (prevIds.length) {
       try { await DB._req('PATCH', 'staff_payouts', { spending_id: null }, '?id=eq.' + payoutId); } catch(e){}
     }
     return;
   }
-  // isPaid = true
-  // Build a clean description that works for both single-creator and grouped payouts
-  const incl = Array.isArray(currentRow.creators_included) ? currentRow.creators_included : [];
-  const creatorList = incl.length
-    ? (incl.length === 1
-        ? incl[0].creator_name
-        : `${incl.length} creators (${incl.map(c => c.creator_name).filter(Boolean).join(', ')})`)
-    : (currentRow.creator_name || 'creator');
-  const spendingRow = {
-    spend_date:        currentRow.paid_at || new Date().toISOString(),
-    category:          'Staff Payouts',
-    vendor:            currentRow.staff_name,
-    description:       `Commission: ${creatorList} × ${currentRow.brand_name || 'brand'} @ ${currentRow.commission_percentage}%`,
-    amount:            currentRow.commission_amount,
-    notes:             (currentRow.notes ? currentRow.notes + ' · ' : '') + 'Linked staff payout #' + payoutId,
-    linked_payout_id:  String(payoutId),
-    created_by:        currentUser?.email || null,
-    updated_at:        new Date().toISOString(),
-  };
 
-  if (prevRow?.spending_id) {
-    // Update existing
+  // isPaid = true — create one row per contributor
+  const contributors = Array.isArray(currentRow.contributor_totals) ? currentRow.contributor_totals : [];
+  if (!contributors.length) return;
+
+  const incl = Array.isArray(currentRow.creators_included) ? currentRow.creators_included : [];
+  const creatorList = incl.length === 1
+    ? incl[0].creator_name
+    : `${incl.length} creators`;
+  const brandName = currentRow.brand_name || 'brand';
+
+  const createdIds = [];
+  for (const c of contributors) {
+    if (!c.staff_email || !c.amount) continue;
+    const spendingRow = {
+      spend_date:        currentRow.paid_at || new Date().toISOString(),
+      category:          'Staff Payouts',
+      vendor:            c.staff_name,
+      description:       `Commission share: ${creatorList} × ${brandName}`,
+      amount:            c.amount,
+      notes:             (currentRow.notes ? currentRow.notes + ' · ' : '') + 'Linked staff payout #' + payoutId,
+      linked_payout_id:  String(payoutId),
+      created_by:        currentUser?.email || null,
+      created_at:        new Date().toISOString(),
+      updated_at:        new Date().toISOString(),
+    };
     try {
-      await DB._req('PATCH', 'agency_spending', spendingRow, '?id=eq.' + prevRow.spending_id);
-    } catch (e) {
-      console.warn('Failed to update linked spending row:', e);
-    }
-  } else {
-    // Create new
-    try {
-      spendingRow.created_at = new Date().toISOString();
       const created = await DB._req('POST', 'agency_spending', [spendingRow], '');
       const newId = Array.isArray(created) ? created[0]?.id : created?.id;
-      if (newId) {
-        // Save back the spending_id link on the payout
-        await DB._req('PATCH', 'staff_payouts', { spending_id: newId }, '?id=eq.' + payoutId);
-      }
+      if (newId) createdIds.push(newId);
     } catch (e) {
-      console.warn('Failed to create linked spending row:', e);
+      console.warn('Failed to create spending row for contributor', c.staff_name, e);
+    }
+  }
+
+  // Save the IDs back as a JSON array in spending_id (we store one as text JSON)
+  if (createdIds.length) {
+    // First spending_id is the legacy single-field link (for backward compat with old queries).
+    // The rest live in spending_ids JSONB if the column exists; otherwise we just track the first.
+    try {
+      await DB._req('PATCH', 'staff_payouts', {
+        spending_id: createdIds[0],
+        spending_ids: createdIds,
+      }, '?id=eq.' + payoutId);
+    } catch (e) {
+      // If the spending_ids column doesn't exist yet, fall back to just spending_id
+      try {
+        await DB._req('PATCH', 'staff_payouts', { spending_id: createdIds[0] }, '?id=eq.' + payoutId);
+      } catch(e2){}
     }
   }
 }
@@ -10519,12 +10788,21 @@ async function markPayoutReady(id) {
 async function deletePayout(id) {
   const p = staffPayouts.find(x => String(x.id) === String(id));
   if (!p) return;
+  // Collect every linked spending id
+  const linkedIds = [];
+  if (p.spending_id) linkedIds.push(p.spending_id);
+  if (p.spending_ids) {
+    try {
+      const arr = typeof p.spending_ids === 'string' ? JSON.parse(p.spending_ids) : p.spending_ids;
+      if (Array.isArray(arr)) for (const sid of arr) if (!linkedIds.includes(sid)) linkedIds.push(sid);
+    } catch(e){}
+  }
+  const linkedNote = linkedIds.length ? ` ${linkedIds.length} linked Spending entr${linkedIds.length === 1 ? 'y' : 'ies'} will also be removed.` : '';
   showConfirm('Delete this staff payout?',
-    `This permanently removes the payout to ${p.staff_name} (${fmtMoneyFull(p.commission_amount)}).${p.spending_id ? ' The linked Spending entry will also be removed.' : ''}`,
+    `This permanently removes the payout for ${p.brand_name || 'this deal'} (${fmtMoneyFull(p.commission_amount)}).${linkedNote}`,
     async () => {
-      // Remove linked spending if any
-      if (p.spending_id) {
-        try { await DB._req('DELETE', 'agency_spending', null, '?id=eq.' + p.spending_id); } catch(e){}
+      for (const sid of linkedIds) {
+        try { await DB._req('DELETE', 'agency_spending', null, '?id=eq.' + sid); } catch(e){}
       }
       const result = await DB._req('DELETE', 'staff_payouts', null, '?id=eq.' + id);
       if (result === null) return;
@@ -10539,55 +10817,63 @@ function exportStaffPayoutsCSV() {
   const filtered = getFilteredStaffPayouts();
   if (!filtered.length) { showToast('No payouts to export'); return; }
   const headers = [
-    'Payout ID','Staff','Staff Email','Brand','Campaign ID',
-    'Creators Count','Creators Included',
-    'Total Agency Fee (£)','Commission %','Staff Payout (£)','BluStu Retained (£)',
-    'Contribution Level','Brand Payment Status','Payout Status',
-    'Creator Signed','Admin Process','Brand Liaison','Creator Comm','Content Review','Negotiation','Reporting',
-    'Notes','Created','Paid Date'
+    'Payout ID','Type','Brand','Campaign ID','Creators Count','Creators Included',
+    'Total Agency Fee (£)','Commission %','Total Commission (£)','BluStu Retained (£)',
+    'Contributors','Contributor Email','Contributor Amount (£)',
+    'Per-Creator: Creator','Per-Creator: Agency Fee (£)','Per-Creator: Items Ticked',
+    'Brand Payment Status','Payout Status','Notes','Created','Paid Date'
   ];
 
   const rows = [];
   for (const p of filtered) {
     const incl = Array.isArray(p.creators_included) && p.creators_included.length
       ? p.creators_included
-      : (p.creator_id ? [{ creator_name: p.creator_name, agency_fee: p.agency_fee, commission_amount_share: p.commission_amount }] : []);
-    const creatorList = incl.map(c => c.creator_name).filter(Boolean).join('; ') || (p.creator_name || '');
+      : (p.creator_id ? [{ creator_name: p.creator_name, agency_fee: p.agency_fee }] : []);
+    const ctrs = Array.isArray(p.contributor_totals) && p.contributor_totals.length
+      ? p.contributor_totals
+      : [{ staff_email: p.staff_email, staff_name: p.staff_name, amount: p.commission_amount }];
+    const creatorList = incl.map(c => c.creator_name).filter(Boolean).join('; ');
+    const contributorList = ctrs.map(c => c.staff_name).filter(Boolean).join('; ');
+
+    // Header row for the payout
     rows.push([
-      p.id, p.staff_name, p.staff_email, p.brand_name, p.campaign_id || '',
+      p.id, 'PAYOUT', p.brand_name || '', p.campaign_id || '',
       incl.length || (p.creator_id ? 1 : 0),
       creatorList,
       Number(p.agency_fee||0).toFixed(2),
       Number(p.commission_percentage||0).toFixed(1),
       Number(p.commission_amount||0).toFixed(2),
       Number(p.blustu_retained_amount||0).toFixed(2),
-      contributionLevelLabel(p.contribution_level || contributionLevelFromCount(_contribCountOfRow(p))),
+      contributorList, '', '',
+      '', '', '',
       BRAND_STATUS_LABELS[p.brand_payment_status] || p.brand_payment_status || '',
       PAYOUT_STATUS_LABELS[p.payout_status] || p.payout_status || '',
-      p.contribution_creator_signed ? 'Y' : '',
-      p.contribution_admin_process ? 'Y' : '',
-      p.contribution_brand_liaison ? 'Y' : '',
-      p.contribution_creator_communication ? 'Y' : '',
-      p.contribution_content_review ? 'Y' : '',
-      p.contribution_negotiation ? 'Y' : '',
-      p.contribution_reporting_payment ? 'Y' : '',
       p.notes || '',
       p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : '',
       p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB') : '',
     ]);
-    // Add per-creator breakdown rows (indented label, partial data)
-    if (incl.length > 1) {
-      for (const c of incl) {
-        rows.push([
-          '  └─', '', '', p.brand_name, '',
-          '', '  ' + (c.creator_name || ''),
-          Number(c.agency_fee||0).toFixed(2),
-          Number(p.commission_percentage||0).toFixed(1),
-          Number(c.commission_amount_share||0).toFixed(2),
-          '', '', '', '',
-          '','','','','','','','','',''
-        ]);
-      }
+    // Contributor rows
+    for (const c of ctrs) {
+      rows.push([
+        p.id, '  contributor', '', '', '', '', '', '', '', '',
+        c.staff_name || '', c.staff_email || '', Number(c.amount||0).toFixed(2),
+        '', '', '', '', '', '', '', '',
+      ]);
+    }
+    // Per-creator rows
+    for (const cIncl of incl) {
+      const items = cIncl.items
+        ? Object.entries(cIncl.items)
+            .filter(([, v]) => v.assignments?.length)
+            .map(([k]) => (PAYOUT_ITEM_DEFS.find(d => d.key === k)?.label || k))
+            .join('; ')
+        : '';
+      rows.push([
+        p.id, '  creator', '', '', '', '', '', '', '', '',
+        '', '', '',
+        cIncl.creator_name || '', Number(cIncl.agency_fee||0).toFixed(2), items,
+        '', '', '', '', '',
+      ]);
     }
   }
   const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
@@ -13255,19 +13541,19 @@ async function deleteMailboxPassword() {
       </div>
 
       <!-- STEP 1: Pick the brand deal / campaign -->
-      <div class="form-group" id="payout-step-campaign-group">
+      <div class="form-group">
         <label class="form-label">1️⃣ Brand deal / campaign *</label>
         <select class="form-select" id="payout-campaign" onchange="onPayoutCampaignChange()">
           <option value="">— Pick a campaign —</option>
         </select>
-        <div class="form-hint">Start by picking the deal. The next step will show creators on this campaign grouped by their assigned manager.</div>
+        <div class="form-hint">Pick the deal. The list of creators on this campaign will appear below.</div>
       </div>
 
-      <!-- STEP 2: Creator picker, grouped by staff -->
+      <!-- STEP 2: Creator selection (flat checkboxes — no longer grouped by staff) -->
       <div id="payout-step-creators" style="display:none">
-        <label class="form-label" style="margin-bottom:6px;display:block">2️⃣ Select creators (grouped by staff member)</label>
-        <div class="form-hint" style="margin-bottom:10px">Tick creators under each staff member. Selecting across staff will create one grouped payout per staff member when you save.</div>
-        <div id="payout-creator-groups" style="background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;padding:8px;max-height:280px;overflow-y:auto;margin-bottom:14px"></div>
+        <label class="form-label" style="margin-bottom:6px;display:block">2️⃣ Select creators</label>
+        <div class="form-hint" style="margin-bottom:10px">Pick which creators on this campaign should be in this payout. Each creator's agency fee is shown.</div>
+        <div id="payout-creator-list" style="background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;padding:8px;max-height:200px;overflow-y:auto;margin-bottom:14px"></div>
       </div>
 
       <div class="form-group" id="payout-brand-group" style="display:none">
@@ -13275,111 +13561,78 @@ async function deleteMailboxPassword() {
         <input class="form-input" id="payout-brand" placeholder="e.g. oTime">
       </div>
 
-      <!-- Selection summary (shown after at least one creator picked) -->
-      <div id="payout-selection-summary" style="display:none">
-        <div class="card" style="padding:12px 14px;margin-bottom:14px;background:#eff6ff;border:1px solid #bfdbfe">
-          <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:6px">
-            📊 Selection summary <span id="payout-summary-multi-warning" style="color:#92400e;font-weight:500;display:none;margin-left:8px"></span>
+      <!-- STEP 3: Per-creator contribution matrix -->
+      <div id="payout-matrix-section" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+          <label class="form-label" style="margin:0">3️⃣ Contribution matrix per creator</label>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="autoAssignPrimaryManagers()" title="For every creator, tick 'Creator signed' and assign 100% to their primary manager">⚡ Auto-assign primary managers</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="copyMatrixToAll()" title="Copy the contribution matrix from the first creator to all others">📋 Copy first to all</button>
           </div>
-          <div id="payout-summary-list" style="font-size:12px;line-height:1.6"></div>
         </div>
+        <div class="form-hint" style="margin-bottom:10px">For each creator, tick the items that were done and assign one or more staff. Each item's value can be split between staff (e.g. 50%/50% for shared work).</div>
+        <div id="payout-matrix-list" style="margin-bottom:14px"></div>
       </div>
 
-      <!-- Total agency fee + override -->
-      <div class="form-row" id="payout-money-row" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Total agency fee received by BluStu (£) *</label>
-          <input class="form-input" id="payout-agency-fee" type="number" min="0" step="0.01" placeholder="0.00" oninput="recalcPayoutMath()">
-          <div class="form-hint">Auto-summed from selected creators. Override if needed.</div>
+      <!-- STEP 4: Final summary + statuses -->
+      <div id="payout-finalize-section" style="display:none">
+        <!-- Money summary -->
+        <div class="card" style="padding:14px 16px;margin-bottom:14px;background:#eff6ff;border:1px solid #bfdbfe">
+          <div style="font-weight:600;color:var(--blue);margin-bottom:10px;font-size:13px">📊 Payout Summary</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:13px">
+            <div>Total agency fee: <strong id="payout-summary-agency">£0.00</strong></div>
+            <div>Total commission: <strong id="payout-summary-commission" style="color:var(--amber)">£0.00</strong> <span id="payout-summary-commission-pct" style="font-size:11px;color:var(--gray-400)">(0%)</span></div>
+            <div style="grid-column:span 2">
+              BluStu retained: <strong id="payout-summary-retained" style="color:var(--green)">£0.00</strong>
+              <span id="payout-summary-retained-pct" style="font-size:11px;color:var(--gray-400)">(0%)</span>
+              <span id="payout-retention-badge" class="badge badge-gray" style="font-size:10px;margin-left:6px"></span>
+            </div>
+          </div>
+          <div id="payout-contributor-totals" style="margin-top:10px;padding-top:10px;border-top:1px dashed #bfdbfe;font-size:12px"></div>
         </div>
+
+        <!-- Total brand spend (reference only) -->
         <div class="form-group">
           <label class="form-label">Total brand spend (£) <span style="font-weight:400;color:var(--gray-400);font-size:11px">— reference only</span></label>
           <input class="form-input" id="payout-brand-spend" type="number" min="0" step="0.01" placeholder="0.00">
           <div class="form-hint">⚠ Commission is NOT calculated from this number.</div>
         </div>
-      </div>
 
-      <!-- Everything below this only shows once at least one creator is selected -->
-      <div id="payout-finalize-section" style="display:none">
+        <!-- Live warnings -->
+        <div id="payout-warnings"></div>
 
-      <!-- Material contribution checklist -->
-      <div class="card" style="padding:14px 16px;margin:8px 0 14px;background:#eff6ff;border:1px solid #bfdbfe">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap">
-          <div>
-            <label class="form-label" style="margin:0;font-size:13px">📋 Material contribution checklist</label>
-            <div class="form-hint" style="margin-top:2px">Tick what this staff member did on the deal. Drives the suggested commission %.</div>
+        <!-- Statuses -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Brand payment status *</label>
+            <select class="form-select" id="payout-brand-status" onchange="onBrandStatusChange()">
+              <option value="not_invoiced">Not invoiced</option>
+              <option value="invoiced">Invoiced</option>
+              <option value="payment_pending">Payment pending</option>
+              <option value="payment_received">Payment received ✓</option>
+            </select>
           </div>
-          <span class="badge" id="payout-contribution-badge" style="font-size:11px;font-weight:600">Low contribution</span>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px" id="payout-contribution-grid">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-creator-signed" onchange="recalcPayoutMath()" style="margin:0">Creator signed/managed by staff (base)</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-admin-process" onchange="recalcPayoutMath()" style="margin:0">Admin process</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-brand-liaison" onchange="recalcPayoutMath()" style="margin:0">Brand liaison</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-creator-comm" onchange="recalcPayoutMath()" style="margin:0">Creator communication</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-content-review" onchange="recalcPayoutMath()" style="margin:0">Content drafting / reviewing</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-negotiation" onchange="recalcPayoutMath()" style="margin:0">Negotiation / pricing</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cb-reporting-payment" onchange="recalcPayoutMath()" style="margin:0">Reporting / payment chasing</label>
-        </div>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #bfdbfe;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-          <div style="font-size:12px;color:var(--blue)">
-            Suggested commission: <strong id="payout-suggested-pct">20%</strong>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="useSuggestedPct()" style="margin-left:8px">Use suggested</button>
+          <div class="form-group">
+            <label class="form-label">Payout status *</label>
+            <select class="form-select" id="payout-status" onchange="recalcPayoutMath()">
+              <option value="draft">Draft</option>
+              <option value="pending_brand_payment">Pending brand payment</option>
+              <option value="ready_to_pay">Ready to pay</option>
+              <option value="paid">Paid</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </div>
         </div>
-      </div>
 
-      <!-- Commission % + math display -->
-      <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Commission percentage (%) *</label>
-          <input class="form-input" id="payout-pct" type="number" min="0" max="100" step="0.5" value="30" oninput="recalcPayoutMath()">
-          <div class="form-hint">Usually 25–50%. Manually adjustable per payout.</div>
+          <label class="form-label">Notes / evidence</label>
+          <textarea class="form-textarea" id="payout-notes" placeholder="Anything justifying the contribution: meeting dates, brand emails, etc."></textarea>
         </div>
-        <div class="form-group">
-          <label class="form-label">Calculated</label>
-          <div style="padding:9px 12px;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;font-size:13px">
-            Staff payout: <strong id="payout-calc-staff" style="color:var(--amber)">£0.00</strong><br>
-            BluStu retained: <strong id="payout-calc-retained" style="color:var(--green)">£0.00</strong> <span id="payout-calc-retained-pct" style="color:var(--gray-400);font-size:11px"></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Live warnings -->
-      <div id="payout-warnings"></div>
-
-      <!-- Statuses -->
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Brand payment status *</label>
-          <select class="form-select" id="payout-brand-status" onchange="onBrandStatusChange()">
-            <option value="not_invoiced">Not invoiced</option>
-            <option value="invoiced">Invoiced</option>
-            <option value="payment_pending">Payment pending</option>
-            <option value="payment_received">Payment received ✓</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Payout status *</label>
-          <select class="form-select" id="payout-status">
-            <option value="draft">Draft</option>
-            <option value="pending_brand_payment">Pending brand payment</option>
-            <option value="ready_to_pay">Ready to pay</option>
-            <option value="paid">Paid</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Notes / evidence</label>
-        <textarea class="form-textarea" id="payout-notes" placeholder="Anything justifying the contribution: meeting dates, brand emails, etc."></textarea>
-      </div>
-
       </div><!-- /payout-finalize-section -->
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('payoutModal')">Cancel</button>
-      <button class="btn btn-primary" id="payout-save-btn" onclick="saveStaffPayout()">Save Payout(s)</button>
+      <button class="btn btn-primary" id="payout-save-btn" onclick="saveStaffPayout()">Save Payout</button>
     </div>
   </div>
 </div>
