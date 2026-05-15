@@ -10354,6 +10354,67 @@ async function saveStaffPayout() {
   }
 }
 
+/** Live math + warnings inside the payout modal. Safe to call when modal isn't open (no-ops then). */
+function recalcPayoutMath() {
+  const feeEl = document.getElementById('payout-agency-fee');
+  if (!feeEl) return; // modal not in DOM yet
+  const agencyFee = Number(feeEl.value) || 0;
+  const pct       = Number(document.getElementById('payout-pct').value) || 0;
+  const commission = agencyFee * pct / 100;
+  const retained   = agencyFee - commission;
+  const retainedPct = agencyFee > 0 ? (100 - pct) : 0;
+
+  document.getElementById('payout-calc-staff').textContent     = fmtMoneyFull(commission);
+  document.getElementById('payout-calc-retained').textContent  = fmtMoneyFull(retained);
+  document.getElementById('payout-calc-retained-pct').textContent = agencyFee > 0 ? '(' + retainedPct.toFixed(0) + '%)' : '';
+
+  // Contribution badge + suggested %
+  const count = contributionCountFromForm();
+  const level = contributionLevelFromCount(count);
+  const badge = document.getElementById('payout-contribution-badge');
+  if (badge) {
+    badge.textContent = contributionLevelLabel(level);
+    badge.className = 'badge ' + contributionLevelBadge(level);
+    badge.style.fontSize = '11px';
+    badge.style.fontWeight = '600';
+  }
+  const sugEl = document.getElementById('payout-suggested-pct');
+  if (sugEl) sugEl.textContent = suggestedCommissionFromForm().toFixed(1) + '%';
+
+  // Warnings
+  const warnings = [];
+  if (pct > 50)                                  warnings.push('⚠ Commission above 50% — BluStu retained falls below the 50% target. Use only if staff was involved throughout the entire deal.');
+  if (pct >= 25 && count === 0)                  warnings.push('⚠ Commission ≥25% but no contribution boxes ticked. Tick the checklist to justify.');
+  if (count >= 4 && pct < 25 && agencyFee > 0)   warnings.push('💡 Strong contribution but commission under 25% — consider raising it.');
+  if (retained < agencyFee * 0.5 && agencyFee > 0) warnings.push('⚠ BluStu retained amount is below 50% of the agency fee.');
+  const brand = document.getElementById('payout-brand-status')?.value;
+  const stat  = document.getElementById('payout-status')?.value;
+  if (stat === 'paid' && brand !== 'payment_received') warnings.push('🚫 Cannot mark as Paid until brand payment is received.');
+
+  const wEl = document.getElementById('payout-warnings');
+  if (wEl) {
+    wEl.innerHTML = !warnings.length ? '' : warnings.map(w =>
+      `<div style="background:#fef3c7;color:#92400e;border-left:3px solid #f59e0b;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:6px">${w}</div>`
+    ).join('');
+  }
+}
+
+function useSuggestedPct() {
+  const p = suggestedCommissionFromForm();
+  document.getElementById('payout-pct').value = p.toFixed(1);
+  recalcPayoutMath();
+}
+
+function onBrandStatusChange() {
+  // If brand status changes away from "payment_received" and current payout status is ready/paid, downgrade it
+  const brand = document.getElementById('payout-brand-status').value;
+  const payoutSel = document.getElementById('payout-status');
+  if (brand !== 'payment_received' && ['ready_to_pay','paid'].includes(payoutSel.value)) {
+    payoutSel.value = 'pending_brand_payment';
+  }
+  recalcPayoutMath();
+}
+
 
 /**
  * Ensure the corresponding agency_spending row mirrors this payout's paid state.
