@@ -2144,15 +2144,31 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
           <select class="form-select" id="snipe-filter-owner" onchange="renderSnipes()" style="max-width:180px;display:none">
             <option value="">All staff</option>
           </select>
-          <select class="form-select" id="snipe-filter-status" onchange="renderSnipes()" style="max-width:160px">
+          <select class="form-select" id="snipe-filter-status" onchange="renderSnipes()" style="max-width:150px">
             <option value="">Any status</option>
             <option value="waiting">Waiting</option>
+            <option value="talking">Talking</option>
+            <option value="interested">Interested</option>
             <option value="replied">Replied</option>
             <option value="signed">Signed</option>
             <option value="rejected">Rejected</option>
             <option value="no_reply">No reply</option>
           </select>
-          <input class="form-input" id="snipe-search" placeholder="Search name / location…" oninput="renderSnipes()" style="max-width:200px">
+          <select class="form-select" id="snipe-filter-contact" onchange="renderSnipes()" style="max-width:130px" title="Contact method">
+            <option value="">Any contact</option>
+            <option value="dm">DM</option>
+            <option value="email">Email</option>
+            <option value="comment">Comment</option>
+            <option value="other">Other</option>
+          </select>
+          <select class="form-select" id="snipe-sort" onchange="setSnipeSort(this.value)" style="max-width:160px" title="Sort by">
+            <option value="status">Sort: Signed first</option>
+            <option value="newest">Sort: Newest first</option>
+            <option value="oldest">Sort: Oldest first</option>
+            <option value="name">Sort: Name A–Z</option>
+            <option value="followers">Sort: Most followers</option>
+          </select>
+          <input class="form-input" id="snipe-search" placeholder="Search name / location…" oninput="renderSnipes()" style="max-width:180px">
           <button class="btn btn-ghost btn-sm" onclick="clearSnipeFilters()">Clear</button>
           <span style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="snipe-count-label">0 snipes</span>
         </div>
@@ -2160,12 +2176,14 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
 
       <!-- Quick-add inline row -->
       <div class="card" style="margin-bottom:12px;padding:10px 14px;background:var(--blue-light);border:1px solid #bfdbfe">
-        <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:8px">⚡ Quick add — type and hit Enter</div>
+        <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:8px">⚡ Quick add — fill what you have, hit Enter</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input class="form-input" id="qs-name" placeholder="Name *" style="flex:1;min-width:120px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
-          <input class="form-input" id="qs-followers" placeholder="Followers" style="width:100px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
-          <input class="form-input" id="qs-link" placeholder="Profile link" style="flex:1;min-width:140px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
-          <select class="form-select" id="qs-contact" style="width:120px">
+          <input class="form-input" id="qs-name" placeholder="Name *" style="flex:1;min-width:110px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
+          <input class="form-input" id="qs-followers" placeholder="Followers" style="width:90px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
+          <input class="form-input" id="qs-location" placeholder="Location" style="width:110px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
+          <input class="form-input" id="qs-email" placeholder="Email" style="flex:1;min-width:130px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
+          <input class="form-input" id="qs-link" placeholder="Profile link" style="flex:1;min-width:130px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
+          <select class="form-select" id="qs-contact" style="width:110px">
             <option value="dm">DM</option>
             <option value="email">Email</option>
             <option value="comment">Comment</option>
@@ -11932,13 +11950,18 @@ let snipes = Storage.get('snipes', []);
 let _snipeScope = 'mine';   // 'mine' | 'all'
 
 const SNIPE_STATUS = {
-  waiting:  { label: 'Waiting',  badge: 'badge-amber', row: '' },
-  replied:  { label: 'Replied',  badge: 'badge-blue',  row: '#eff6ff' },
-  signed:   { label: 'Signed',   badge: 'badge-green', row: '#dcfce7' },
-  rejected: { label: 'Rejected', badge: 'badge-red',   row: '#fee2e2' },
-  no_reply: { label: 'No reply', badge: 'badge-gray',  row: '#f9fafb' },
+  waiting:    { label: 'Waiting',     badge: 'badge-amber', row: '' },
+  talking:    { label: 'Talking',     badge: 'badge-blue',  row: '#eff6ff' },
+  interested: { label: 'Interested',  badge: 'badge-blue',  row: '#e0f2fe' },
+  replied:    { label: 'Replied',     badge: 'badge-blue',  row: '#eff6ff' },
+  signed:     { label: 'Signed',      badge: 'badge-green', row: '#dcfce7' },
+  rejected:   { label: 'Rejected',    badge: 'badge-red',   row: '#fee2e2' },
+  no_reply:   { label: 'No reply',    badge: 'badge-gray',  row: '#f9fafb' },
 };
+// Sort priority for "by status" — signed first, then warm leads, then cold
+const SNIPE_STATUS_ORDER = { signed:0, interested:1, talking:2, replied:3, waiting:4, no_reply:5, rejected:6 };
 const CONTACT_LABELS = { dm:'DM', email:'Email', comment:'Comment', other:'Other' };
+let _snipeSort = 'status';   // 'status' | 'newest' | 'oldest' | 'name' | 'followers'
 
 async function loadSnipes() {
   const rows = await DB.select('snipes', '?order=created_at.desc');
@@ -11979,7 +12002,7 @@ function setSnipeScope(scope) {
 }
 
 function clearSnipeFilters() {
-  ['snipe-filter-owner','snipe-filter-status','snipe-search'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['snipe-filter-owner','snipe-filter-status','snipe-filter-contact','snipe-search'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   renderSnipes();
 }
 
@@ -12001,19 +12024,56 @@ function _populateSnipeOwnerFilter() {
 function getFilteredSnipes() {
   const ownerQ  = document.getElementById('snipe-filter-owner')?.value || '';
   const statusQ = document.getElementById('snipe-filter-status')?.value || '';
+  const contactQ = document.getElementById('snipe-filter-contact')?.value || '';
   const searchQ = (document.getElementById('snipe-search')?.value || '').toLowerCase();
-  return snipes.filter(s => {
+  const list = snipes.filter(s => {
     // Scope
     if (_snipeScope === 'mine' && s.owner_email !== currentUser?.email) return false;
     if (_snipeScope === 'all' && ownerQ && s.owner_email !== ownerQ) return false;
     if (statusQ && (s.reply_status || 'waiting') !== statusQ) return false;
+    if (contactQ && (s.contact_method || '') !== contactQ) return false;
     if (searchQ) {
       const hay = `${s.name||''} ${s.location||''} ${s.email||''}`.toLowerCase();
       if (!hay.includes(searchQ)) return false;
     }
     return true;
   });
+
+  // Sorting
+  const parseFollowers = v => {
+    if (!v) return 0;
+    const str = String(v).toLowerCase().replace(/,/g,'').trim();
+    const m = str.match(/([\d.]+)\s*([km]?)/);
+    if (!m) return 0;
+    let n = parseFloat(m[1]) || 0;
+    if (m[2] === 'k') n *= 1000;
+    if (m[2] === 'm') n *= 1000000;
+    return n;
+  };
+  const byDate = (a, b, dir) => {
+    const da = new Date(a.created_at || 0).getTime();
+    const db = new Date(b.created_at || 0).getTime();
+    return dir === 'asc' ? da - db : db - da;
+  };
+  list.sort((a, b) => {
+    switch (_snipeSort) {
+      case 'status': {
+        const oa = SNIPE_STATUS_ORDER[a.reply_status || 'waiting'] ?? 99;
+        const ob = SNIPE_STATUS_ORDER[b.reply_status || 'waiting'] ?? 99;
+        if (oa !== ob) return oa - ob;
+        return byDate(a, b, 'desc');   // newest first within a status
+      }
+      case 'newest':    return byDate(a, b, 'desc');
+      case 'oldest':    return byDate(a, b, 'asc');
+      case 'name':      return (a.name||'').localeCompare(b.name||'');
+      case 'followers': return parseFollowers(b.followers) - parseFollowers(a.followers);
+      default:          return 0;
+    }
+  });
+  return list;
 }
+
+function setSnipeSort(v) { _snipeSort = v; renderSnipes(); }
 
 function renderSnipes() {
   _populateSnipeOwnerFilter();
@@ -12106,6 +12166,8 @@ async function quickAddSnipe() {
     owner_name:     currentUser?.name || currentUser?.email || '',
     name,
     followers:      document.getElementById('qs-followers').value.trim() || null,
+    location:       document.getElementById('qs-location').value.trim() || null,
+    email:          document.getElementById('qs-email').value.trim() || null,
     link:           document.getElementById('qs-link').value.trim() || null,
     contact_method: document.getElementById('qs-contact').value,
     sent:           'no',
@@ -12114,9 +12176,7 @@ async function quickAddSnipe() {
     updated_at:     new Date().toISOString(),
   };
   // Optimistic clear
-  document.getElementById('qs-name').value = '';
-  document.getElementById('qs-followers').value = '';
-  document.getElementById('qs-link').value = '';
+  ['qs-name','qs-followers','qs-location','qs-email','qs-link'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('qs-name').focus();
 
   const result = await DB._req('POST', 'snipes', [row], '');
@@ -12255,9 +12315,12 @@ function _parseReplyStatus(raw) {
   if (!v) return 'waiting';
   if (v.includes('sign')) return 'signed';
   if (v.includes('nah') || v.includes('reject') || v.includes('no thanks') || v === 'no') return 'rejected';
-  if (v.includes('wait')) return 'waiting';
-  if (v.includes('repl')) return 'replied';
   if (v.includes('no reply') || v.includes('not needed')) return 'no_reply';
+  if (v.includes('talk')) return 'talking';
+  if (v.includes('interest')) return 'interested';
+  if (v.includes('repl')) return 'replied';
+  if (v.includes('wait')) return 'waiting';
+  if (v === 'yes' || v.includes('yes')) return 'talking';   // "yes talking", "yes waiting" → treat as in-conversation
   return 'waiting';
 }
 function _parseContact(raw) {
