@@ -977,7 +977,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
     </button>
   </nav>
   <div class="sidebar-footer">
-    <div class="sidebar-user" onclick="openModal('profileModal')">
+    <div class="sidebar-user" onclick="openProfileModal()">
       <div class="user-avatar" id="sidebarAvatar">U</div>
       <div class="user-info"><div class="name" id="sidebarName">Ubayy</div><div class="role" id="sidebarRole">Manager</div></div>
     </div>
@@ -2189,7 +2189,18 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
             <option value="comment">Comment</option>
             <option value="other">Other</option>
           </select>
-          <button class="btn btn-primary btn-sm" onclick="quickAddSnipe()" style="white-space:nowrap">+ Add Snipe</button>
+          <select class="form-select" id="qs-niche" style="width:120px" title="Niche — picks the outreach template for Snipe + Email">
+            <option value="general">General</option>
+            <option value="lifestyle">Lifestyle</option>
+            <option value="beauty">Beauty</option>
+            <option value="fashion">Fashion</option>
+            <option value="fitness">Fitness</option>
+            <option value="food">Food</option>
+            <option value="comedy">Comedy</option>
+            <option value="gaming">Gaming</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="quickAddSnipe()" style="white-space:nowrap">+ Add</button>
+          <button class="btn btn-primary btn-sm" onclick="quickAddSnipeAndEmail()" style="white-space:nowrap" title="Add snipe then open a pre-filled outreach email">+ Snipe & Email ✉️</button>
         </div>
       </div>
 
@@ -2865,7 +2876,17 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <input class="form-input" id="compose-subject" placeholder="Subject line">
       </div>
       <div class="form-group">
-        <label class="form-label">Message *</label>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <label class="form-label" style="margin:0">Message *</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select class="form-select" id="compose-template" onchange="applyComposeTemplate(this.value)" style="font-size:11px;padding:4px 8px;width:auto">
+              <option value="">Insert template…</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer" title="Append your saved signature">
+              <input type="checkbox" id="compose-use-signature" onchange="toggleComposeSignature()" style="margin:0"> Signature
+            </label>
+          </div>
+        </div>
         <textarea class="form-textarea" id="compose-body" placeholder="Type your message..." style="min-height:240px;font-family:'DM Sans',sans-serif"></textarea>
       </div>
       <!-- Hidden fields for reply threading -->
@@ -3024,6 +3045,22 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <div><div style="font-size:16px;font-weight:600" id="profile-modal-name">Ubayy</div><div style="font-size:12px;color:var(--gray-400)" id="profile-modal-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a5d0c7c4dcdce5c7c9d0d6d1d08bc4c2c0cbc6dc">[email&#160;protected]</a></div></div>
       </div>
       <div class="form-group"><label class="form-label">Display Name</label><input class="form-input" id="profile-modal-display" placeholder="Your name"></div>
+
+      <!-- Email Settings -->
+      <div style="border-top:1px solid var(--gray-100);margin-top:14px;padding-top:14px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">✉️ Email Settings</div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label" style="font-size:11px">Send snipe emails from</label>
+          <select class="form-select" id="profile-snipe-mailbox"><option value="">— Pick your BluStu mailbox —</option></select>
+          <div class="form-hint">Your outreach + snipe emails send from this address.</div>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" style="font-size:11px">Email signature</label>
+          <textarea class="form-textarea" id="profile-email-signature" rows="4" placeholder="e.g.&#10;Ubayy&#10;Director, BluStu&#10;blustu.agency"></textarea>
+          <div class="form-hint">Auto-added to your emails + replies you send on behalf of creators you manage.</div>
+        </div>
+      </div>
+
       <div style="border-top:1px solid var(--gray-100);margin-top:14px;padding-top:14px">
         <button type="button" class="btn btn-ghost btn-sm" onclick="closeModal('profileModal');openInvoiceDetailsModal(currentUser?.email)" style="width:100%">📄 Edit my invoice details</button>
       </div>
@@ -3417,6 +3454,7 @@ async function syncAllFromDB() {
     loadStaffPayouts(),
     loadInvoices(),
     loadSnipes(),
+    loadEmailTemplates(),
   ]).then(() => {
     try { updateDashStats(); } catch(e) { /* dashboard not on screen */ }
   });
@@ -3674,12 +3712,48 @@ function doLogout() {
   if (roleEl) roleEl.textContent = '';
 }
 
-function saveProfile() {
+async function openProfileModal() {
+  if (!currentUser) { openModal('profileModal'); return; }
+  // Populate email settings from the staff row
+  const s = STAFF.find(x => x.email === currentUser.email) || currentUser;
+  // Mailbox dropdown — list configured email accounts
+  const sel = document.getElementById('profile-snipe-mailbox');
+  if (sel) {
+    let accounts = [];
+    try { accounts = await loadEmailAccounts(); } catch(e) {}
+    sel.innerHTML = '<option value="">— Pick your BluStu mailbox —</option>' +
+      accounts.map(a => `<option value="${a.local}">${friendlyFromName(a.local)} (${a.email})</option>`).join('');
+    sel.value = s.snipe_from_mailbox || '';
+  }
+  const sig = document.getElementById('profile-email-signature');
+  if (sig) sig.value = s.email_signature || '';
+  openModal('profileModal');
+}
+
+async function saveProfile() {
   const n = document.getElementById('profile-modal-display').value.trim();
   if (n && currentUser) {
     currentUser.name = n;
     document.getElementById('sidebarName').textContent = n;
     document.getElementById('profile-modal-name').textContent = n;
+  }
+  // Email settings
+  const mailbox = document.getElementById('profile-snipe-mailbox')?.value || null;
+  const signature = document.getElementById('profile-email-signature')?.value || null;
+  if (currentUser) {
+    currentUser.snipe_from_mailbox = mailbox;
+    currentUser.email_signature = signature;
+    const s = STAFF.find(x => x.email === currentUser.email);
+    if (s) { s.snipe_from_mailbox = mailbox; s.email_signature = signature; }
+    Storage.set('staff', STAFF);
+    // Persist to DB
+    const patch = { updated_at: new Date().toISOString() };
+    if (n) patch.name = n;
+    patch.snipe_from_mailbox = mailbox;
+    patch.email_signature = signature;
+    try {
+      await DB._req('PATCH', 'staff_accounts', patch, '?email=eq.' + encodeURIComponent(currentUser.email));
+    } catch(e) { console.warn('Profile save failed', e); }
   }
   closeModal('profileModal');
   showToast('Profile updated!');
@@ -12185,6 +12259,164 @@ async function quickAddSnipe() {
   showToast('✅ Snipe added');
 }
 
+// ══ EMAIL TEMPLATES + SNIPE → EMAIL ══
+let emailTemplates = Storage.get('email_templates', []);
+const SNIPE_SUBJECT_SUFFIX = ' | BluStu Creator Representation Opportunity';
+
+async function loadEmailTemplates() {
+  const rows = await DB.select('email_templates', '?order=sort_order.asc');
+  if (rows && rows.length !== undefined) {
+    emailTemplates = rows;
+    Storage.set('email_templates', emailTemplates);
+  }
+  return emailTemplates;
+}
+
+/** Fill {creator_name} / {your_name} placeholders. */
+function _fillTemplate(text, creatorName) {
+  return (text || '')
+    .replace(/\{creator_name\}/g, creatorName || 'there')
+    .replace(/\{your_name\}/g, currentUser?.name || 'BluStu');
+}
+
+/** Get the logged-in user's saved signature, or empty string. */
+function _mySignature() {
+  const s = STAFF.find(x => x.email === currentUser?.email) || currentUser || {};
+  return s.email_signature || '';
+}
+
+/** Quick-add a snipe, then jump to a pre-filled outreach email (if it has an email address). */
+async function quickAddSnipeAndEmail() {
+  const name  = document.getElementById('qs-name').value.trim();
+  const email = document.getElementById('qs-email').value.trim();
+  if (!name) { document.getElementById('qs-name').focus(); return; }
+  if (!email) { showToast('Add an email address to use Snipe & Email'); document.getElementById('qs-email').focus(); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('That email looks invalid'); return; }
+
+  const niche = document.getElementById('qs-niche')?.value || 'general';
+  const row = {
+    owner_email:    currentUser?.email || '',
+    owner_name:     currentUser?.name || currentUser?.email || '',
+    name,
+    followers:      document.getElementById('qs-followers').value.trim() || null,
+    location:       document.getElementById('qs-location').value.trim() || null,
+    email,
+    link:           document.getElementById('qs-link').value.trim() || null,
+    contact_method: 'email',
+    sent:           'no',
+    reply_status:   'waiting',
+    notes:          'Niche: ' + niche,
+    created_at:     new Date().toISOString(),
+    updated_at:     new Date().toISOString(),
+  };
+  const result = await DB._req('POST', 'snipes', [row], '');
+  if (result === null) { showToast('Save failed — run the snipes SQL migration?'); return; }
+
+  // Clear quick-add
+  ['qs-name','qs-followers','qs-location','qs-email','qs-link'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  await loadSnipes();
+
+  // Open compose pre-filled
+  await openSnipeCompose({ creatorName: name, to: email, niche });
+}
+
+/** Open the compose modal pre-filled for a snipe outreach. */
+async function openSnipeCompose({ creatorName, to, niche }) {
+  await loadEmailTemplates();
+  const accounts = await loadEmailAccounts();
+  const sel = document.getElementById('compose-from');
+  if (!sel) { showToast('Email system not ready'); return; }
+  sel.innerHTML = accounts.map(a => `<option value="${a.local}">${friendlyFromName(a.local)} &lt;${a.email}&gt;</option>`).join('');
+
+  // Default to the user's chosen snipe mailbox
+  const myMailbox = (STAFF.find(x => x.email === currentUser?.email) || {}).snipe_from_mailbox;
+  if (myMailbox && accounts.find(a => a.local === myMailbox)) sel.value = myMailbox;
+  else if (accounts.length) sel.value = accounts[0].local;
+
+  // Reset threading fields
+  ['compose-in-reply-to','compose-references','compose-cc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+
+  document.getElementById('compose-to').value = to;
+  document.getElementById('compose-subject').value = creatorName + SNIPE_SUBJECT_SUFFIX;
+
+  // Populate template dropdown
+  _populateComposeTemplates(creatorName);
+
+  // Body = chosen niche template + signature
+  const tpl = emailTemplates.find(t => t.niche === niche) || emailTemplates.find(t => t.niche === 'general');
+  let body = tpl ? _fillTemplate(tpl.body, creatorName) : `Hi ${creatorName},\n\n`;
+  const sig = _mySignature();
+  if (sig) { body += '\n\n' + sig; document.getElementById('compose-use-signature').checked = true; }
+  else { document.getElementById('compose-use-signature').checked = false; }
+  document.getElementById('compose-body').value = body;
+  document.getElementById('compose-body').dataset.creatorName = creatorName;
+
+  // Select the matching template in the dropdown
+  const tplSel = document.getElementById('compose-template');
+  if (tplSel && tpl) tplSel.value = tpl.id;
+
+  document.getElementById('composeModalTitle').textContent = '✉ Snipe Outreach';
+  document.getElementById('compose-error').style.display = 'none';
+  updateFromPreview();
+  openModal('composeEmailModal');
+  setTimeout(() => document.getElementById('compose-body')?.focus(), 100);
+}
+
+function _populateComposeTemplates(creatorName) {
+  const sel = document.getElementById('compose-template');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Insert template…</option>' +
+    emailTemplates.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
+  if (creatorName) sel.dataset.creatorName = creatorName;
+}
+
+/** Replace the compose body with the chosen template (keeps signature if toggled on). */
+function applyComposeTemplate(templateId) {
+  if (!templateId) return;
+  const tpl = emailTemplates.find(t => String(t.id) === String(templateId));
+  if (!tpl) return;
+  const creatorName = document.getElementById('compose-body').dataset.creatorName
+    || document.getElementById('compose-template').dataset.creatorName
+    || '';
+  let body = _fillTemplate(tpl.body, creatorName);
+  if (document.getElementById('compose-use-signature').checked) {
+    const sig = _mySignature();
+    if (sig) body += '\n\n' + sig;
+  }
+  document.getElementById('compose-body').value = body;
+}
+
+/** Toggle signature on/off at the end of the body. */
+function toggleComposeSignature() {
+  const on = document.getElementById('compose-use-signature').checked;
+  const sig = _mySignature();
+  if (!sig) { if (on) showToast('No signature saved — set one in Your Profile → Email Settings'); return; }
+  const ta = document.getElementById('compose-body');
+  let body = ta.value;
+  // Remove existing signature occurrence at the end
+  const idx = body.lastIndexOf(sig);
+  if (idx !== -1 && idx >= body.length - sig.length - 4) {
+    body = body.slice(0, idx).replace(/\s+$/, '');
+  }
+  if (on) body = body.replace(/\s+$/, '') + '\n\n' + sig;
+  ta.value = body;
+}
+
+/** When an outreach email is sent, find a snipe with that recipient email and flip it to Sent. */
+async function _markSnipeSentByEmail(toField) {
+  const firstEmail = (toField || '').split(',')[0].trim().toLowerCase();
+  if (!firstEmail) return;
+  const match = snipes.find(s => (s.email || '').toLowerCase() === firstEmail && (s.sent || 'no').toLowerCase() !== 'yes');
+  if (!match) return;
+  match.sent = 'yes';
+  if (!match.reply_status || match.reply_status === 'waiting') match.reply_status = 'waiting';
+  try {
+    await DB._req('PATCH', 'snipes', { sent: 'yes', updated_at: new Date().toISOString() }, '?id=eq.' + match.id);
+    await loadSnipes();
+    showToast('📌 Snipe "' + match.name + '" marked as Sent');
+  } catch(e) { /* non-fatal */ }
+}
+
 // ── Inline updates ──
 async function toggleSnipeSent(id) {
   const s = snipes.find(x => String(x.id) === String(id));
@@ -14271,6 +14503,13 @@ async function openCompose(presetMailbox) {
   });
   document.getElementById('composeModalTitle').textContent = '✉ New Email';
   document.getElementById('compose-error').style.display = 'none';
+  // Populate templates + reset signature toggle
+  await loadEmailTemplates();
+  _populateComposeTemplates('');
+  const sigBox = document.getElementById('compose-use-signature');
+  if (sigBox) sigBox.checked = false;
+  const bodyEl = document.getElementById('compose-body');
+  if (bodyEl) delete bodyEl.dataset.creatorName;
   updateFromPreview();
   openModal('composeEmailModal');
   setTimeout(() => document.getElementById('compose-to')?.focus(), 100);
@@ -14295,10 +14534,16 @@ async function openReply(meta) {
   const refs = (meta.references || '') + (meta.messageId ? ' ' + meta.messageId : '');
   document.getElementById('compose-references').value = refs.trim();
 
-  // Build quoted reply body
+  // Build quoted reply body — prepend the user's signature above the quote
   const quoteDate = meta.date ? new Date(meta.date).toLocaleString('en-GB') : '';
   const quoted = (meta.bodyText || '').split('\n').map(l => '> ' + l).join('\n');
-  document.getElementById('compose-body').value = `\n\nOn ${quoteDate}, ${meta.from} wrote:\n${quoted}`;
+  const sig = _mySignature();
+  const sigBlock = sig ? '\n\n' + sig : '';
+  document.getElementById('compose-body').value = `${sigBlock}\n\nOn ${quoteDate}, ${meta.from} wrote:\n${quoted}`;
+  await loadEmailTemplates();
+  _populateComposeTemplates('');
+  const sigBox = document.getElementById('compose-use-signature');
+  if (sigBox) sigBox.checked = !!sig;
 
   document.getElementById('composeModalTitle').textContent = '↩ Reply';
   document.getElementById('compose-error').style.display = 'none';
@@ -14395,6 +14640,8 @@ async function sendComposedEmail() {
       console.warn('Sent-save error:', res);
     }
     addActivity('Email sent from <strong>' + fromName + '</strong> to ' + to);
+    // If this email matches a snipe (by recipient email), mark that snipe as Sent
+    _markSnipeSentByEmail(to);
     // Refresh whichever inbox is open
     if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
       renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder);
