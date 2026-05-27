@@ -3055,9 +3055,15 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
           <div class="form-hint">Your outreach + snipe emails send from this address.</div>
         </div>
         <div class="form-group" style="margin-bottom:0">
-          <label class="form-label" style="font-size:11px">Email signature</label>
-          <textarea class="form-textarea" id="profile-email-signature" rows="4" placeholder="e.g.&#10;Ubayy&#10;Director, BluStu&#10;blustu.agency"></textarea>
-          <div class="form-hint">Auto-added to your emails + replies you send on behalf of creators you manage.</div>
+          <label class="form-label" style="font-size:11px">Email signature (HTML)</label>
+          <textarea class="form-textarea" id="profile-email-signature" rows="6" placeholder="Paste your HTML signature here, e.g.&#10;&lt;table&gt;...&lt;/table&gt; or &lt;div&gt;...&lt;/div&gt;" oninput="updateSignaturePreview()" style="font-family:monospace;font-size:11px"></textarea>
+          <div class="form-hint">Paste your branded HTML signature. Plain text works too — it'll be sent as-is. Used on your emails + replies you send for creators you manage.</div>
+          <div style="margin-top:8px">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-400);font-weight:600;margin-bottom:4px">Live preview</div>
+            <div id="signature-preview" style="border:1px solid var(--gray-100);border-radius:8px;padding:12px;background:white;min-height:40px;font-size:13px;color:#1a1a1a">
+              <span style="color:var(--gray-300)">Your signature will render here…</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3727,7 +3733,22 @@ async function openProfileModal() {
   }
   const sig = document.getElementById('profile-email-signature');
   if (sig) sig.value = s.email_signature || '';
+  updateSignaturePreview();
   openModal('profileModal');
+}
+
+/** Render the HTML signature preview live as the user types. */
+function updateSignaturePreview() {
+  const raw = document.getElementById('profile-email-signature')?.value || '';
+  const box = document.getElementById('signature-preview');
+  if (!box) return;
+  if (!raw.trim()) {
+    box.innerHTML = '<span style="color:var(--gray-300)">Your signature will render here…</span>';
+    return;
+  }
+  // If it looks like HTML, render it; otherwise show plain text with line breaks
+  const looksHtml = /<[a-z][\s\S]*>/i.test(raw);
+  box.innerHTML = looksHtml ? _sanitiseEmailHtml(raw) : escapeHtml(raw).replace(/\n/g, '<br>');
 }
 
 async function saveProfile() {
@@ -12342,14 +12363,13 @@ async function openSnipeCompose({ creatorName, to, niche }) {
   // Populate template dropdown
   _populateComposeTemplates(creatorName);
 
-  // Body = chosen niche template + signature
+  // Body = chosen niche template (plain text). Signature is applied separately at send time.
   const tpl = emailTemplates.find(t => t.niche === niche) || emailTemplates.find(t => t.niche === 'general');
   let body = tpl ? _fillTemplate(tpl.body, creatorName) : `Hi ${creatorName},\n\n`;
-  const sig = _mySignature();
-  if (sig) { body += '\n\n' + sig; document.getElementById('compose-use-signature').checked = true; }
-  else { document.getElementById('compose-use-signature').checked = false; }
   document.getElementById('compose-body').value = body;
   document.getElementById('compose-body').dataset.creatorName = creatorName;
+  // Turn signature on by default if the user has one
+  document.getElementById('compose-use-signature').checked = !!_mySignature();
 
   // Select the matching template in the dropdown
   const tplSel = document.getElementById('compose-template');
@@ -12370,7 +12390,7 @@ function _populateComposeTemplates(creatorName) {
   if (creatorName) sel.dataset.creatorName = creatorName;
 }
 
-/** Replace the compose body with the chosen template (keeps signature if toggled on). */
+/** Replace the compose body with the chosen template. Signature is applied at send time. */
 function applyComposeTemplate(templateId) {
   if (!templateId) return;
   const tpl = emailTemplates.find(t => String(t.id) === String(templateId));
@@ -12378,28 +12398,16 @@ function applyComposeTemplate(templateId) {
   const creatorName = document.getElementById('compose-body').dataset.creatorName
     || document.getElementById('compose-template').dataset.creatorName
     || '';
-  let body = _fillTemplate(tpl.body, creatorName);
-  if (document.getElementById('compose-use-signature').checked) {
-    const sig = _mySignature();
-    if (sig) body += '\n\n' + sig;
-  }
-  document.getElementById('compose-body').value = body;
+  document.getElementById('compose-body').value = _fillTemplate(tpl.body, creatorName);
 }
 
-/** Toggle signature on/off at the end of the body. */
+/** Signature toggle is now just a flag — the HTML signature is appended at send time, not into the textarea. */
 function toggleComposeSignature() {
   const on = document.getElementById('compose-use-signature').checked;
-  const sig = _mySignature();
-  if (!sig) { if (on) showToast('No signature saved — set one in Your Profile → Email Settings'); return; }
-  const ta = document.getElementById('compose-body');
-  let body = ta.value;
-  // Remove existing signature occurrence at the end
-  const idx = body.lastIndexOf(sig);
-  if (idx !== -1 && idx >= body.length - sig.length - 4) {
-    body = body.slice(0, idx).replace(/\s+$/, '');
+  if (on && !_mySignature()) {
+    showToast('No signature saved — set one in Your Profile → Email Settings');
+    document.getElementById('compose-use-signature').checked = false;
   }
-  if (on) body = body.replace(/\s+$/, '') + '\n\n' + sig;
-  ta.value = body;
 }
 
 /** When an outreach email is sent, find a snipe with that recipient email and flip it to Sent. */
@@ -14534,12 +14542,11 @@ async function openReply(meta) {
   const refs = (meta.references || '') + (meta.messageId ? ' ' + meta.messageId : '');
   document.getElementById('compose-references').value = refs.trim();
 
-  // Build quoted reply body — prepend the user's signature above the quote
+  // Build quoted reply body (plain text). Signature is applied as HTML at send time.
   const quoteDate = meta.date ? new Date(meta.date).toLocaleString('en-GB') : '';
   const quoted = (meta.bodyText || '').split('\n').map(l => '> ' + l).join('\n');
   const sig = _mySignature();
-  const sigBlock = sig ? '\n\n' + sig : '';
-  document.getElementById('compose-body').value = `${sigBlock}\n\nOn ${quoteDate}, ${meta.from} wrote:\n${quoted}`;
+  document.getElementById('compose-body').value = `\n\nOn ${quoteDate}, ${meta.from} wrote:\n${quoted}`;
   await loadEmailTemplates();
   _populateComposeTemplates('');
   const sigBox = document.getElementById('compose-use-signature');
@@ -14605,6 +14612,31 @@ ${dbg.responseTextSnippet}
   }
 }
 
+/**
+ * Build the HTML + plain-text versions of an outgoing email.
+ * - The typed message is plain text → converted to HTML with <br> for line breaks.
+ * - The signature is HTML (or plain) → appended after a spacer.
+ * - textBody is a plain-text fallback (message + signature with tags stripped).
+ */
+function _buildEmailPayload(message, sigHtml) {
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const msgHtml = esc(message).replace(/\n/g, '<br>');
+
+  let html = `<div style="font-family:'DM Sans',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#1a1a1a">${msgHtml}`;
+  let textBody = message;
+
+  if (sigHtml && sigHtml.trim()) {
+    const looksHtml = /<[a-z][\s\S]*>/i.test(sigHtml);
+    const sigBlock = looksHtml ? sigHtml : esc(sigHtml).replace(/\n/g, '<br>');
+    html += `<br><br><div class="blustu-signature">${sigBlock}</div>`;
+    // Plain-text fallback: strip tags from the signature
+    const sigText = looksHtml ? stripHtmlForQuote(sigHtml) : sigHtml;
+    textBody += '\n\n' + sigText;
+  }
+  html += '</div>';
+  return { html, textBody };
+}
+
 async function sendComposedEmail() {
   const errEl = document.getElementById('compose-error');
   const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
@@ -14617,6 +14649,7 @@ async function sendComposedEmail() {
   const body = document.getElementById('compose-body').value.trim();
   const inReplyTo = document.getElementById('compose-in-reply-to').value || null;
   const references = document.getElementById('compose-references').value || null;
+  const useSignature = document.getElementById('compose-use-signature')?.checked;
 
   if (!mailbox)            { showErr('Select a From address'); return; }
   if (!to)                 { showErr('Enter at least one recipient'); return; }
@@ -14626,11 +14659,15 @@ async function sendComposedEmail() {
 
   const fromName = friendlyFromName(mailbox);
 
+  // Build the HTML + plain-text versions of the email.
+  const sigHtml = useSignature ? _mySignature() : '';
+  const { html, textBody } = _buildEmailPayload(body, sigHtml);
+
   const btn = document.getElementById('composeSendBtn');
   btn.disabled = true; btn.textContent = 'Sending…';
 
   try {
-    const res = await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body, inReplyTo, references, fromName });
+    const res = await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body: textBody, html, inReplyTo, references, fromName });
     btn.disabled = false; btn.textContent = 'Send →';
     closeModal('composeEmailModal');
     if (res.savedToSent) {
