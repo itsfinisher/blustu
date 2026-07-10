@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-b (archive fix v2) -->
+<!-- blustu panel build 2026-07-10-c (crm default active + dash eng excl archived) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3900,7 +3900,16 @@ function showPage(id, btn) {
 
   // ── Per-page re-render on navigation ──
   // Guarantees each page shows current data on every visit.
-  if (id === 'crm')        { renderCRM(creators); }
+  if (id === 'crm')        {
+    // Reset roster scope + filters to Active view every time you land on CRM
+    _crmFilters.rosterScope = 'active';
+    _crmFilters.search = '';
+    _crmFilters.status = '';
+    _crmFilters.manager = '';
+    const searchInput = document.getElementById('crmSearchInput');
+    if (searchInput) searchInput.value = '';
+    _applyCrmFilters();
+  }
   if (id === 'onboarding') { renderOnboarding(); }
   if (id === 'mediakit')   {
     renderMediaKitList();
@@ -6229,15 +6238,15 @@ function updateDashStats(){
   const profSub = document.getElementById('stat-pipeline-sub');
   if (profSub) profSub.textContent = totalProfit > 0 ? 'All-time agency profit' : 'No earnings yet';
 
-  // Avg engagement rate from admin overrides (resolved)
-  const engRates = creators.map(c=>resolveCreator(c).engRate).filter(v=>v!=null&&v!=='');
+  // Avg engagement rate — active roster only (excludes archived / kicked)
+  const engRates = activeCreators().map(c=>resolveCreator(c).engRate).filter(v=>v!=null&&v!=='');
   const avgEngEl = document.getElementById('stat-avg-eng');
   const avgSubEl = document.getElementById('stat-avg-eng-sub');
   if (avgEngEl) {
     if (engRates.length) {
       const avg = (engRates.reduce((s,v)=>s+parseFloat(v),0)/engRates.length).toFixed(1);
       avgEngEl.textContent = avg+'%';
-      if (avgSubEl) avgSubEl.textContent = `Across ${engRates.length} creator${engRates.length>1?'s':''}`;
+      if (avgSubEl) avgSubEl.textContent = `Across ${engRates.length} active creator${engRates.length>1?'s':''}`;
     } else {
       avgEngEl.textContent = '—';
       if (avgSubEl) avgSubEl.textContent = 'No data yet';
