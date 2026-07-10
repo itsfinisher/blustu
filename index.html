@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-c (crm default active + dash eng excl archived) -->
+<!-- blustu panel build 2026-07-10-d (crm active-default v2 + onboarding excl archived) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3531,7 +3531,7 @@ async function refetch(table) {
   switch(table) {
     case 'creators':
       creators = sortCreators(normaliseCreators(rows)); Storage.set('creators', creators);
-      renderCRM(creators); renderOnboarding();
+      _applyCrmFilters(); renderOnboarding();
       if (currentCreatorId) {
         renderCreatorDeals(currentCreatorId);
         renderCreatorContracts(currentCreatorId);
@@ -4456,7 +4456,7 @@ async function deleteCreator(id) {
   if (document.getElementById('page-creatorprofile').classList.contains('active')) {
     showPage('crm', document.querySelector('[onclick*=crm]'));
   }
-  renderCRM(creators);
+  _applyCrmFilters();
   renderPipeline();
   updateDashStats();
   addActivity('Creator deleted from roster');
@@ -4806,7 +4806,7 @@ async function handleProfilePicUpload(event) {
         profilePics[currentCreatorId] = e.target.result;
         await saveProfilePics();
         renderProfilePic(currentCreatorId, e.target.result);
-        renderCRM(creators);
+        _applyCrmFilters();
         renderMediaKitList();
         showToast('Profile picture saved!');
       };
@@ -4829,7 +4829,7 @@ async function handleProfilePicUpload(event) {
     await saveProfilePics();
 
     renderProfilePic(currentCreatorId, publicUrl);
-    renderCRM(creators);
+    _applyCrmFilters();
     renderMediaKitList();
     showToast('Profile picture updated!');
   } catch(e) {
@@ -4925,9 +4925,11 @@ function saveProfileNote(val){
 
 // ══ ONBOARDING PAGE ══
 function renderOnboarding(){
-  const invited   = creators.filter(c => c.status === 'Invited');
-  const onboarded = creators.filter(c => c.onboarding);
-  const active    = creators.filter(c => c.status === 'Active' || c.status === 'Onboarded');
+  // Archived / kicked creators are excluded from onboarding.
+  const active_c   = activeCreators();
+  const invited    = active_c.filter(c => c.status === 'Invited');
+  const onboarded  = active_c.filter(c => c.onboarding);
+  const active     = active_c.filter(c => c.status === 'Active' || c.status === 'Onboarded');
 
   // Update stat pills
   const statInv = document.getElementById('stat-invited');
@@ -4963,21 +4965,22 @@ function renderOnboarding(){
 
   // Update total count pill
   const statTotal = document.getElementById('stat-total-ob');
-  if (statTotal) statTotal.textContent = creators.length;
+  if (statTotal) statTotal.textContent = active_c.length;
 
   // Full tracker delegates to shared renderer (also used by search filter)
-  _renderOnboardingTrackerRows(creators);
+  _renderOnboardingTrackerRows(active_c);
 }
 
 function filterOnboardingTracker(q) {
   const s = (q||'').toLowerCase();
+  const base = activeCreators();
   const filtered = s
-    ? creators.filter(c =>
+    ? base.filter(c =>
         (c.name||'').toLowerCase().includes(s) ||
         (c.email||'').toLowerCase().includes(s) ||
         (c.niche||'').toLowerCase().includes(s)
       )
-    : creators;
+    : base;
   _renderOnboardingTrackerRows(filtered);
 }
 
@@ -5068,7 +5071,7 @@ async function sendInvite(){
   closeModal('inviteCreatorModal');
   // Re-render immediately so Pending Invites list updates now
   renderOnboarding();
-  renderCRM(creators);
+  _applyCrmFilters();
   addActivity(`Onboarding invite sent to <strong>${name}</strong>`);
   showToast(`Invite link ready for ${name}!`);
 }
@@ -5239,7 +5242,7 @@ async function submitOnboarding(){
 
   Storage.set('creators', creators);
   // Update any open CRM / onboarding views immediately
-  if (typeof renderCRM === 'function')       renderCRM(creators);
+  if (typeof _applyCrmFilters === 'function') _applyCrmFilters();
   if (typeof renderOnboarding === 'function') renderOnboarding();
   showPortalStep(5);
 }
@@ -7306,7 +7309,7 @@ async function saveManagerAssignments() {
 
   // Refresh CRM badges if CRM is the active page
   if (document.getElementById('page-crm') && document.getElementById('page-crm').classList.contains('active')) {
-    renderCRM(creators);
+    _applyCrmFilters();
   }
   // Refresh managers detail view if it's open
   if (_mgrDetailEmail) { renderMgrDetail(_mgrDetailEmail); } else { renderManagersPage(); }
@@ -7436,7 +7439,7 @@ function closeSidebar() {
 function handleGlobalSearch() {}
 
 function renderAll() {
-  renderCRM(creators);
+  _applyCrmFilters();
   renderCampaigns(currentCampaignFilter);
   renderPitchDecks();
   renderPipeline();
