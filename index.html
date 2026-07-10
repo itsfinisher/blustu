@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-e (inbox threading with sent replies inline) -->
+<!-- blustu panel build 2026-07-10-f (inbox pagination + search) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1679,6 +1679,15 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         </div>
       </div>
       <div id="teamInboxFolderTabs" class="email-folder-tabs" style="margin-bottom:12px"></div>
+      <!-- Search bar -->
+      <div id="inboxSearchBar" style="display:none;margin-bottom:10px">
+        <div style="position:relative">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B93A8" stroke-width="2" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" id="inboxSearchInput" placeholder="Search sender, subject or body…" oninput="filterInboxSearch(this.value)" style="width:100%;padding:9px 36px 9px 34px;border:1px solid var(--gray-100);border-radius:8px;font-size:13px;font-family:inherit;background:var(--gray-50)">
+          <button id="inboxSearchClear" onclick="clearInboxSearch()" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;color:var(--gray-400);cursor:pointer;padding:2px 6px">✕</button>
+        </div>
+        <div id="inboxSearchCount" style="font-size:11px;color:var(--gray-400);margin-top:4px;padding-left:2px"></div>
+      </div>
       <div class="inbox-layout">
         <div class="inbox-list" id="inboxList">
           <div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">Select a mailbox above to load messages</div>
@@ -14190,20 +14199,23 @@ function _prettyFolderName(f) {
  * is tagged with `_folder` so later per-message operations (expand, mark, delete)
  * can use the correct source folder.
  *
- * Returns { messages, total } where `total` is the primary folder's own count.
+ * Returns { primary, sent, total } — primary/sent are already tagged; total is
+ * the primary folder's own count (so pagination knows when to stop).
  */
-async function _fetchFolderWithSentMerge(mailbox, folder) {
+async function _fetchFolderWithSentMerge(mailbox, folder, offset = 0, limit = 50) {
   const isInbox = (folder || 'INBOX').toLowerCase() === 'inbox';
-  const primaryReq = emailApi('/inbox', { mailbox, folder, limit: 50, offset: 0 });
-  const sentReq    = isInbox
-    ? emailApi('/inbox', { mailbox, folder: 'Sent', limit: 50, offset: 0 }).catch(() => ({ messages: [] }))
+  const primaryReq = emailApi('/inbox', { mailbox, folder, limit, offset });
+  // On INBOX, always fetch a wide Sent window (once, at offset 0) so reply
+  // threading works across pagination. Skip when we're loading page 2+ of
+  // INBOX — Sent is already in _currentInbox.messages from the first page.
+  const sentReq    = isInbox && offset === 0
+    ? emailApi('/inbox', { mailbox, folder: 'Sent', limit: 200, offset: 0 }).catch(() => ({ messages: [] }))
     : Promise.resolve(null);
 
   const [primary, sent] = await Promise.all([primaryReq, sentReq]);
   const primaryMsgs = (primary.messages || []).map(m => ({ ...m, _folder: folder }));
   const sentMsgs    = sent ? (sent.messages || []).map(m => ({ ...m, _folder: 'Sent' })) : [];
-  const merged = [...primaryMsgs, ...sentMsgs];
-  return { messages: merged, total: primary.total || 0 };
+  return { primary: primaryMsgs, sent: sentMsgs, total: primary.total || 0 };
 }
 
 /** Build the folder-tabs HTML strip. clickFn returns the onclick string for each folder. */
@@ -14322,6 +14334,10 @@ async function renderCreatorEmail(creatorId, folder) {
     <div class="email-folder-tabs">
       ${_folderTabsHtml(currentFolder, f => `renderCreatorEmail(${creatorId}, '${f}')`)}
     </div>
+    <div style="margin:10px 0;position:relative">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B93A8" stroke-width="2" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="ce-search-${creatorId}" placeholder="Search sender, subject or body…" oninput="filterInboxSearch(this.value)" style="width:100%;padding:9px 36px 9px 34px;border:1px solid var(--gray-100);border-radius:8px;font-size:13px;font-family:inherit;background:var(--gray-50)">
+    </div>
     <div class="inbox-layout" style="height:560px">
       <div class="inbox-list" id="ce-list-${creatorId}">
         <div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">Connecting to mailbox…</div>
@@ -14334,11 +14350,18 @@ async function renderCreatorEmail(creatorId, folder) {
       </div>
     </div>`;
 
-  _currentInbox = { mailbox, folder: currentFolder, messages: [], selectedUid: null, isCreatorTab: true, creatorId };
+  _currentInbox = {
+    mailbox, folder: currentFolder, messages: [], selectedUid: null,
+    isCreatorTab: true, creatorId, listElId: `ce-list-${creatorId}`,
+    primaryOffset: 0, primaryTotal: 0, primaryLoaded: 0, pageSize: 50, search: '',
+  };
 
   try {
-    const data = await _fetchFolderWithSentMerge(mailbox, currentFolder);
-    _currentInbox.messages = data.messages || [];
+    const data = await _fetchFolderWithSentMerge(mailbox, currentFolder, 0, 50);
+    _currentInbox.messages = [...data.primary, ...data.sent];
+    _currentInbox.primaryTotal  = data.total;
+    _currentInbox.primaryLoaded = data.primary.length;
+    _currentInbox.primaryOffset = data.primary.length;
     _renderInboxList(`ce-list-${creatorId}`, _currentInbox.messages, mailbox, true, creatorId, currentFolder);
     const statusEl = document.getElementById(`ce-status-${creatorId}`);
     if (statusEl) statusEl.textContent = (data.total || 0) + ' messages in ' + _prettyFolderName(currentFolder);
@@ -14390,11 +14413,28 @@ async function loadTeamInbox(mailbox, folder) {
   if (tabsEl) tabsEl.innerHTML = _folderTabsHtml(currentFolder, f => `loadTeamInbox('${mailbox}', '${f}')`);
 
   listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">Loading…</div>';
-  _currentInbox = { mailbox, folder: currentFolder, messages: [], selectedUid: null, isCreatorTab: false };
+  _currentInbox = {
+    mailbox, folder: currentFolder, messages: [], selectedUid: null,
+    isCreatorTab: false, listElId: 'inboxList',
+    primaryOffset: 0, primaryTotal: 0, primaryLoaded: 0, pageSize: 50, search: '',
+  };
+
+  // Reset & show search bar
+  const searchBar = document.getElementById('inboxSearchBar');
+  if (searchBar) searchBar.style.display = '';
+  const searchInput = document.getElementById('inboxSearchInput');
+  if (searchInput) searchInput.value = '';
+  const clearBtn = document.getElementById('inboxSearchClear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  const searchCount = document.getElementById('inboxSearchCount');
+  if (searchCount) searchCount.textContent = '';
 
   try {
-    const data = await _fetchFolderWithSentMerge(mailbox, currentFolder);
-    _currentInbox.messages = data.messages || [];
+    const data = await _fetchFolderWithSentMerge(mailbox, currentFolder, 0, 50);
+    _currentInbox.messages = [...data.primary, ...data.sent];
+    _currentInbox.primaryTotal  = data.total;
+    _currentInbox.primaryLoaded = data.primary.length;
+    _currentInbox.primaryOffset = data.primary.length;
     _renderInboxList('inboxList', _currentInbox.messages, mailbox, false, null, currentFolder);
     const sub = document.getElementById('inbox-sub-title');
     if (sub) sub.textContent = (data.total || 0) + ' messages in ' + _prettyFolderName(currentFolder) + ' — ' + mailbox + '@blustu.agency';
@@ -14412,27 +14452,111 @@ function refreshTeamInbox() {
 function _renderInboxList(listElId, messages, mailbox, isCreatorTab, creatorId, folder) {
   const listEl = document.getElementById(listElId);
   if (!listEl) return;
-  if (!messages.length) {
-    listEl.innerHTML = '<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">No messages in this folder</div>';
-    return;
+
+  // Apply client-side search across sender/subject/preview
+  const q = ((_currentInbox && _currentInbox.search) || '').trim().toLowerCase();
+  let filteredMsgs = messages;
+  if (q) {
+    filteredMsgs = messages.filter(m => {
+      const hay = [
+        _parseFromName(m.from || ''),
+        _parseFromAddress(m.from || ''),
+        m.to || '',
+        m.subject || '',
+        m.bodyText || '',
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
   }
 
   const viewingInbox = (folder || 'INBOX').toLowerCase() === 'inbox';
+  const loadMoreHtml = _loadMoreFooterHtml();
+
+  if (!filteredMsgs.length) {
+    listEl.innerHTML = q
+      ? `<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">No messages match "${q.replace(/</g,'&lt;')}"</div>` + loadMoreHtml
+      : '<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">No messages in this folder</div>';
+    _updateInboxSearchCount(filteredMsgs.length, messages.length);
+    return;
+  }
 
   if (_emailThreadMode) {
-    let threads = _groupIntoThreads(messages);
-    // In Inbox view, hide threads that only contain Sent messages
-    // (they have no inbound counterpart yet — belong in Sent folder, not Inbox).
+    let threads = _groupIntoThreads(filteredMsgs);
     if (viewingInbox) {
       threads = threads.filter(t => t.messages.some(m => (m._folder || 'INBOX').toLowerCase() !== 'sent'));
     }
-    listEl.innerHTML = threads.map(t => _renderThreadRow(t, isCreatorTab, creatorId, folder)).join('');
+    listEl.innerHTML = threads.map(t => _renderThreadRow(t, isCreatorTab, creatorId, folder)).join('') + loadMoreHtml;
   } else {
-    // Non-threaded view: in Inbox, don't show raw Sent-tagged messages as list rows.
     const shown = viewingInbox
-      ? messages.filter(m => (m._folder || 'INBOX').toLowerCase() !== 'sent')
-      : messages;
-    listEl.innerHTML = shown.map(m => _renderMessageRow(m, isCreatorTab, creatorId, folder)).join('');
+      ? filteredMsgs.filter(m => (m._folder || 'INBOX').toLowerCase() !== 'sent')
+      : filteredMsgs;
+    listEl.innerHTML = shown.map(m => _renderMessageRow(m, isCreatorTab, creatorId, folder)).join('') + loadMoreHtml;
+  }
+  _updateInboxSearchCount(filteredMsgs.length, messages.length);
+}
+
+/** HTML fragment for the "Load more" footer, or "" if we've loaded everything. */
+function _loadMoreFooterHtml() {
+  if (!_currentInbox) return '';
+  const loaded = _currentInbox.primaryLoaded || 0;
+  const total  = _currentInbox.primaryTotal  || 0;
+  if (loaded >= total || total === 0) {
+    return loaded > 0 ? `<div style="padding:16px;text-align:center;color:var(--gray-400);font-size:11px">— End of ${_prettyFolderName(_currentInbox.folder)} (${loaded} of ${total}) —</div>` : '';
+  }
+  const remaining = total - loaded;
+  const nextBatch = Math.min(_currentInbox.pageSize || 50, remaining);
+  return `<div style="padding:12px;text-align:center;border-top:1px solid var(--gray-100);margin-top:8px">
+    <button class="btn btn-ghost btn-sm" id="inbox-load-more-btn" onclick="loadMoreInbox()" style="font-size:12px">
+      ⬇ Load ${nextBatch} more <span style="color:var(--gray-400)">(${loaded} of ${total})</span>
+    </button>
+  </div>`;
+}
+
+/** Update the small "n of m messages matching…" indicator under the search bar. */
+function _updateInboxSearchCount(shownCount, totalLoaded) {
+  const el = document.getElementById('inboxSearchCount');
+  if (!el) return;
+  const q = ((_currentInbox && _currentInbox.search) || '').trim();
+  if (!q) { el.textContent = ''; return; }
+  el.textContent = `${shownCount} match${shownCount === 1 ? '' : 'es'} of ${totalLoaded} loaded — hit "Load more" to search further back`;
+}
+
+/** Filter the currently-loaded messages by a search string. */
+function filterInboxSearch(q) {
+  if (!_currentInbox || !_currentInbox.mailbox) return;
+  _currentInbox.search = q || '';
+  const clearBtn = document.getElementById('inboxSearchClear');
+  if (clearBtn) clearBtn.style.display = (q || '').trim() ? '' : 'none';
+  const listElId = _currentInbox.listElId || 'inboxList';
+  _renderInboxList(listElId, _currentInbox.messages, _currentInbox.mailbox, !!_currentInbox.isCreatorTab, _currentInbox.creatorId || null, _currentInbox.folder);
+}
+
+function clearInboxSearch() {
+  const input = document.getElementById('inboxSearchInput');
+  if (input) input.value = '';
+  filterInboxSearch('');
+}
+
+/** Load the next page of messages from the primary folder. */
+async function loadMoreInbox() {
+  if (!_currentInbox || !_currentInbox.mailbox) return;
+  const btn = document.getElementById('inbox-load-more-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+  try {
+    const data = await _fetchFolderWithSentMerge(
+      _currentInbox.mailbox, _currentInbox.folder,
+      _currentInbox.primaryOffset, _currentInbox.pageSize || 50
+    );
+    // Append primary; Sent was already fetched on first page and stays cached
+    _currentInbox.messages = [..._currentInbox.messages, ...data.primary];
+    _currentInbox.primaryLoaded += data.primary.length;
+    _currentInbox.primaryOffset += data.primary.length;
+    if (!_currentInbox.primaryTotal) _currentInbox.primaryTotal = data.total;
+    const listElId = _currentInbox.listElId || 'inboxList';
+    _renderInboxList(listElId, _currentInbox.messages, _currentInbox.mailbox, !!_currentInbox.isCreatorTab, _currentInbox.creatorId || null, _currentInbox.folder);
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '❌ Try again'; }
+    showToast('Failed to load more: ' + e.message);
   }
 }
 
