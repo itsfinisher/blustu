@@ -1,7 +1,11 @@
 <!DOCTYPE html>
+<!-- blustu panel build 2026-07-10-b (archive fix v2) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>blustu™ — Internal Panel</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
@@ -4325,7 +4329,6 @@ async function saveArchiveCreator() {
     archived_notes:  notes,
     archived_at:     new Date().toISOString(),
     archived_by:     currentUser?.email || null,
-    updated_at:      new Date().toISOString(),
   };
   const result = await DB._req('PATCH', 'creators', patch, '?id=eq.' + id);
   btn.disabled = false; btn.textContent = 'Archive Creator';
@@ -4367,7 +4370,6 @@ async function reactivateCreator(id) {
     archived_notes:  null,
     archived_at:     null,
     archived_by:     null,
-    updated_at:      new Date().toISOString(),
   };
   const result = await DB._req('PATCH', 'creators', patch, '?id=eq.' + id);
   if (result === null) { showToast('Save failed'); return; }
