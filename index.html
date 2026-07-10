@@ -1060,6 +1060,11 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
         <button class="btn btn-primary" onclick="openModal('addCreatorModal')">+ Add Creator</button>
       </div>
       <div class="crm-toolbar">
+        <div style="display:inline-flex;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:8px;padding:2px" title="Roster scope">
+          <button id="crm-scope-active"   class="btn btn-sm"       onclick="setCrmRosterScope('active')"   style="border-radius:6px">Active</button>
+          <button id="crm-scope-archived" class="btn btn-ghost btn-sm" onclick="setCrmRosterScope('archived')" style="border-radius:6px">Archived</button>
+          <button id="crm-scope-all"      class="btn btn-ghost btn-sm" onclick="setCrmRosterScope('all')"      style="border-radius:6px">All</button>
+        </div>
         <div class="crm-search">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B93A8" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input type="text" placeholder="Search by name, location, niche..." oninput="filterCRM(this.value)" id="crmSearchInput">
@@ -1144,12 +1149,15 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
             </div>
           </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span id="profile-roster-badge"></span>
           <span id="profile-status-badge"></span>
           <button class="btn btn-ghost btn-sm" id="profileEditBtn" onclick="openEditCreator()">✏️ Edit</button>
+          <button class="btn btn-ghost btn-sm" id="profileArchiveBtn" onclick="_profileArchiveAction()" style="display:none">📦 Archive</button>
           <button class="btn btn-danger btn-sm" onclick="confirmDeleteCreator()">Delete</button>
         </div>
       </div>
+      <div id="profile-archived-banner" style="display:none;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:6px;padding:10px 14px;font-size:12px;color:#92400e;margin:-6px 0 10px"></div>
       <div class="profile-tabs">
         <button class="profile-tab active" onclick="switchProfileTab('overview',this)">Overview</button>
         <button class="profile-tab" onclick="switchProfileTab('socials',this)">Socials & Rates</button>
@@ -2965,6 +2973,51 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
 </div>
 
 <!-- ══ INVOICE DETAILS MODAL ══ -->
+<!-- ══ ARCHIVE CREATOR MODAL ══ -->
+<div class="modal-overlay" id="archiveCreatorModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title" id="archiveCreatorModalTitle">Archive Creator</div>
+      <button class="modal-close" onclick="closeModal('archiveCreatorModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="arch-creator-id">
+      <div id="arch-error" style="display:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500"></div>
+      <div style="background:var(--blue-light);color:var(--blue);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px">
+        ℹ️ Archiving removes them from the main CRM view. Their profile, past campaigns, earnings and payouts stay intact. You can still pitch them for freelance one-offs, and reactivate them at any time.
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Status *</label>
+          <select class="form-select" id="arch-status">
+            <option value="inactive">Inactive — paused / on break / left amicably</option>
+            <option value="kicked">Kicked — removed for cause</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reason</label>
+          <select class="form-select" id="arch-reason">
+            <option value="">— Pick a reason —</option>
+            <option value="left_agency">Left the agency</option>
+            <option value="underperforming">Underperforming</option>
+            <option value="contract_ended">Contract ended</option>
+            <option value="behaviour">Behaviour / conduct</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional but recommended)</label>
+        <textarea class="form-textarea" id="arch-notes" rows="4" placeholder="Anything future-you will want to know — context of the split, whether they're pitchable later, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('archiveCreatorModal')">Cancel</button>
+      <button class="btn btn-primary" id="arch-save-btn" onclick="saveArchiveCreator()">Archive Creator</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="invoiceDetailsModal">
   <div class="modal" style="max-width:560px">
     <div class="modal-header">
@@ -3928,10 +3981,12 @@ function renderCRMGrid(list) {
       ? `<img src="${pic}" alt="${c.name}">`
       : avatarLetter(c.name);
     const avStyle = pic ? '' : `background:${avatarColor(c.id)};`;
+    const archived = isArchivedCreator(c);
+    const cardStyle = archived ? 'opacity:.65' : '';
     return `
-      <div class="crm-gc" data-id="${c.id}" onclick="openCreatorProfile(${c.id})">
+      <div class="crm-gc" data-id="${c.id}" onclick="openCreatorProfile(${c.id})" style="${cardStyle}">
         <div class="crm-gc-av" style="${avStyle}">${avH}</div>
-        <div class="crm-gc-name">${c.name}</div>
+        <div class="crm-gc-name">${c.name}${_rosterStatusBadge(c)}</div>
         ${(function(){var m=getCreatorManager(c.id);return m?'<div class="crm-mgr-badge" style="margin:2px 0 4px;font-size:10px">'+m+'</div>':'';})()}
         <div class="crm-gc-niche">${r.niche || c.niche || '—'}</div>
         <div class="crm-gc-stats">
@@ -3995,16 +4050,21 @@ function renderCRM(list) {
       ? `<td class="crm-drag-handle" title="Drag to reorder">${HANDLE_SVG}</td>`
       : `<td style="width:32px;padding:0"></td>`;
     return `
-    <tr data-id="${c.id}">
+    <tr data-id="${c.id}"${(c.roster_status && c.roster_status !== 'active') ? ' style="opacity:.7;background:#f9fafb"' : ''}>
       ${handleTd}
-      <td><div class="creator-cell">${avatarHtml}<div><div class="creator-name">${c.name}${(function(){var m=getCreatorManager(c.id);return m?'<span class="crm-mgr-badge">'+m+'</span>':'';})()}</div><div class="creator-handle">${c.email}</div></div></div></td>
+      <td><div class="creator-cell">${avatarHtml}<div><div class="creator-name">${c.name}${(function(){var m=getCreatorManager(c.id);return m?'<span class="crm-mgr-badge">'+m+'</span>':'';})()}${_rosterStatusBadge(c)}</div><div class="creator-handle">${c.email}</div></div></div></td>
       <td style="font-size:12px;color:var(--gray-400)">${c.role}</td>
       <td style="font-size:12px">${c.location}</td>
       <td>${c.onboarding ? '<span class="badge badge-green">✓ Complete</span>' : c.status === 'Invited' ? '<span class="badge badge-amber">Invited</span>' : '<span class="badge badge-gray">Pending</span>'}</td>
       <td>${statusBadge(c.status)}</td>
-      <td style="display:flex;gap:6px">
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openCreatorProfile(${c.id})">Profile</button>
         <button class="btn btn-ghost btn-sm" onclick="openCreatorQuickView(${c.id})">Quick</button>
+        ${_canArchiveCreators() ? (
+          (c.roster_status && c.roster_status !== 'active')
+            ? `<button class="btn btn-ghost btn-sm" onclick="reactivateCreator(${c.id})" title="Bring back to active roster">↺ Reactivate</button>`
+            : `<button class="btn btn-ghost btn-sm" onclick="openArchiveCreatorModal(${c.id})" title="Move to archive">📦 Archive</button>`
+        ) : ''}
         <button class="btn btn-danger btn-sm" onclick="confirmDeleteCreator(${c.id})">Delete</button>
       </td>
     </tr>`;
@@ -4125,10 +4185,17 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Unified CRM filter state — all three filters compose together.
-let _crmFilters = { search: '', status: '', manager: '' };
+let _crmFilters = { search: '', status: '', manager: '', rosterScope: 'active' };  // rosterScope: 'active' | 'archived' | 'all'
 
 function _applyCrmFilters() {
   let list = creators;
+  // Roster scope — active (default), archived (inactive+kicked), or all
+  const scope = _crmFilters.rosterScope || 'active';
+  if (scope === 'active') {
+    list = list.filter(c => !c.roster_status || c.roster_status === 'active');
+  } else if (scope === 'archived') {
+    list = list.filter(c => c.roster_status && c.roster_status !== 'active');
+  }
   // Search
   const s = (_crmFilters.search || '').toLowerCase();
   if (s) {
@@ -4156,7 +4223,162 @@ function _applyCrmFilters() {
       return primary === m || secondary === m || admin === m;
     });
   }
+  _refreshRosterScopeUI();
   renderCRM(list);
+}
+
+/** Update the "Show archived" toggle button styling + counts. */
+function _refreshRosterScopeUI() {
+  const scope = _crmFilters.rosterScope || 'active';
+  const activeCount   = creators.filter(c => !c.roster_status || c.roster_status === 'active').length;
+  const archivedCount = creators.filter(c => c.roster_status && c.roster_status !== 'active').length;
+  const btnActive = document.getElementById('crm-scope-active');
+  const btnArch   = document.getElementById('crm-scope-archived');
+  const btnAll    = document.getElementById('crm-scope-all');
+  if (btnActive) {
+    btnActive.className = scope === 'active' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+    btnActive.innerHTML = `Active <span style="opacity:.6;font-size:11px;margin-left:2px">${activeCount}</span>`;
+  }
+  if (btnArch) {
+    btnArch.className   = scope === 'archived' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+    btnArch.innerHTML   = `Archived <span style="opacity:.6;font-size:11px;margin-left:2px">${archivedCount}</span>`;
+  }
+  if (btnAll) {
+    btnAll.className    = scope === 'all' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  }
+}
+
+function setCrmRosterScope(scope) {
+  _crmFilters.rosterScope = scope;
+  _applyCrmFilters();
+}
+
+// ══ ROSTER STATUS (archive / kicked) ══
+
+const ROSTER_STATUS_META = {
+  active:   { label: 'Active',   badge: 'badge-green', color: '#16a34a' },
+  inactive: { label: 'Inactive', badge: 'badge-gray',  color: '#6b7280' },
+  kicked:   { label: 'Kicked',   badge: 'badge-red',   color: '#dc2626' },
+};
+const ARCHIVED_REASON_LABEL = {
+  left_agency:     'Left the agency',
+  underperforming: 'Underperforming',
+  contract_ended:  'Contract ended',
+  behaviour:       'Behaviour / conduct',
+  other:           'Other',
+};
+
+/** Only owners/admins may archive or reactivate creators. */
+function _canArchiveCreators() {
+  return currentUser && ['owner','admin'].includes(currentUser.systemRole);
+}
+
+/** Small inline badge next to a creator name, shown only when archived. */
+function _rosterStatusBadge(c) {
+  const st = c && c.roster_status;
+  if (!st || st === 'active') return '';
+  const meta = ROSTER_STATUS_META[st] || ROSTER_STATUS_META.inactive;
+  return ` <span class="badge ${meta.badge}" style="font-size:9px;margin-left:6px;vertical-align:middle">${meta.label}</span>`;
+}
+
+/** Return whether a creator should be excluded from pickers (new campaigns, earnings, etc.). */
+function isArchivedCreator(c) {
+  return c && c.roster_status && c.roster_status !== 'active';
+}
+
+/** Filter helper — pass creators to any dropdown or picker to exclude archived by default. */
+function activeCreators() {
+  return creators.filter(c => !isArchivedCreator(c));
+}
+
+function openArchiveCreatorModal(id) {
+  if (!_canArchiveCreators()) { showToast('Only owners/admins can archive creators'); return; }
+  const c = creators.find(x => Number(x.id) === Number(id));
+  if (!c) return;
+  document.getElementById('arch-creator-id').value = c.id;
+  document.getElementById('archiveCreatorModalTitle').textContent = `Archive ${c.name}`;
+  document.getElementById('arch-status').value = c.roster_status && c.roster_status !== 'active' ? c.roster_status : 'inactive';
+  document.getElementById('arch-reason').value = c.archived_reason || '';
+  document.getElementById('arch-notes').value  = c.archived_notes  || '';
+  document.getElementById('arch-error').style.display = 'none';
+  document.getElementById('arch-save-btn').textContent = 'Archive Creator';
+  openModal('archiveCreatorModal');
+}
+
+async function saveArchiveCreator() {
+  const errEl = document.getElementById('arch-error');
+  const showErr = m => { errEl.textContent = m; errEl.style.display = 'block'; };
+  errEl.style.display = 'none';
+  const id = Number(document.getElementById('arch-creator-id').value);
+  const c = creators.find(x => Number(x.id) === id);
+  if (!c) { showErr('Creator not found'); return; }
+  const status = document.getElementById('arch-status').value;
+  const reason = document.getElementById('arch-reason').value || null;
+  const notes  = document.getElementById('arch-notes').value.trim() || null;
+
+  const btn = document.getElementById('arch-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const patch = {
+    roster_status:   status,
+    archived_reason: reason,
+    archived_notes:  notes,
+    archived_at:     new Date().toISOString(),
+    archived_by:     currentUser?.email || null,
+    updated_at:      new Date().toISOString(),
+  };
+  const result = await DB._req('PATCH', 'creators', patch, '?id=eq.' + id);
+  btn.disabled = false; btn.textContent = 'Archive Creator';
+  if (result === null) { showErr('Save failed: ' + (DB._lastError || 'unknown — run the roster-status SQL migration?')); return; }
+
+  // Sync local
+  Object.assign(c, patch);
+  Storage.set('creators', creators);
+  closeModal('archiveCreatorModal');
+  _applyCrmFilters();
+  // Refresh the profile page if it's showing this creator
+  if (typeof currentCreatorId !== 'undefined' && Number(currentCreatorId) === Number(id) && typeof openCreatorProfile === 'function') {
+    try { openCreatorProfile(id); } catch(e){}
+  }
+  addActivity(`Creator archived: <strong>${c.name}</strong> — ${ROSTER_STATUS_META[status]?.label || status}${reason ? ' (' + ARCHIVED_REASON_LABEL[reason] + ')' : ''}`);
+  showToast('📦 ' + c.name + ' archived');
+}
+
+/** Profile-page dispatcher — archive or reactivate depending on current status. */
+function _profileArchiveAction() {
+  if (typeof currentCreatorId === 'undefined' || !currentCreatorId) return;
+  const c = creators.find(x => Number(x.id) === Number(currentCreatorId));
+  if (!c) return;
+  if (c.roster_status && c.roster_status !== 'active') {
+    reactivateCreator(c.id);
+  } else {
+    openArchiveCreatorModal(c.id);
+  }
+}
+
+async function reactivateCreator(id) {
+  if (!_canArchiveCreators()) { showToast('Only owners/admins can reactivate creators'); return; }
+  const c = creators.find(x => Number(x.id) === Number(id));
+  if (!c) return;
+  if (!confirm(`Bring ${c.name} back to the active roster?`)) return;
+  const patch = {
+    roster_status:   'active',
+    archived_reason: null,
+    archived_notes:  null,
+    archived_at:     null,
+    archived_by:     null,
+    updated_at:      new Date().toISOString(),
+  };
+  const result = await DB._req('PATCH', 'creators', patch, '?id=eq.' + id);
+  if (result === null) { showToast('Save failed'); return; }
+  Object.assign(c, patch);
+  Storage.set('creators', creators);
+  _applyCrmFilters();
+  if (typeof currentCreatorId !== 'undefined' && Number(currentCreatorId) === Number(id) && typeof openCreatorProfile === 'function') {
+    try { openCreatorProfile(id); } catch(e){}
+  }
+  addActivity(`Creator reactivated: <strong>${c.name}</strong>`);
+  showToast('✅ ' + c.name + ' is back on the active roster');
 }
 
 /** Resolve a creator's primary staff email — checks new assigned_staff.primary, falls back to legacy managerAssignments. */
@@ -4432,6 +4654,46 @@ function openCreatorProfile(id){
   document.getElementById('profile-name').textContent=c.name;
   document.getElementById('profile-email').textContent=c.email;
   document.getElementById('profile-status-badge').innerHTML=statusBadge(c.status);
+
+  // Roster status (archive) — badge + banner + button
+  const rosterEl = document.getElementById('profile-roster-badge');
+  const banner   = document.getElementById('profile-archived-banner');
+  const archBtn  = document.getElementById('profileArchiveBtn');
+  const st = c.roster_status || 'active';
+  if (rosterEl) {
+    if (st !== 'active') {
+      const meta = ROSTER_STATUS_META[st] || ROSTER_STATUS_META.inactive;
+      rosterEl.innerHTML = `<span class="badge ${meta.badge}" style="font-size:10px">📦 ${meta.label}</span>`;
+    } else {
+      rosterEl.innerHTML = '';
+    }
+  }
+  if (banner) {
+    if (st !== 'active') {
+      const reasonLabel = c.archived_reason ? (ARCHIVED_REASON_LABEL[c.archived_reason] || c.archived_reason) : null;
+      const when = c.archived_at ? new Date(c.archived_at).toLocaleDateString('en-GB') : null;
+      const by   = c.archived_by || null;
+      const bits = [];
+      if (reasonLabel) bits.push('<strong>Reason:</strong> ' + reasonLabel);
+      if (when) bits.push('<strong>On:</strong> ' + when);
+      if (by)   bits.push('<strong>By:</strong> ' + by);
+      const notesLine = c.archived_notes ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed rgba(146,64,14,.3)">${c.archived_notes.replace(/</g,'&lt;')}</div>` : '';
+      banner.innerHTML = `📦 <strong>Archived — ${ROSTER_STATUS_META[st]?.label || st}.</strong> ${bits.join(' · ')}${notesLine}`;
+      banner.style.display = '';
+    } else {
+      banner.style.display = 'none';
+      banner.innerHTML = '';
+    }
+  }
+  if (archBtn) {
+    if (_canArchiveCreators()) {
+      archBtn.style.display = '';
+      archBtn.innerHTML = (st !== 'active') ? '↺ Reactivate' : '📦 Archive';
+      archBtn.title      = (st !== 'active') ? 'Bring back to active roster' : 'Move to archive';
+    } else {
+      archBtn.style.display = 'none';
+    }
+  }
   // Show who manages this creator
   const mbEl = document.getElementById('profile-managed-by');
   if (mbEl) {
@@ -5983,15 +6245,22 @@ function updateDashStats(){
 
 // ══ POPULATE SELECTS ══
 function populateSelects(){
-  const names=creators.map(c=>c.name);
-  ['invite-creator-select','camp-creator','edit-camp-creator','pitch-creator','edit-pitch-creator','deal-creator','edit-deal-creator','kit-creator-select'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(!el)return;
-    const prev=el.value;
-    el.innerHTML=names.map(n=>`<option>${n}</option>`).join('');
-    if(names.includes(prev))el.value=prev;
-    else if(names.length)el.value=names[0];
-  });
+  // For NEW records, exclude archived creators so you don't accidentally add them.
+  const activeNames  = activeCreators().map(c=>c.name);
+  // For EDIT records, include ALL names so old records referencing an archived creator still resolve.
+  const allNames     = creators.map(c=>c.name);
+  const newRecordIds  = ['invite-creator-select','camp-creator','pitch-creator','deal-creator','kit-creator-select'];
+  const editRecordIds = ['edit-camp-creator','edit-pitch-creator','edit-deal-creator'];
+  newRecordIds.forEach(id => _fillCreatorSelect(id, activeNames));
+  editRecordIds.forEach(id => _fillCreatorSelect(id, allNames));
+}
+function _fillCreatorSelect(id, names) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const prev = el.value;
+  el.innerHTML = names.map(n => `<option>${n}</option>`).join('');
+  if (names.includes(prev)) el.value = prev;
+  else if (names.length) el.value = names[0];
 }
 
 // ══ USERS & ACCESS MANAGEMENT ══
@@ -8538,12 +8807,18 @@ function renderEarnings() {
   }).join('');
 }
 
-function populateEarningSelects() {
+function populateEarningSelects(includeCreatorId) {
   const creatorSel = document.getElementById('earn-creator-sel');
   const campSel    = document.getElementById('earn-campaign-sel');
   if (!creatorSel || !campSel) return;
 
-  creatorSel.innerHTML = creators.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  // Default: exclude archived. If editing an existing earning tied to an archived creator, include them.
+  let list = activeCreators();
+  if (includeCreatorId != null) {
+    const arch = creators.find(c => Number(c.id) === Number(includeCreatorId));
+    if (arch && isArchivedCreator(arch) && !list.some(x => x.id === arch.id)) list = [...list, arch];
+  }
+  creatorSel.innerHTML = list.map(c => `<option value="${c.id}">${c.name}${isArchivedCreator(c) ? ' 📦' : ''}</option>`).join('');
   campSel.innerHTML = '<option value="">— No campaign —</option>' +
     campaigns.map(c => `<option value="${c.id}" data-brand="${c.brand||''}" data-value="${c.value||0}">${c.brand} × ${c.creator}</option>`).join('');
 }
@@ -8590,7 +8865,7 @@ function openEditEarning(id) {
   if (!e) return;
   document.getElementById('earningModalTitle').textContent = 'Edit Earnings Record';
   document.getElementById('earn-id').value = e.id;
-  populateEarningSelects();
+  populateEarningSelects(e.creator_id);
   document.getElementById('earn-campaign-sel').value = e.campaign_id || '';
   document.getElementById('earn-brand').value = e.brand_name || '';
   document.getElementById('earn-notes').value = e.notes || '';
