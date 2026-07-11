@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-f (inbox pagination + search) -->
+<!-- blustu panel build 2026-07-10-g (mobile / iOS polish pass) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>blustu™ — Internal Panel</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
 <style>
@@ -435,6 +435,114 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
   .sidebar-overlay.show{display:block;}
 }
 @media(min-width:769px){.hamburger{display:none;}.sidebar-overlay{display:none!important;}}
+
+/* ═════════ IOS / MOBILE POLISH ═════════ */
+/* Prevent horizontal body scroll from any wide element */
+html, body { overflow-x: hidden; }
+/* Softer tap highlight everywhere */
+* { -webkit-tap-highlight-color: rgba(0,0,0,0.04); }
+/* iOS safe area insets (notch / home indicator) */
+@supports (padding: env(safe-area-inset-top)) {
+  .sidebar { padding-top: max(env(safe-area-inset-top), 8px); padding-bottom: max(env(safe-area-inset-bottom), 8px); }
+  .topbar  { padding-top: env(safe-area-inset-top); }
+  .content { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+}
+@media(max-width:768px){
+  /* Kill iOS Safari's auto-zoom on input focus — inputs must be ≥16px */
+  input, select, textarea, .form-input, .form-select, .form-textarea { font-size: 16px !important; }
+  /* Bigger touch targets */
+  .btn { min-height: 40px; }
+  .btn-sm { min-height: 36px; padding: 6px 12px; }
+  .nav-item { min-height: 44px; }
+  /* Sidebar drawer sized well for phones */
+  .sidebar { width: min(82vw, 320px); }
+  /* Content — tighter but breathable */
+  .content { padding: 14px; }
+  .card { padding: 14px; }
+  .stat-card { padding: 14px; }
+  .stat-value { font-size: 20px; }
+  .stat-label { font-size: 11px; }
+  .page-header h1 { font-size: 22px; }
+  .page-header p { font-size: 12px; }
+  /* Page header action buttons: wrap to next row, take useful width */
+  .page-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .page-header > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* Toolbars, filter rows: allow wrapping */
+  .crm-toolbar { flex-wrap: wrap; gap: 8px; }
+  .crm-search { flex: 1 1 100%; }
+  .crm-toolbar select, .crm-toolbar > div { flex: 1 1 auto; min-width: 130px; }
+  /* Tables: keep horizontal scroll, add a subtle right shadow to hint scroll */
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  table { font-size: 12px; min-width: 100%; }
+  td, th { padding: 8px 10px; white-space: nowrap; }
+  /* Modals: slide up from bottom, full-width, sticky header + footer */
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal {
+    width: 100vw; max-width: 100vw;
+    max-height: 92dvh; max-height: 92vh;
+    border-radius: 16px 16px 0 0;
+    margin: 0;
+    display: flex; flex-direction: column;
+  }
+  .modal-header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--white);
+    padding-top: max(16px, env(safe-area-inset-top, 16px));
+  }
+  .modal-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .modal-footer {
+    position: sticky; bottom: 0; z-index: 5;
+    background: var(--white);
+    border-top: 1px solid var(--gray-100);
+    padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
+    flex-wrap: wrap; gap: 8px;
+  }
+  .modal-footer .btn { flex: 1 1 auto; min-height: 44px; }
+  .form-row { grid-template-columns: 1fr !important; gap: 10px; }
+  /* Global search overlay — full width on mobile */
+  .search-box-wrap { margin-top: 40px; padding: 0 12px; }
+  /* Inbox: stack list + reader; reader is hidden until a message is tapped */
+  .inbox-layout {
+    display: block; grid-template-columns: none;
+    height: auto; min-height: calc(100dvh - 200px); min-height: calc(100vh - 200px);
+    position: relative;
+  }
+  .inbox-layout .inbox-list { display: block; }
+  .inbox-layout .inbox-pane { display: none; }
+  .inbox-layout.mobile-showing-pane .inbox-list { display: none; }
+  .inbox-layout.mobile-showing-pane .inbox-pane { display: flex; flex-direction: column; min-height: calc(100dvh - 200px); }
+  .inbox-email-header { padding: 14px 16px; }
+  .thread-msg { margin: 0 12px 8px; }
+  .thread-msg-head { padding: 10px 12px; }
+  .thread-msg-body { padding: 0 12px 12px; }
+  /* Sticky "← Back to inbox" button (JS-injected on mobile only) */
+  .mobile-inbox-back {
+    display: none;
+    position: sticky; top: 0; z-index: 6;
+    background: var(--white); border-bottom: 1px solid var(--gray-100);
+    padding: 10px 14px; width: 100%; text-align: left;
+    border: none; font-size: 13px; font-weight: 600; color: var(--blue); cursor: pointer;
+  }
+  .inbox-layout.mobile-showing-pane .mobile-inbox-back { display: block; }
+  /* Compose modal — bigger textarea */
+  #composeEmailModal .modal { height: 92dvh; height: 92vh; }
+  #compose-body { min-height: 200px !important; }
+  /* Sidebar drawer overlay: darker + tap outside closes */
+  .sidebar-overlay { background: rgba(15,17,32,.55); }
+  /* Kanban / pipeline: horizontal scroll */
+  .pipeline { flex-wrap: nowrap; }
+  /* Profile page header: allow wrap */
+  .profile-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; white-space: nowrap; }
+  /* Prevent double-zoom taps on iOS */
+  button, a, .nav-item, .inbox-item, .thread-msg-head { touch-action: manipulation; }
+}
+/* Landscape phones + small tablets: keep list beside pane if there's room */
+@media (max-width: 768px) and (orientation: landscape) and (min-width: 640px) {
+  .inbox-layout { display: grid; grid-template-columns: 260px 1fr; }
+  .inbox-layout .inbox-pane { display: flex; flex-direction: column; }
+  .inbox-layout.mobile-showing-pane .inbox-list { display: block; }
+  .mobile-inbox-back { display: none !important; }
+}
 
 /* ── GLOBAL SEARCH OVERLAY ── */
 .search-overlay{display:none;position:fixed;inset:0;z-index:5000;background:rgba(15,17,32,.5);backdrop-filter:blur(4px);}
@@ -14531,6 +14639,23 @@ function filterInboxSearch(q) {
   _renderInboxList(listElId, _currentInbox.messages, _currentInbox.mailbox, !!_currentInbox.isCreatorTab, _currentInbox.creatorId || null, _currentInbox.folder);
 }
 
+/** On mobile, hide the list and show the reader pane. No-op on desktop. */
+function _enterInboxReaderMobile(pane) {
+  if (!pane) return;
+  const layout = pane.closest('.inbox-layout');
+  if (!layout) return;
+  layout.classList.add('mobile-showing-pane');
+  // Inject the back button once, as a first child of the layout (survives pane innerHTML rewrites)
+  if (!layout.querySelector(':scope > .mobile-inbox-back')) {
+    const back = document.createElement('button');
+    back.className = 'mobile-inbox-back';
+    back.type = 'button';
+    back.innerHTML = '← Back to inbox';
+    back.onclick = () => layout.classList.remove('mobile-showing-pane');
+    layout.insertBefore(back, layout.firstChild);
+  }
+}
+
 function clearInboxSearch() {
   const input = document.getElementById('inboxSearchInput');
   if (input) input.value = '';
@@ -14758,6 +14883,7 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
   const pane = document.getElementById(paneId);
   if (!pane) return;
   pane.innerHTML = '<div style="padding:32px;text-align:center;color:var(--gray-400)">Loading message…</div>';
+  _enterInboxReaderMobile(pane);
 
   // Highlight in the list
   const listId = isCreatorTab ? `ce-list-${creatorId}` : 'inboxList';
@@ -14820,6 +14946,8 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
   const threads = _groupIntoThreads(_currentInbox.messages);
   const thread = threads.find(t => t.threadKey === threadKey);
   if (!thread) { pane.innerHTML = '<div style="padding:32px;text-align:center;color:var(--red)">Thread not found</div>'; return; }
+
+  _enterInboxReaderMobile(pane);
 
   // Mark active in list
   const listId = isCreatorTab ? `ce-list-${creatorId}` : 'inboxList';
