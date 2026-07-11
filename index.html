@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-g (mobile / iOS polish pass) -->
+<!-- blustu panel build 2026-07-10-h (desktop inbox layout fix) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -434,6 +434,10 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
   .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199;}
   .sidebar-overlay.show{display:block;}
 }
+/* Back-to-inbox button lives inside .inbox-layout — must be hidden by default so it
+   doesn't take a grid cell on desktop. Mobile media query overrides display below. */
+.mobile-inbox-back { display: none; }
+
 @media(min-width:769px){.hamburger{display:none;}.sidebar-overlay{display:none!important;}}
 
 /* ═════════ IOS / MOBILE POLISH ═════════ */
