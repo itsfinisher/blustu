@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-j (thread grouping: subject fallback requires shared participant) -->
+<!-- blustu panel build 2026-07-10-k (gmail-style quoted reply) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -14972,7 +14972,7 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
       </div>
       <div class="inbox-email-body" id="email-body-container">${bodyHtml}</div>
       <div class="inbox-email-actions">
-        <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
+        <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), bodyHtml: m.bodyHtml || "", date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
         <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
         <button class="btn btn-ghost btn-sm" onclick="debugMessageBody(${uid})" style="margin-left:auto;font-size:11px">🐛 Debug</button>
         <button class="btn btn-danger btn-sm" onclick="deleteEmailMessage(${uid}, ${isCreatorTab}, ${creatorId || 'null'})">Delete</button>
@@ -15061,7 +15061,7 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
       <div class="thread-msg-body" id="thread-body-${m.uid}" style="display:${isExpanded ? 'block' : 'none'}">
         <div class="inbox-email-body" style="border-top:1px solid var(--gray-100);padding-top:12px;margin-top:8px">${bodyHtml}</div>
         <div class="inbox-email-actions" style="border-top:1px solid var(--gray-100);margin-top:12px;padding-top:12px">
-          <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
+          <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), bodyHtml: m.bodyHtml || "", date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
           <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${m.uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
           <button class="btn btn-danger btn-sm" onclick="deleteEmailMessage(${m.uid}, ${isCreatorTab}, ${creatorId || 'null'})">Delete</button>
         </div>
@@ -15159,7 +15159,15 @@ async function openCompose(presetMailbox) {
   const sigBox = document.getElementById('compose-use-signature');
   if (sigBox) sigBox.checked = false;
   const bodyEl = document.getElementById('compose-body');
-  if (bodyEl) delete bodyEl.dataset.creatorName;
+  if (bodyEl) {
+    delete bodyEl.dataset.creatorName;
+    // Fresh compose — no quote from a previous message
+    delete bodyEl.dataset.replyQuoteHtml;
+    delete bodyEl.dataset.replyQuoteText;
+    delete bodyEl.dataset.replyQuoteFrom;
+    delete bodyEl.dataset.replyQuoteDate;
+    bodyEl.placeholder = 'Type your message...';
+  }
   updateFromPreview();
   openModal('composeEmailModal');
   setTimeout(() => document.getElementById('compose-to')?.focus(), 100);
@@ -15184,11 +15192,19 @@ async function openReply(meta) {
   const refs = (meta.references || '') + (meta.messageId ? ' ' + meta.messageId : '');
   document.getElementById('compose-references').value = refs.trim();
 
-  // Build quoted reply body (plain text). Signature is applied as HTML at send time.
-  const quoteDate = meta.date ? new Date(meta.date).toLocaleString('en-GB') : '';
-  const quoted = (meta.bodyText || '').split('\n').map(l => '> ' + l).join('\n');
+  // The compose textarea holds ONLY the user's new reply (empty by default —
+  // like Gmail/Outlook). The previous message is stashed on the textarea as data
+  // attributes; _buildEmailPayload uses them at send time to append a nicely-
+  // formatted quoted block (with the ORIGINAL HTML preserved, not > > > text).
+  const bodyEl = document.getElementById('compose-body');
+  bodyEl.value = '';
+  bodyEl.dataset.replyQuoteHtml = meta.bodyHtml || '';
+  bodyEl.dataset.replyQuoteText = meta.bodyText || '';
+  bodyEl.dataset.replyQuoteFrom = meta.from || '';
+  bodyEl.dataset.replyQuoteDate = meta.date || '';
+  bodyEl.placeholder = 'Type your reply here… (the original message will be quoted below automatically)';
+
   const sig = _mySignature();
-  document.getElementById('compose-body').value = `\n\nOn ${quoteDate}, ${meta.from} wrote:\n${quoted}`;
   await loadEmailTemplates();
   _populateComposeTemplates('');
   const sigBox = document.getElementById('compose-use-signature');
@@ -15258,9 +15274,12 @@ ${dbg.responseTextSnippet}
  * Build the HTML + plain-text versions of an outgoing email.
  * - The typed message is plain text → converted to HTML with <br> for line breaks.
  * - The signature is HTML (or plain) → appended after a spacer.
- * - textBody is a plain-text fallback (message + signature with tags stripped).
+ * - When `quote` is present (reply), a Gmail/Outlook-style quoted block is
+ *   appended after the signature, using the original message's HTML if we have
+ *   it (so formatting, links, and tables render correctly).
+ * - textBody is a plain-text fallback (message + signature + text-quoted block).
  */
-function _buildEmailPayload(message, sigHtml) {
+function _buildEmailPayload(message, sigHtml, quote) {
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const msgHtml = esc(message).replace(/\n/g, '<br>');
 
@@ -15271,10 +15290,31 @@ function _buildEmailPayload(message, sigHtml) {
     const looksHtml = /<[a-z][\s\S]*>/i.test(sigHtml);
     const sigBlock = looksHtml ? sigHtml : esc(sigHtml).replace(/\n/g, '<br>');
     html += `<br><br><div class="blustu-signature">${sigBlock}</div>`;
-    // Plain-text fallback: strip tags from the signature
     const sigText = looksHtml ? stripHtmlForQuote(sigHtml) : sigHtml;
     textBody += '\n\n' + sigText;
   }
+
+  // Gmail/Outlook-style reply quote
+  if (quote && (quote.html || quote.text)) {
+    const dateStr = quote.date ? new Date(quote.date).toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+    const fromLine = `On ${dateStr}${dateStr && quote.from ? ', ' : ''}${esc(quote.from || '')} wrote:`;
+    // Use the original HTML if we have it (preserves formatting, signatures, tables).
+    // Otherwise fall back to escaping the plain text with <br>s.
+    const quoteBody = quote.html && quote.html.trim()
+      ? _sanitiseEmailHtml(quote.html)
+      : esc(quote.text || '').replace(/\n/g, '<br>');
+    html +=
+      '<br><br>' +
+      `<div style="color:#5f6368;font-size:13px;margin-top:12px">${fromLine}</div>` +
+      '<blockquote style="margin:8px 0 0 0;padding:0 0 0 12px;border-left:2px solid #dadce0;color:#555">' +
+      quoteBody +
+      '</blockquote>';
+    // Plain-text fallback keeps the > > > lines for text-only clients
+    const quoteText = quote.text || (quote.html ? stripHtmlForQuote(quote.html) : '');
+    textBody += '\n\n' + fromLine.replace(/<[^>]+>/g, '') + '\n' +
+      quoteText.split('\n').map(l => '> ' + l).join('\n');
+  }
+
   html += '</div>';
   return { html, textBody };
 }
@@ -15301,9 +15341,19 @@ async function sendComposedEmail() {
 
   const fromName = friendlyFromName(mailbox);
 
+  // Read the stashed reply-quote from the textarea (set by openReply). Empty when composing a fresh email.
+  const bodyEl = document.getElementById('compose-body');
+  const quote = {
+    html: bodyEl.dataset.replyQuoteHtml || '',
+    text: bodyEl.dataset.replyQuoteText || '',
+    from: bodyEl.dataset.replyQuoteFrom || '',
+    date: bodyEl.dataset.replyQuoteDate || '',
+  };
+  const hasQuote = !!(quote.html || quote.text);
+
   // Build the HTML + plain-text versions of the email.
   const sigHtml = useSignature ? _mySignature() : '';
-  const { html, textBody } = _buildEmailPayload(body, sigHtml);
+  const { html, textBody } = _buildEmailPayload(body, sigHtml, hasQuote ? quote : null);
 
   const btn = document.getElementById('composeSendBtn');
   btn.disabled = true; btn.textContent = 'Sending…';
@@ -15311,6 +15361,11 @@ async function sendComposedEmail() {
   try {
     const res = await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body: textBody, html, inReplyTo, references, fromName });
     btn.disabled = false; btn.textContent = 'Send →';
+    // Clear any stashed reply-quote data now that this send is done
+    delete bodyEl.dataset.replyQuoteHtml;
+    delete bodyEl.dataset.replyQuoteText;
+    delete bodyEl.dataset.replyQuoteFrom;
+    delete bodyEl.dataset.replyQuoteDate;
     closeModal('composeEmailModal');
     if (res.savedToSent) {
       showToast('✅ Email sent + saved to Sent (' + res.sentFolder + ')');
