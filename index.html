@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-i (desktop inbox JS-guard) -->
+<!-- blustu panel build 2026-07-10-j (thread grouping: subject fallback requires shared participant) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -14804,18 +14804,57 @@ function _groupIntoThreads(messages) {
     if (m.inReplyTo) union(myId, m.inReplyTo.trim());
   });
 
-  // Second pass: union messages with same normalised subject when both have no threading info
-  // (catches threads where headers were stripped). Use a subject → first-msg map.
-  const subjectAnchor = {};
+  // Helper — extract all email addresses from from/to/cc as a normalised Set,
+  // EXCLUDING the mailbox owner (so we compare external participants only).
+  // Two messages are in the "same conversation" if they share at least one
+  // non-self participant.
+  const selfAddr = (_currentInbox && _currentInbox.mailbox)
+    ? (_currentInbox.mailbox + '@blustu.agency').toLowerCase()
+    : '';
+  const _extractAddrs = (str) => {
+    if (!str) return [];
+    return (str.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || [])
+      .map(s => s.toLowerCase())
+      .filter(s => s !== selfAddr);
+  };
+  const participantsOf = messages.map(m => {
+    const set = new Set([
+      ..._extractAddrs(m.from),
+      ..._extractAddrs(m.to),
+      ..._extractAddrs(m.cc),
+    ]);
+    return set;
+  });
+
+  // Second pass: fallback threading by subject — ONLY when messages share at least
+  // one participant email. This catches replies where headers were stripped, but
+  // prevents unrelated outreach emails with the same subject (e.g. "BluStu — Creator
+  // Representation Opportunity" sent to 100 different people) from collapsing into
+  // one giant thread.
+  const bySubject = {};   // subj -> array of message indices
   messages.forEach((m, i) => {
     const subj = _normaliseSubject(m.subject || '').toLowerCase();
     if (!subj) return;
-    if (!subjectAnchor[subj]) {
-      subjectAnchor[subj] = ids[i];
-    } else {
-      union(subjectAnchor[subj], ids[i]);
-    }
+    if (!bySubject[subj]) bySubject[subj] = [];
+    bySubject[subj].push(i);
   });
+  for (const subj of Object.keys(bySubject)) {
+    const indices = bySubject[subj];
+    if (indices.length < 2) continue;
+    // Try to union each pair only if they share a participant
+    for (let a = 0; a < indices.length; a++) {
+      for (let b = a + 1; b < indices.length; b++) {
+        const ia = indices[a], ib = indices[b];
+        // Skip if a real threading link already puts them together
+        if (find(ids[ia]) === find(ids[ib])) continue;
+        // Check participant overlap
+        const pa = participantsOf[ia], pb = participantsOf[ib];
+        let overlap = false;
+        for (const addr of pa) { if (pb.has(addr)) { overlap = true; break; } }
+        if (overlap) union(ids[ia], ids[ib]);
+      }
+    }
+  }
 
   // Group messages by their root
   const groups = {};
