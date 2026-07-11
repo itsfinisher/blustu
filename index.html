@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-h (desktop inbox layout fix) -->
+<!-- blustu panel build 2026-07-10-i (desktop inbox JS-guard) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -14648,6 +14648,13 @@ function _enterInboxReaderMobile(pane) {
   if (!pane) return;
   const layout = pane.closest('.inbox-layout');
   if (!layout) return;
+  // Desktop: proactively clean up any leftover back button from a previous mobile render.
+  if (window.innerWidth > 768) {
+    layout.classList.remove('mobile-showing-pane');
+    const stale = layout.querySelector(':scope > .mobile-inbox-back');
+    if (stale) stale.remove();
+    return;
+  }
   layout.classList.add('mobile-showing-pane');
   // Inject the back button once, as a first child of the layout (survives pane innerHTML rewrites)
   if (!layout.querySelector(':scope > .mobile-inbox-back')) {
