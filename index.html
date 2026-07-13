@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-j (dark mode text/bg sweep) -->
+<!-- blustu panel build 2026-07-13-k (live tiktok stats via tikhub) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2722,6 +2722,9 @@ html, body { overflow-x: hidden; }
         <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="ec-loc" placeholder="e.g. UK"></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label class="form-label">TikTok handle <span style="color:var(--gray-400);font-weight:400">(for live stats)</span></label><input class="form-input" id="ec-tiktok" placeholder="@username or username"></div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="ec-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="ec-status"><option>Active</option><option>Invited</option><option>Onboarded</option><option>Paused</option><option>Inactive</option></select></div>
       </div>
@@ -4768,6 +4771,8 @@ function openEditCreator(){
   document.getElementById('ec-name').value     = c.name || '';
   document.getElementById('ec-email').value    = c.email || '';
   document.getElementById('ec-loc').value      = c.location === '—' ? '' : (c.location || '');
+  const ecTt = document.getElementById('ec-tiktok');
+  if (ecTt) ecTt.value = c.tiktok_handle || '';
   _setSelectIfPresent('ec-niche',  c.niche  || 'Lifestyle');
   _setSelectIfPresent('ec-role',   c.role   || 'Creator');
   _setSelectIfPresent('ec-status', c.status || 'Active');
@@ -4835,6 +4840,7 @@ async function saveCreatorEdit(){
   const location = document.getElementById('ec-loc').value.trim() || '—';
   const role     = document.getElementById('ec-role').value;
   const status   = document.getElementById('ec-status').value;
+  const tiktokHandle = (document.getElementById('ec-tiktok')?.value || '').trim().replace(/^@/, '') || null;
 
   // Staff assignment
   const assigned_staff = {
@@ -4848,7 +4854,7 @@ async function saveCreatorEdit(){
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showErr('Email address looks invalid'); return; }
 
   // Build update — preserve all existing fields not in this form (notes, onboarding, profile_image_url, etc.)
-  const update = { ...orig, name, email, niche, location, role, status, assigned_staff };
+  const update = { ...orig, name, email, niche, location, role, status, assigned_staff, tiktok_handle: tiktokHandle };
 
   const btn = document.getElementById('ec-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -8163,6 +8169,100 @@ function exportInvoicePDF() {
 // ── PROFILE SOCIALS: Full dual-layer display ──────────────────
 // ══════════════════════════════════════════════════════════════
 
+// ── LIVE TIKTOK STATS ──
+function _fmtCompact(n) {
+  n = Number(n) || 0;
+  if (n >= 1e9) return (n/1e9).toFixed(1).replace(/\.0$/,'') + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'') + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'') + 'K';
+  return String(n);
+}
+
+function _renderTikTokStatsCard(c) {
+  const handle = c.tiktok_handle || '';
+  const canRefresh = currentUser && ['owner','admin','manager'].includes(currentUser.systemRole);
+  if (!handle) {
+    return `<div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:8px">🎵 Live TikTok Stats</div>
+      <div style="font-size:12px;color:var(--gray-400)">No TikTok handle set. Add one via <strong>✏️ Edit</strong> to pull live follower + engagement data.</div>
+    </div>`;
+  }
+  const followers = c.tiktok_followers != null ? _fmtCompact(c.tiktok_followers) : '—';
+  const eng       = c.tiktok_engagement != null ? c.tiktok_engagement + '%' : '—';
+  const views     = c.tiktok_avg_views != null ? _fmtCompact(c.tiktok_avg_views) : '—';
+  const updated   = c.tiktok_updated_at ? new Date(c.tiktok_updated_at).toLocaleString('en-GB', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'never';
+  // Engagement colour: green ≥5, blue 3-5, amber 1.5-3, red <1.5
+  let engColor = 'var(--gray-400)';
+  if (c.tiktok_engagement != null) {
+    const e = Number(c.tiktok_engagement);
+    engColor = e >= 5 ? 'var(--green)' : e >= 3 ? 'var(--blue)' : e >= 1.5 ? 'var(--amber)' : 'var(--red)';
+  }
+  return `<div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+      <div class="card-title" style="margin:0">🎵 Live TikTok Stats <a href="https://www.tiktok.com/@${encodeURIComponent(handle)}" target="_blank" style="font-size:11px;color:var(--blue);font-weight:400;margin-left:6px">@${handle}</a></div>
+      ${canRefresh ? `<button class="btn btn-ghost btn-sm" id="tt-refresh-${c.id}" onclick="refreshTikTokStats(${c.id})">↻ Refresh</button>` : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:700;font-family:'DM Serif Display',serif">${followers}</div>
+        <div style="font-size:11px;color:var(--gray-400)">Followers</div>
+      </div>
+      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:700;font-family:'DM Serif Display',serif;color:${engColor}">${eng}</div>
+        <div style="font-size:11px;color:var(--gray-400)">Engagement</div>
+      </div>
+      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:700;font-family:'DM Serif Display',serif">${views}</div>
+        <div style="font-size:11px;color:var(--gray-400)">Avg views</div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--gray-400);margin-top:8px;text-align:right">Updated: ${updated}${c.tiktok_engagement != null ? ' · engagement = (likes+comments+shares)/views' : ''}</div>
+  </div>`;
+}
+
+async function refreshTikTokStats(creatorId) {
+  const c = creators.find(x => Number(x.id) === Number(creatorId));
+  if (!c || !c.tiktok_handle) { showToast('No TikTok handle set'); return; }
+  const token = _emailAuthToken();
+  if (!token) { showToast('Not logged in'); return; }
+  const btn = document.getElementById('tt-refresh-' + creatorId);
+  if (btn) { btn.disabled = true; btn.textContent = 'Fetching…'; }
+  try {
+    const res = await fetch(EMAIL_API + '/tiktok/stats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Staff-Token': token },
+      body: JSON.stringify({ handle: c.tiktok_handle }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
+    // Persist to creator
+    const patch = {
+      tiktok_followers:  data.follower_count ?? null,
+      tiktok_engagement: data.engagement_rate ?? null,
+      tiktok_avg_views:  data.avg_views ?? null,
+      tiktok_updated_at: data.fetched_at || new Date().toISOString(),
+    };
+    const r = await DB._req('PATCH', 'creators', patch, '?id=eq.' + creatorId);
+    if (r === null) { showToast('⚠ Fetched but failed to save — run tiktok-stats.sql?'); }
+    Object.assign(c, patch);
+    Storage.set('creators', creators);
+    // Log history (fire and forget)
+    DB._req('POST', 'creator_stats_history', [{
+      creator_id: creatorId, tiktok_handle: c.tiktok_handle,
+      followers: data.follower_count, engagement: data.engagement_rate,
+      avg_views: data.avg_views, captured_at: data.fetched_at,
+    }], '').catch(()=>{});
+    renderProfileSocials(c);
+    const msg = data.sample_count
+      ? `✅ ${_fmtCompact(data.follower_count)} followers · ${data.engagement_rate}% engagement (${data.sample_count} videos)`
+      : `✅ ${_fmtCompact(data.follower_count)} followers (no recent videos for engagement)`;
+    showToast(msg);
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+    showToast('❌ ' + e.message);
+  }
+}
+
 function renderProfileSocials(c) {
   const el = document.getElementById('profile-socials-body');
   if (!el) return;
@@ -8205,6 +8305,8 @@ function renderProfileSocials(c) {
   const aoUsage   = ao.usage  || null;
 
   el.innerHTML = `
+    <!-- Live TikTok stats -->
+    ${_renderTikTokStatsCard(c)}
     <!-- Socials -->
     <div class="card" style="margin-bottom:14px">
       <div class="card-title" style="margin-bottom:12px">Social Platforms</div>
