@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-k (gmail-style quoted reply) -->
+<!-- blustu panel build 2026-07-10-l (email attachments — panel side, worker patch required) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3022,12 +3022,21 @@ html, body { overflow-x: hidden; }
         </div>
         <textarea class="form-textarea" id="compose-body" placeholder="Type your message..." style="min-height:240px;font-family:'DM Sans',sans-serif"></textarea>
       </div>
+      <!-- Attachments -->
+      <div class="form-group">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
+          <label class="form-label" style="margin:0;font-size:12px">📎 Attachments <span id="compose-att-count" style="color:var(--gray-400);font-weight:400"></span></label>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('compose-att-input').click()" style="font-size:11px">＋ Attach files</button>
+        </div>
+        <input type="file" id="compose-att-input" multiple style="display:none" onchange="onComposeAttachmentPicked(event)">
+        <div id="compose-att-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
       <!-- Hidden fields for reply threading -->
       <input type="hidden" id="compose-in-reply-to">
       <input type="hidden" id="compose-references">
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('composeEmailModal')">Cancel</button>
+      <button class="btn btn-ghost" onclick="_resetComposeAttachments();closeModal('composeEmailModal')">Cancel</button>
       <button class="btn btn-primary" id="composeSendBtn" onclick="sendComposedEmail()">Send →</button>
     </div>
   </div>
@@ -14971,6 +14980,7 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
         </div>
       </div>
       <div class="inbox-email-body" id="email-body-container">${bodyHtml}</div>
+      ${_renderAttachmentsBlock(m, _currentInbox.folder)}
       <div class="inbox-email-actions">
         <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), bodyHtml: m.bodyHtml || "", date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
         <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
@@ -15060,6 +15070,7 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
       </div>
       <div class="thread-msg-body" id="thread-body-${m.uid}" style="display:${isExpanded ? 'block' : 'none'}">
         <div class="inbox-email-body" style="border-top:1px solid var(--gray-100);padding-top:12px;margin-top:8px">${bodyHtml}</div>
+        ${_renderAttachmentsBlock(m, m._folder || _currentInbox.folder)}
         <div class="inbox-email-actions" style="border-top:1px solid var(--gray-100);margin-top:12px;padding-top:12px">
           <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), bodyHtml: m.bodyHtml || "", date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
           <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${m.uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
@@ -15086,6 +15097,82 @@ function toggleThreadMsg(uid) {
   const willOpen = el.style.display === 'none';
   el.style.display = willOpen ? 'block' : 'none';
   parent.classList.toggle('expanded', willOpen);
+}
+
+/** Render a downloadable attachments block for a message. Returns '' when the
+ *  message has no attachments. Requires the Worker to expose /attachment. */
+function _renderAttachmentsBlock(m, folder) {
+  const atts = Array.isArray(m.attachments) ? m.attachments.filter(a => !a.inline) : [];
+  if (!atts.length) return '';
+  const items = atts.map((a, i) => {
+    const icon = _iconForMime(a.mimetype || '', a.filename || '');
+    const size = _fmtFileSize(a.size || 0);
+    const partId = encodeURIComponent(a.partId || '');
+    const filename = (a.filename || 'attachment').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--gray-100);border-radius:8px;background:var(--gray-50);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background='var(--gray-50)'" onclick="downloadAttachment('${m.uid}','${folder}','${partId}','${filename}')">
+      <span style="font-size:24px">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;color:var(--gray-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${filename}</div>
+        <div style="font-size:11px;color:var(--gray-500)">${size} · Click to download</div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--gray-400)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </div>`;
+  }).join('');
+  return `<div style="border-top:1px solid var(--gray-100);margin-top:12px;padding-top:12px">
+    <div style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">📎 ${atts.length} attachment${atts.length === 1 ? '' : 's'}</div>
+    <div style="display:flex;flex-direction:column;gap:6px">${items}</div>
+  </div>`;
+}
+
+function _iconForMime(mime, filename) {
+  const mm = (mime || '').toLowerCase();
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  if (mm.startsWith('image/')) return '🖼️';
+  if (mm.startsWith('video/')) return '🎬';
+  if (mm.startsWith('audio/')) return '🎵';
+  if (mm.includes('pdf') || ext === 'pdf') return '📄';
+  if (mm.includes('word') || ['doc','docx'].includes(ext)) return '📝';
+  if (mm.includes('excel') || mm.includes('spreadsheet') || ['xls','xlsx','csv'].includes(ext)) return '📊';
+  if (mm.includes('powerpoint') || mm.includes('presentation') || ['ppt','pptx'].includes(ext)) return '📽️';
+  if (mm.includes('zip') || mm.includes('compressed') || ['zip','rar','7z','tar','gz'].includes(ext)) return '🗜️';
+  return '📎';
+}
+
+function _fmtFileSize(bytes) {
+  bytes = Number(bytes) || 0;
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(1) + ' MB';
+  return (bytes/1024/1024/1024).toFixed(2) + ' GB';
+}
+
+/** Download an attachment via the Worker. Uses fetch + blob so the actual file
+ *  bytes flow back to the browser, then triggers a save-as. */
+async function downloadAttachment(uid, folder, partId, filename) {
+  if (!_currentInbox?.mailbox) { showToast('No mailbox context'); return; }
+  const token = _emailAuthToken();
+  if (!token) { showToast('Not logged in to email'); return; }
+  const q = new URLSearchParams({
+    mailbox: _currentInbox.mailbox,
+    uid: String(uid),
+    folder: folder || _currentInbox.folder || 'INBOX',
+    partId: decodeURIComponent(partId),
+  }).toString();
+  const url = EMAIL_API + '/attachment?' + q;
+  showToast('⬇ Downloading ' + filename + '…');
+  try {
+    const res = await fetch(url, { headers: { 'X-Staff-Token': token } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch(e) {
+    showToast('❌ Download failed: ' + e.message);
+  }
 }
 
 // Very light HTML sanitiser — strips scripts, iframes, on* attrs, javascript: urls.
@@ -15134,6 +15221,84 @@ async function deleteEmailMessage(uid, isCreatorTab, creatorId) {
 }
 
 // ─── COMPOSE / REPLY ──────────────────────────────────────────────────
+// ── COMPOSE ATTACHMENTS ────
+// Each attachment: { filename, mimetype, size, data (base64), _id }
+let _composeAttachments = [];
+const COMPOSE_ATTACH_LIMIT_BYTES = 20 * 1024 * 1024; // 20 MB total
+
+function _resetComposeAttachments() {
+  _composeAttachments = [];
+  _renderComposeAttachments();
+  const inp = document.getElementById('compose-att-input');
+  if (inp) inp.value = '';
+}
+
+function _renderComposeAttachments() {
+  const wrap = document.getElementById('compose-att-list');
+  const count = document.getElementById('compose-att-count');
+  if (!wrap) return;
+  if (!_composeAttachments.length) {
+    wrap.innerHTML = '';
+    if (count) count.textContent = '';
+    return;
+  }
+  const total = _composeAttachments.reduce((s, a) => s + a.size, 0);
+  if (count) count.textContent = `(${_composeAttachments.length}, ${_fmtFileSize(total)} total)`;
+  wrap.innerHTML = _composeAttachments.map(a => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--gray-100);border-radius:6px;background:var(--gray-50)">
+      <span style="font-size:18px">${_iconForMime(a.mimetype, a.filename)}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(a.filename||'').replace(/</g,'&lt;')}</div>
+        <div style="font-size:10px;color:var(--gray-500)">${_fmtFileSize(a.size)} · ${a.mimetype || 'application/octet-stream'}</div>
+      </div>
+      <button type="button" onclick="removeComposeAttachment('${a._id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 6px" title="Remove">✕</button>
+    </div>
+  `).join('');
+}
+
+async function onComposeAttachmentPicked(evt) {
+  const files = Array.from(evt.target.files || []);
+  if (!files.length) return;
+  for (const f of files) {
+    const currentTotal = _composeAttachments.reduce((s, a) => s + a.size, 0);
+    if (currentTotal + f.size > COMPOSE_ATTACH_LIMIT_BYTES) {
+      showToast(`⚠ ${f.name} skipped — would exceed 20 MB total attachment limit`);
+      continue;
+    }
+    try {
+      const data = await _fileToBase64(f);
+      _composeAttachments.push({
+        _id: 'att_' + Math.random().toString(36).slice(2, 9),
+        filename: f.name,
+        mimetype: f.type || 'application/octet-stream',
+        size: f.size,
+        data,
+      });
+    } catch(e) { showToast('❌ Failed to attach ' + f.name); }
+  }
+  _renderComposeAttachments();
+  evt.target.value = '';   // let the same file be re-picked later
+}
+
+function removeComposeAttachment(id) {
+  _composeAttachments = _composeAttachments.filter(a => a._id !== id);
+  _renderComposeAttachments();
+}
+
+function _fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = String(r.result || '');
+      // strip the "data:<mime>;base64," prefix
+      const idx = s.indexOf(',');
+      resolve(idx >= 0 ? s.slice(idx + 1) : s);
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
 async function openCompose(presetMailbox) {
   const accounts = await loadEmailAccounts();
   const sel = document.getElementById('compose-from');
@@ -15168,6 +15333,7 @@ async function openCompose(presetMailbox) {
     delete bodyEl.dataset.replyQuoteDate;
     bodyEl.placeholder = 'Type your message...';
   }
+  _resetComposeAttachments();
   updateFromPreview();
   openModal('composeEmailModal');
   setTimeout(() => document.getElementById('compose-to')?.focus(), 100);
@@ -15203,6 +15369,7 @@ async function openReply(meta) {
   bodyEl.dataset.replyQuoteFrom = meta.from || '';
   bodyEl.dataset.replyQuoteDate = meta.date || '';
   bodyEl.placeholder = 'Type your reply here… (the original message will be quoted below automatically)';
+  _resetComposeAttachments();
 
   const sig = _mySignature();
   await loadEmailTemplates();
@@ -15359,13 +15526,17 @@ async function sendComposedEmail() {
   btn.disabled = true; btn.textContent = 'Sending…';
 
   try {
-    const res = await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body: textBody, html, inReplyTo, references, fromName });
+    const attachments = _composeAttachments.map(a => ({
+      filename: a.filename, mimetype: a.mimetype, size: a.size, data: a.data,
+    }));
+    const res = await emailApi('/send', { mailbox, to, cc: cc || undefined, subject, body: textBody, html, inReplyTo, references, fromName, attachments });
     btn.disabled = false; btn.textContent = 'Send →';
     // Clear any stashed reply-quote data now that this send is done
     delete bodyEl.dataset.replyQuoteHtml;
     delete bodyEl.dataset.replyQuoteText;
     delete bodyEl.dataset.replyQuoteFrom;
     delete bodyEl.dataset.replyQuoteDate;
+    _resetComposeAttachments();
     closeModal('composeEmailModal');
     if (res.savedToSent) {
       showToast('✅ Email sent + saved to Sent (' + res.sentFolder + ')');
