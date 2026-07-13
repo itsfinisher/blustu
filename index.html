@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-c (profile save resilient to missing updated_at) -->
+<!-- blustu panel build 2026-07-13-d (snipe email template manager) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2257,6 +2257,7 @@ html, body { overflow-x: hidden; }
           <p>Scouting tracker for new influencers. Your snipes show by default — toggle to see the whole team's.</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="openTemplateManager()">✉️ Email Templates</button>
           <button class="btn btn-ghost btn-sm" onclick="openSnipeImport()">⬆ Import</button>
           <button class="btn btn-ghost btn-sm" onclick="exportSnipesCSV()">⬇ Export CSV</button>
         </div>
@@ -2333,6 +2334,8 @@ html, body { overflow-x: hidden; }
             <option value="food">Food</option>
             <option value="comedy">Comedy</option>
             <option value="gaming">Gaming</option>
+            <option value="tech">Tech</option>
+            <option value="travel">Travel</option>
           </select>
           <button class="btn btn-ghost btn-sm" onclick="quickAddSnipe()" style="white-space:nowrap">+ Add</button>
           <button class="btn btn-primary btn-sm" onclick="quickAddSnipeAndEmail()" style="white-space:nowrap" title="Add snipe then open a pre-filled outreach email">+ Snipe & Email ✉️</button>
@@ -3110,6 +3113,38 @@ html, body { overflow-x: hidden; }
 
 <!-- ══ INVOICE DETAILS MODAL ══ -->
 <!-- ══ ARCHIVE CREATOR MODAL ══ -->
+<!-- ══ EMAIL TEMPLATE MANAGER ══ -->
+<div class="modal-overlay" id="templateManagerModal">
+  <div class="modal" style="max-width:920px">
+    <div class="modal-header">
+      <div class="modal-title">✉️ Snipe Email Templates</div>
+      <button class="modal-close" onclick="closeModal('templateManagerModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--blue-light);color:var(--blue);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px">
+        ℹ️ These are the outreach templates used by <strong>Snipe & Email</strong>. Each snipe's <strong>niche</strong> picks the matching template automatically. Use placeholders below and they'll be filled in when you send.
+      </div>
+      <!-- Placeholder reference -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--gray-600);align-self:center">Placeholders:</div>
+        <code onclick="_copyPlaceholder('{creator_name}')" style="cursor:pointer;background:var(--gray-50);border:1px solid var(--gray-100);padding:3px 8px;border-radius:6px;font-size:12px" title="Click to copy">{creator_name}</code>
+        <code onclick="_copyPlaceholder('{your_name}')" style="cursor:pointer;background:var(--gray-50);border:1px solid var(--gray-100);padding:3px 8px;border-radius:6px;font-size:12px" title="Click to copy">{your_name}</code>
+        <div style="font-size:11px;color:var(--gray-400);align-self:center">— click to copy, then paste into a template body</div>
+      </div>
+      <div id="template-error" style="display:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px;font-weight:500"></div>
+
+      <!-- Template list -->
+      <div id="template-list" style="display:flex;flex-direction:column;gap:10px"></div>
+
+      <button class="btn btn-ghost btn-sm" onclick="addTemplateRow()" style="margin-top:14px">＋ Add new template</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('templateManagerModal')">Close</button>
+      <button class="btn btn-primary" id="template-save-btn" onclick="saveAllTemplates()">💾 Save all templates</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="archiveCreatorModal">
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
@@ -12823,6 +12858,155 @@ function _populateComposeTemplates(creatorName) {
   sel.innerHTML = '<option value="">Insert template…</option>' +
     emailTemplates.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
   if (creatorName) sel.dataset.creatorName = creatorName;
+}
+
+// ══ TEMPLATE MANAGER ══
+// Niches available for templates — must match the qs-niche dropdown options.
+const TEMPLATE_NICHES = ['general','lifestyle','beauty','fashion','fitness','food','comedy','gaming','tech','travel'];
+
+// Working copy while the modal is open. Committed to DB on Save.
+let _templateDraft = [];
+
+async function openTemplateManager() {
+  document.getElementById('template-error').style.display = 'none';
+  const listEl = document.getElementById('template-list');
+  listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400)">Loading templates…</div>';
+  openModal('templateManagerModal');
+  await loadEmailTemplates();
+  // Clone into a working draft (so cancel = no change)
+  _templateDraft = (emailTemplates || []).map(t => ({
+    id: t.id,
+    label: t.label || '',
+    niche: t.niche || 'general',
+    body: t.body || '',
+    sort_order: t.sort_order ?? 0,
+    _isNew: false,
+  }));
+  _renderTemplateList();
+}
+
+function _renderTemplateList() {
+  const listEl = document.getElementById('template-list');
+  if (!listEl) return;
+  const visible = _templateDraft.map((t, i) => ({ t, i })).filter(x => !x.t._delete);
+  if (!visible.length) {
+    listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">No templates yet. Click "＋ Add new template" to create one.</div>';
+    return;
+  }
+  listEl.innerHTML = visible.map(({ t, i }) => {
+    const nicheOpts = TEMPLATE_NICHES.map(n =>
+      `<option value="${n}"${t.niche === n ? ' selected' : ''}>${n.charAt(0).toUpperCase() + n.slice(1)}</option>`
+    ).join('');
+    return `
+    <div style="border:1px solid var(--gray-100);border-radius:10px;padding:14px;background:var(--gray-50)" data-idx="${i}">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <label style="font-size:11px;color:var(--gray-500);font-weight:600;display:block;margin-bottom:3px">Template name</label>
+          <input class="form-input" value="${(t.label||'').replace(/"/g,'&quot;')}" oninput="_updateTemplateField(${i},'label',this.value)" placeholder="e.g. Beauty creators" style="font-size:13px">
+        </div>
+        <div style="width:150px">
+          <label style="font-size:11px;color:var(--gray-500);font-weight:600;display:block;margin-bottom:3px">Niche (auto-match)</label>
+          <select class="form-select" onchange="_updateTemplateField(${i},'niche',this.value)" style="font-size:13px">${nicheOpts}</select>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="removeTemplateRow(${i})" style="align-self:flex-end" title="Delete this template">🗑</button>
+      </div>
+      <label style="font-size:11px;color:var(--gray-500);font-weight:600;display:block;margin-bottom:3px">Email body</label>
+      <textarea class="form-textarea" oninput="_updateTemplateField(${i},'body',this.value)" rows="7" placeholder="Hi {creator_name},&#10;&#10;My name is {your_name}..." style="font-family:'DM Sans',sans-serif;font-size:13px;width:100%">${(t.body||'').replace(/</g,'&lt;')}</textarea>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:4px">Preview: ${_templatePreview(t.body)}</div>
+    </div>`;
+  }).join('');
+}
+
+function _templatePreview(body) {
+  const filled = _fillTemplate(body || '', 'Alex');
+  return (filled.slice(0, 90).replace(/</g,'&lt;').replace(/\n/g,' ') + (filled.length > 90 ? '…' : '')) || '<em>empty</em>';
+}
+
+function _updateTemplateField(idx, field, value) {
+  if (!_templateDraft[idx]) return;
+  _templateDraft[idx][field] = value;
+  // Live-update just the preview line for the body, not a full re-render (keeps focus)
+  if (field === 'body') {
+    const row = document.querySelector(`#template-list [data-idx="${idx}"]`);
+    const prev = row?.querySelector('div[style*="margin-top:4px"]');
+    if (prev) prev.innerHTML = 'Preview: ' + _templatePreview(value);
+  }
+}
+
+function addTemplateRow() {
+  const maxSort = _templateDraft.reduce((m, t) => Math.max(m, t.sort_order || 0), 0);
+  _templateDraft.push({
+    id: null, label: '', niche: 'general', body: 'Hi {creator_name},\n\n\n\nBest,\n{your_name}',
+    sort_order: maxSort + 1, _isNew: true,
+  });
+  _renderTemplateList();
+  // Scroll to the new row
+  const listEl = document.getElementById('template-list');
+  setTimeout(() => listEl.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+}
+
+function removeTemplateRow(idx) {
+  const t = _templateDraft[idx];
+  if (!t) return;
+  const label = t.label || 'this template';
+  if (!confirm(`Delete "${label}"? This can't be undone once you save.`)) return;
+  if (t.id && !t._isNew) {
+    // Existing DB row — flag for deletion but keep in the array so save() can DELETE it
+    t._delete = true;
+  } else {
+    // Never-saved row — just drop it
+    _templateDraft.splice(idx, 1);
+  }
+  _renderTemplateList();
+}
+
+function _copyPlaceholder(text) {
+  navigator.clipboard?.writeText(text).then(
+    () => showToast('Copied ' + text),
+    () => showToast('Copy failed — select and copy manually')
+  );
+}
+
+async function saveAllTemplates() {
+  const errEl = document.getElementById('template-error');
+  const showErr = m => { errEl.textContent = m; errEl.style.display = 'block'; };
+  errEl.style.display = 'none';
+
+  // Validate
+  const live = _templateDraft.filter(t => !t._delete);
+  for (const t of live) {
+    if (!t.label.trim()) { showErr('Every template needs a name.'); return; }
+    if (!t.body.trim())  { showErr(`"${t.label}" has an empty body.`); return; }
+  }
+
+  const btn = document.getElementById('template-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    // 1) Deletions
+    const toDelete = _templateDraft.filter(t => t._delete && t.id);
+    for (const t of toDelete) {
+      await DB._req('DELETE', 'email_templates', null, '?id=eq.' + t.id);
+    }
+    // 2) Updates (existing) + inserts (new)
+    for (let i = 0; i < live.length; i++) {
+      const t = live[i];
+      const payload = { label: t.label.trim(), niche: t.niche, body: t.body, sort_order: i };
+      if (t.id && !t._isNew) {
+        await DB._req('PATCH', 'email_templates', payload, '?id=eq.' + t.id);
+      } else {
+        await DB._req('POST', 'email_templates', [payload], '');
+      }
+    }
+    // Reload from DB
+    await loadEmailTemplates();
+    btn.disabled = false; btn.textContent = '💾 Save all templates';
+    closeModal('templateManagerModal');
+    showToast('✅ Templates saved');
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '💾 Save all templates';
+    showErr('Save failed: ' + (DB._lastError || e.message || 'unknown'));
+  }
 }
 
 /** Replace the compose body with the chosen template. Signature is applied at send time. */
