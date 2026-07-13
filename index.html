@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-i (snipe by-staff + auto follow-up 2wk + dark mode) -->
+<!-- blustu panel build 2026-07-13-j (dark mode text/bg sweep) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -340,12 +340,12 @@ tr:hover td{background:var(--gray-50);}
 .crm-search input::placeholder{color:var(--gray-400);}
 /* ── CRM VIEW TOGGLE ── */
 .crm-view-toggle{display:flex;border:1px solid var(--gray-100);border-radius:8px;overflow:hidden;flex-shrink:0;}
-.crm-view-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:white;border:none;cursor:pointer;color:var(--gray-400);transition:all .15s;}
+.crm-view-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--white);border:none;cursor:pointer;color:var(--gray-400);transition:all .15s;}
 .crm-view-btn:hover{background:var(--gray-50);color:var(--gray-600);}
 .crm-view-btn.active{background:var(--blue);color:white;}
 /* ── CRM GRID LAYOUT ── */
 .crm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;}
-.crm-gc{background:white;border:1.5px solid var(--gray-100);border-radius:14px;padding:18px 14px;cursor:pointer;transition:all .18s;text-align:center;box-shadow:var(--shadow-sm);}
+.crm-gc{background:var(--white);border:1.5px solid var(--gray-100);border-radius:14px;padding:18px 14px;cursor:pointer;transition:all .18s;text-align:center;box-shadow:var(--shadow-sm);}
 .crm-gc:hover{border-color:var(--blue);box-shadow:var(--shadow-md);transform:translateY(-2px);}
 .crm-gc-av{width:64px;height:64px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:22px;font-weight:700;color:white;overflow:hidden;flex-shrink:0;}
 .crm-gc-av img{width:100%;height:100%;object-fit:cover;}
@@ -392,7 +392,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
 .user-card-actions{display:flex;gap:8px;margin-top:14px;}
 /* ── Managers page grid ── */
 .mpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;}
-.mpl-card{background:white;border:1.5px solid var(--gray-100);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-sm);cursor:pointer;transition:all .18s;}
+.mpl-card{background:var(--white);border:1.5px solid var(--gray-100);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-sm);cursor:pointer;transition:all .18s;}
 .mpl-card:hover{border-color:var(--blue);box-shadow:var(--shadow-md);transform:translateY(-2px);}
 .mpl-card-hdr{padding:20px;display:flex;align-items:center;gap:14px;}
 .mpl-av{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:20px;font-weight:700;color:white;flex-shrink:0;overflow:hidden;}
@@ -403,7 +403,7 @@ tr:hover .crm-drag-handle{color:var(--gray-400);}
 .mpl-roster-av:first-child{margin-left:0;}
 .mpl-roster-av img{width:100%;height:100%;object-fit:cover;}
 /* ── Manager detail profile card ── */
-.mpl-profile-card{background:white;border:1px solid var(--gray-100);border-radius:18px;overflow:hidden;box-shadow:var(--shadow-sm);}
+.mpl-profile-card{background:var(--white);border:1px solid var(--gray-100);border-radius:18px;overflow:hidden;box-shadow:var(--shadow-sm);}
 .mpl-profile-hdr{background:linear-gradient(135deg,#0b1f36 0%,#1a4872 60%,#2198ED 100%);padding:28px 28px 24px;position:relative;overflow:hidden;}
 .mpl-profile-hdr::before{content:'';position:absolute;bottom:-30px;right:-30px;width:140px;height:140px;border-radius:50%;background:rgba(33,152,237,.18);pointer-events:none;}
 .mpl-profile-hdr::after{content:'';position:absolute;top:-20px;left:160px;width:90px;height:90px;border-radius:50%;background:rgba(33,152,237,.1);pointer-events:none;}
@@ -613,12 +613,12 @@ html, body { overflow-x: hidden; }
 
 /* ━━ PREMIUM PITCH DECK VIEWER ━━ */
 .pd-thumb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:20px;}
-.pd-thumb{background:white;border-radius:14px;border:1.5px solid var(--gray-100);overflow:hidden;box-shadow:var(--shadow-sm);cursor:pointer;transition:all .18s;}
+.pd-thumb{background:var(--white);border-radius:14px;border:1.5px solid var(--gray-100);overflow:hidden;box-shadow:var(--shadow-sm);cursor:pointer;transition:all .18s;}
 .pd-thumb:hover,.pd-thumb.pd-thumb-active{box-shadow:var(--shadow-md);border-color:var(--blue);transform:translateY(-2px);}
 .pd-thumb-active{border-width:2px;box-shadow:0 0 0 3px rgba(33,152,237,.15)!important;}
 .pd-thumb-hdr{background:linear-gradient(140deg,#0b1f36 0%,#1a4872 100%);padding:14px 16px;display:flex;align-items:center;gap:12px;}
 .pd-thumb-body{padding:12px 14px;}
-.pd-viewer{display:grid;grid-template-columns:280px 1fr;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(15,17,32,.10),0 2px 8px rgba(15,17,32,.06);background:white;}
+.pd-viewer{display:grid;grid-template-columns:280px 1fr;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(15,17,32,.10),0 2px 8px rgba(15,17,32,.06);background:var(--white);}
 .pd-left{background:linear-gradient(155deg,#0b1f36 0%,#123356 50%,#1a4872 100%);padding:32px 24px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;}
 .pd-left::before{content:'';position:absolute;bottom:-50px;right:-50px;width:200px;height:200px;border-radius:50%;background:rgba(33,152,237,.16);pointer-events:none;}
 .pd-left::after{content:'';position:absolute;top:-30px;left:-30px;width:120px;height:120px;border-radius:50%;background:rgba(33,152,237,.08);pointer-events:none;}
@@ -654,7 +654,7 @@ html, body { overflow-x: hidden; }
 .pd-ana-val{font-family:'DM Serif Display',serif;font-size:20px;font-weight:700;color:var(--blue);}
 .pd-ana-lbl{font-size:9px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-top:3px;}
 .pd-nav-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--gray-50);border:1px solid var(--gray-100);border-top:none;border-radius:0 0 18px 18px;}
-.pd-nav-arr{width:32px;height:32px;border-radius:8px;border:1px solid var(--gray-200);background:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--gray-600);transition:all .15s;line-height:1;}
+.pd-nav-arr{width:32px;height:32px;border-radius:8px;border:1px solid var(--gray-200);background:var(--white);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--gray-600);transition:all .15s;line-height:1;}
 .pd-nav-arr:hover:not(:disabled){background:var(--blue);color:white;border-color:var(--blue);}
 .pd-nav-arr:disabled{opacity:.3;cursor:not-allowed;}
 .pd-nav-label{font-size:13px;font-weight:600;color:var(--gray-600);}
@@ -679,7 +679,7 @@ html, body { overflow-x: hidden; }
 .pd-social-icon svg{display:block;}
 /* ── MULTI-CREATOR pitch deck ── */
 .pd-mc-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-100);}
-.pd-mc-chip{display:flex;align-items:center;gap:7px;padding:5px 10px;background:white;border:1px solid var(--gray-100);border-radius:20px;cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-700);transition:all .13s;}
+.pd-mc-chip{display:flex;align-items:center;gap:7px;padding:5px 10px;background:var(--white);border:1px solid var(--gray-100);border-radius:20px;cursor:pointer;font-size:12px;font-weight:600;color:var(--gray-700);transition:all .13s;}
 .pd-mc-chip:hover{border-color:var(--blue);color:var(--blue);}
 .pd-mc-chip.active{background:var(--blue);color:white;border-color:var(--blue);}
 .pd-mc-av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;flex-shrink:0;overflow:hidden;}
@@ -702,7 +702,7 @@ html, body { overflow-x: hidden; }
 .pd-av-arr.visible{display:flex;}
 .pd-av-dots{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);display:flex;gap:4px;}
 .pd-av-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.35);transition:background .15s;}
-.pd-av-dot.active{background:white;}
+.pd-av-dot.active{background:var(--white);}
 
 /* ══════════════════════════════════════════════
    MOBILE PITCH DECK — max-width 768px
@@ -807,7 +807,7 @@ html, body { overflow-x: hidden; }
 }
 
 /* ── Rates Calculator ── */
-.calc-section{background:white;border:1px solid var(--gray-100);border-radius:14px;padding:20px;margin-bottom:16px;}
+.calc-section{background:var(--white);border:1px solid var(--gray-100);border-radius:14px;padding:20px;margin-bottom:16px;}
 .calc-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--gray-400);margin-bottom:14px;}
 .calc-toggle{display:flex;gap:0;border:1.5px solid var(--gray-200);border-radius:10px;overflow:hidden;background:var(--gray-50);}
 .calc-toggle-btn{flex:1;padding:8px 12px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--gray-600);transition:all .15s;white-space:nowrap;}
@@ -827,12 +827,12 @@ html, body { overflow-x: hidden; }
 .calc-copy-btn{font-size:11px;font-weight:600;color:var(--blue);background:var(--blue-light);border:1px solid rgba(33,152,237,.18);border-radius:7px;padding:4px 10px;cursor:pointer;}
 /* ── Calc creator picker ── */
 .calc-creator-picker{position:relative;}
-.calc-picker-display{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:10px;cursor:pointer;background:white;transition:border-color .15s;user-select:none;}
+.calc-picker-display{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:10px;cursor:pointer;background:var(--white);transition:border-color .15s;user-select:none;}
 .calc-picker-display:hover{border-color:var(--blue);}
 .calc-picker-display.open{border-color:var(--blue);box-shadow:0 0 0 3px rgba(33,152,237,.12);}
 .calc-picker-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;overflow:hidden;background:var(--gray-200);}
 .calc-picker-av img{width:100%;height:100%;object-fit:cover;}
-.calc-picker-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:white;border:1.5px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 32px rgba(15,17,32,.12);z-index:200;overflow:hidden;}
+.calc-picker-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--white);border:1.5px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 32px rgba(15,17,32,.12);z-index:200;overflow:hidden;}
 .calc-picker-dropdown.open{display:block;animation:fadeInDown .12s ease;}
 @keyframes fadeInDown{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .calc-picker-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .1s;}
@@ -842,12 +842,12 @@ html, body { overflow-x: hidden; }
 .calc-picker-empty{padding:16px;text-align:center;font-size:12px;color:var(--gray-400);}
 /* ── Secondary currency picker ── */
 .calc-fx-picker{position:relative;}
-.calc-fx-display{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:10px;cursor:pointer;background:white;transition:border-color .15s;user-select:none;min-width:90px;}
+.calc-fx-display{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:10px;cursor:pointer;background:var(--white);transition:border-color .15s;user-select:none;min-width:90px;}
 .calc-fx-display:hover{border-color:var(--blue);}
 .calc-fx-display.open{border-color:var(--blue);box-shadow:0 0 0 3px rgba(33,152,237,.12);}
 .calc-fx-flag{font-size:16px;line-height:1;}
 .calc-fx-label{font-size:13px;font-weight:700;color:var(--gray-900);}
-.calc-fx-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:240px;background:white;border:1.5px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 32px rgba(15,17,32,.13);z-index:300;overflow:hidden;}
+.calc-fx-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:240px;background:var(--white);border:1.5px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 32px rgba(15,17,32,.13);z-index:300;overflow:hidden;}
 .calc-fx-dropdown.open{display:block;animation:fadeInDown .12s ease;}
 .calc-fx-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;transition:background .1s;font-size:13px;}
 .calc-fx-item:hover,.calc-fx-item.active{background:var(--blue-light);}
@@ -7921,7 +7921,7 @@ function loadReport(campId) {
     {label:'Deadline', value:camp.deadline||'TBD', color:'var(--red)'},
   ];
   document.getElementById('reportKPIs').innerHTML = kpis.map(k => `
-    <div style="background:white;border-radius:12px;padding:16px 18px;box-shadow:var(--shadow-sm);border:1px solid var(--gray-100)">
+    <div style="background:var(--white);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow-sm);border:1px solid var(--gray-100)">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gray-400);margin-bottom:6px">${k.label}</div>
       <div style="font-size:20px;font-weight:700;color:${k.color};font-family:'DM Serif Display',serif">${k.value}</div>
     </div>`).join('');
@@ -12718,7 +12718,7 @@ function renderSnipeStaffBreakdown() {
         const color = _snipeOwnerColor(b.email);
         const initial = (b.name[0] || '?').toUpperCase();
         const isActive = activeOwner === b.email;
-        return `<div onclick="filterSnipesByStaff('${b.email === '__none__' ? '' : b.email}')" style="cursor:pointer;border:2px solid ${isActive ? color : 'var(--gray-100)'};border-radius:12px;padding:14px;background:${isActive ? color+'10' : 'white'};transition:all .12s" title="Click to filter to ${escapeHtml(b.name)}">
+        return `<div onclick="filterSnipesByStaff('${b.email === '__none__' ? '' : b.email}')" style="cursor:pointer;border:2px solid ${isActive ? color : 'var(--gray-100)'};border-radius:12px;padding:14px;background:${isActive ? color+'22' : 'var(--white)'};transition:all .12s" title="Click to filter to ${escapeHtml(b.name)}">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
             <div style="width:34px;height:34px;border-radius:50%;background:${color};color:white;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initial}</div>
             <div style="min-width:0">
@@ -12727,10 +12727,10 @@ function renderSnipeStaffBreakdown() {
             </div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <span style="font-size:10px;background:var(--green-light,#dcfce7);color:#166534;padding:2px 7px;border-radius:6px;font-weight:600">${b.signed} signed</span>
-            <span style="font-size:10px;background:#eff6ff;color:#1e40af;padding:2px 7px;border-radius:6px;font-weight:600">${b.replied} warm</span>
+            <span style="font-size:10px;background:#dcfce7;color:#166534;padding:2px 7px;border-radius:6px;font-weight:600">${b.signed} signed</span>
+            <span style="font-size:10px;background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:6px;font-weight:600">${b.replied} warm</span>
             <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:6px;font-weight:600">${b.waiting} waiting</span>
-            <span style="font-size:10px;background:var(--gray-50);color:var(--gray-500);padding:2px 7px;border-radius:6px;font-weight:600">${b.sent} sent</span>
+            <span style="font-size:10px;background:#e5e7eb;color:#374151;padding:2px 7px;border-radius:6px;font-weight:600">${b.sent} sent</span>
           </div>
         </div>`;
       }).join('')}
@@ -12884,7 +12884,7 @@ function renderSnipes() {
         <button class="btn btn-ghost btn-sm" onclick="toggleSnipeSent('${s.id}')" style="padding:2px 10px;font-size:11px;${sentYes?'color:var(--green);font-weight:700':'color:var(--gray-400)'}">${sentYes ? '✓ Yes' : 'No'}</button>
       </td>
       <td>
-        <select onchange="updateSnipeStatus('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-100);border-radius:6px;background:white">
+        <select onchange="updateSnipeStatus('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-100);border-radius:6px;background:var(--white);color:var(--gray-900)">
           ${Object.entries(SNIPE_STATUS).map(([k,v]) => `<option value="${k}" ${st===k?'selected':''}>${v.label}</option>`).join('')}
         </select>
       </td>
