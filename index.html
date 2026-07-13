@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-f (inbox auto-opens assigned mailbox) -->
+<!-- blustu panel build 2026-07-13-g (fix reply broken when body has quotes/newlines) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -15174,6 +15174,9 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
   try {
     const data = await emailApi('/message', { mailbox: _currentInbox.mailbox, uid, folder: _currentInbox.folder });
     const m = data.message;
+    // Cache for reply lookup (avoids embedding quote-laden body in onclick)
+    _threadMsgCache = {};
+    if (m && m.uid != null) _threadMsgCache[String(m.uid)] = { ...m, _folder: _currentInbox.folder };
     const fromName = _parseFromName(m.from);
     const fromAddr = _parseFromAddress(m.from);
     const dateStr = m.date ? new Date(m.date).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
@@ -15202,7 +15205,7 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
       <div class="inbox-email-body" id="email-body-container">${bodyHtml}</div>
       ${_renderAttachmentsBlock(m, _currentInbox.folder)}
       <div class="inbox-email-actions">
-        <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), bodyHtml: m.bodyHtml || "", date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
+        <button class="btn btn-primary btn-sm" onclick="replyToCachedMessage('${m.uid}')">↩ Reply</button>
         <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
         <button class="btn btn-ghost btn-sm" onclick="debugMessageBody(${uid})" style="margin-left:auto;font-size:11px">🐛 Debug</button>
         <button class="btn btn-danger btn-sm" onclick="deleteEmailMessage(${uid}, ${isCreatorTab}, ${creatorId || 'null'})">Delete</button>
@@ -15255,6 +15258,12 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
   const subjectLine = (thread.subject || '(no subject)').replace(/</g,'&lt;');
   const lastIdx = fullMessages.length - 1;
 
+  // Cache the fully-fetched messages so Reply/actions can look them up by UID
+  // instead of trying to embed the whole (possibly quote-laden) body in an
+  // inline onclick attribute — which breaks when the body has quotes/newlines.
+  _threadMsgCache = {};
+  fullMessages.forEach(m => { if (m && m.uid != null) _threadMsgCache[String(m.uid)] = m; });
+
   const messagesHtml = fullMessages.map((m, idx) => {
     if (m.error) {
       return `<div class="thread-msg" style="padding:14px;background:#fee2e2;color:#991b1b;border-radius:8px;margin-bottom:8px;font-size:12px">⚠️ Could not load this message: ${m.error}</div>`;
@@ -15292,7 +15301,7 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
         <div class="inbox-email-body" style="border-top:1px solid var(--gray-100);padding-top:12px;margin-top:8px">${bodyHtml}</div>
         ${_renderAttachmentsBlock(m, m._folder || _currentInbox.folder)}
         <div class="inbox-email-actions" style="border-top:1px solid var(--gray-100);margin-top:12px;padding-top:12px">
-          <button class="btn btn-primary btn-sm" onclick='openReply(${JSON.stringify({uid: m.uid, from: fromAddr, subject: m.subject, messageId: m.messageId, references: m.references, bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ""), bodyHtml: m.bodyHtml || "", date: m.date}).replace(/'/g, "&#39;")})'>↩ Reply</button>
+          <button class="btn btn-primary btn-sm" onclick="replyToCachedMessage('${m.uid}')">↩ Reply</button>
           <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${m.uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
           <button class="btn btn-danger btn-sm" onclick="deleteEmailMessage(${m.uid}, ${isCreatorTab}, ${creatorId || 'null'})">Delete</button>
         </div>
@@ -15557,6 +15566,28 @@ async function openCompose(presetMailbox) {
   updateFromPreview();
   openModal('composeEmailModal');
   setTimeout(() => document.getElementById('compose-to')?.focus(), 100);
+}
+
+// Cache of fully-fetched messages in the currently open thread/message view,
+// keyed by UID. Reply buttons look up from here instead of embedding the whole
+// message (which breaks inline onclick when bodies contain quotes/newlines).
+let _threadMsgCache = {};
+
+/** Reply to a message by UID, pulling its full data from the thread cache. */
+function replyToCachedMessage(uid) {
+  const m = _threadMsgCache[String(uid)];
+  if (!m) { showToast('⚠ Could not load that message to reply — try reopening the thread'); return; }
+  const fromAddr = _parseFromAddress(m.from);
+  openReply({
+    uid: m.uid,
+    from: fromAddr,
+    subject: m.subject,
+    messageId: m.messageId,
+    references: m.references,
+    bodyText: m.bodyText || stripHtmlForQuote(m.bodyHtml || ''),
+    bodyHtml: m.bodyHtml || '',
+    date: m.date,
+  });
 }
 
 async function openReply(meta) {
