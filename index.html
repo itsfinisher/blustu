@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-k (live tiktok stats via tikhub) -->
+<!-- blustu panel build 2026-07-13-l (crm cards show live tiktok stats + refresh all) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1217,7 +1217,10 @@ html, body { overflow-x: hidden; }
     <div class="page" id="page-crm">
       <div class="page-header">
         <div><h1>Creator CRM</h1><p>Full roster — <span id="crm-count">25</span> creators</p></div>
-        <button class="btn btn-primary" onclick="openModal('addCreatorModal')">+ Add Creator</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" id="crm-refresh-tt" onclick="refreshAllTikTokStats()" title="Pull live TikTok stats for all active creators with a handle set">🎵 Refresh all stats</button>
+          <button class="btn btn-primary" onclick="openModal('addCreatorModal')">+ Add Creator</button>
+        </div>
       </div>
       <div class="crm-toolbar">
         <div style="display:inline-flex;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:8px;padding:2px" title="Roster scope">
@@ -3888,6 +3891,30 @@ function resolveCreator(c) {
   };
 }
 
+// Card stats — prefer LIVE TikTok data (from the ↻ Refresh), fall back to
+// admin-override / self-reported onboarding numbers. Returns display strings.
+function creatorCardStats(c) {
+  const r = resolveCreator(c);
+  const hasLive = c.tiktok_followers != null || c.tiktok_engagement != null;
+  // Followers
+  let followers = r.followers || '—';
+  if (c.tiktok_followers != null) followers = _fmtCompact(c.tiktok_followers);
+  // Engagement
+  let engRate = r.engRate != null ? r.engRate : null;
+  if (c.tiktok_engagement != null) engRate = c.tiktok_engagement;
+  // Avg views
+  let avgViews = r.avgViews || null;
+  if (c.tiktok_avg_views != null) avgViews = _fmtCompact(c.tiktok_avg_views);
+  return {
+    followers,
+    engRate,
+    avgViews,
+    audience: r.audience || null,
+    niche: r.niche || c.niche || '—',
+    isLive: hasLive,
+  };
+}
+
 // ── Grid state ──
 let gridSelectionIds = new Set();
 let gridCallbackFn   = null;   // called with array of selected creator ids when confirmed
@@ -4251,6 +4278,7 @@ function renderCRMGrid(list) {
   if (empty) empty.style.display = 'none';
   el.innerHTML = list.map(c => {
     const r   = resolveCreator(c);
+    const cs  = creatorCardStats(c);
     const pic = profilePics[c.id];
     const avH = pic
       ? `<img src="${pic}" alt="${c.name}">`
@@ -4263,17 +4291,17 @@ function renderCRMGrid(list) {
         <div class="crm-gc-av" style="${avStyle}">${avH}</div>
         <div class="crm-gc-name">${c.name}${_rosterStatusBadge(c)}</div>
         ${(function(){var m=getCreatorManager(c.id);return m?'<div class="crm-mgr-badge" style="margin:2px 0 4px;font-size:10px">'+m+'</div>':'';})()}
-        <div class="crm-gc-niche">${r.niche || c.niche || '—'}</div>
+        <div class="crm-gc-niche">${cs.niche}${cs.isLive ? ' <span style="font-size:8px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:6px;font-weight:700;vertical-align:middle;margin-left:4px">● LIVE</span>' : ''}</div>
         <div class="crm-gc-stats">
           <div class="crm-gc-stat">
-            <div class="crm-gc-stat-val">${r.followers || '—'}</div>
+            <div class="crm-gc-stat-val">${cs.followers || '—'}</div>
             <div class="crm-gc-stat-lbl">Followers</div>
           </div>
           <div class="crm-gc-stat">
-            <div class="crm-gc-stat-val" style="color:var(--green)">${r.engRate != null ? r.engRate + '%' : '—'}</div>
+            <div class="crm-gc-stat-val" style="color:var(--green)">${cs.engRate != null ? cs.engRate + '%' : '—'}</div>
             <div class="crm-gc-stat-lbl">Engagement</div>
           </div>
-          ${r.audience ? `<div class="crm-gc-stat full"><div class="crm-gc-stat-val">${r.audience}</div><div class="crm-gc-stat-lbl">Audience</div></div>` : ''}
+          ${cs.audience ? `<div class="crm-gc-stat full"><div class="crm-gc-stat-val">${cs.audience}</div><div class="crm-gc-stat-lbl">Audience</div></div>` : (cs.avgViews ? `<div class="crm-gc-stat full"><div class="crm-gc-stat-val">${cs.avgViews}</div><div class="crm-gc-stat-lbl">Avg views</div></div>` : '')}
         </div>
       </div>`;
   }).join('');
@@ -6814,17 +6842,18 @@ function renderMgrDetail(email) {
 
   gridEl.innerHTML = assigned.map(c => {
     const r2  = resolveCreator(c);
+    const cs  = creatorCardStats(c);
     const cp  = profilePics[c.id];
     const avH = cp ? '<img src="' + cp + '" alt="' + c.name + '">' : avatarLetter(c.name);
     const avS = cp ? '' : 'background:' + avatarColor(c.id) + ';';
     return '<div class="crm-gc" onclick="openCreatorProfile(' + c.id + ')">'
       + '<div class="crm-gc-av" style="' + avS + '">' + avH + '</div>'
       + '<div class="crm-gc-name">' + c.name + '</div>'
-      + '<div class="crm-gc-niche">' + (r2.niche || c.niche || '—') + '</div>'
+      + '<div class="crm-gc-niche">' + cs.niche + (cs.isLive ? ' <span style="font-size:8px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:6px;font-weight:700;vertical-align:middle">● LIVE</span>' : '') + '</div>'
       + '<div class="crm-gc-stats">'
-      +   '<div class="crm-gc-stat"><div class="crm-gc-stat-val">' + (r2.followers || '—') + '</div><div class="crm-gc-stat-lbl">Followers</div></div>'
-      +   '<div class="crm-gc-stat"><div class="crm-gc-stat-val" style="color:var(--green)">' + (r2.engRate != null ? r2.engRate + '%' : '—') + '</div><div class="crm-gc-stat-lbl">Engagement</div></div>'
-      +   (r2.audience ? '<div class="crm-gc-stat full"><div class="crm-gc-stat-val">' + r2.audience + '</div><div class="crm-gc-stat-lbl">Audience</div></div>' : '')
+      +   '<div class="crm-gc-stat"><div class="crm-gc-stat-val">' + (cs.followers || '—') + '</div><div class="crm-gc-stat-lbl">Followers</div></div>'
+      +   '<div class="crm-gc-stat"><div class="crm-gc-stat-val" style="color:var(--green)">' + (cs.engRate != null ? cs.engRate + '%' : '—') + '</div><div class="crm-gc-stat-lbl">Engagement</div></div>'
+      +   (cs.audience ? '<div class="crm-gc-stat full"><div class="crm-gc-stat-val">' + cs.audience + '</div><div class="crm-gc-stat-lbl">Audience</div></div>' : (cs.avgViews ? '<div class="crm-gc-stat full"><div class="crm-gc-stat-val">' + cs.avgViews + '</div><div class="crm-gc-stat-lbl">Avg views</div></div>' : ''))
       + '</div>'
       + '</div>';
   }).join('');
@@ -8218,6 +8247,51 @@ function _renderTikTokStatsCard(c) {
     </div>
     <div style="font-size:10px;color:var(--gray-400);margin-top:8px;text-align:right">Updated: ${updated}${c.tiktok_engagement != null ? ' · engagement = (likes+comments+shares)/views' : ''}</div>
   </div>`;
+}
+
+async function refreshAllTikTokStats() {
+  if (!currentUser || !['owner','admin','manager'].includes(currentUser.systemRole)) {
+    showToast('Only owners/admins/managers can refresh stats'); return;
+  }
+  const token = _emailAuthToken();
+  if (!token) { showToast('Not logged in'); return; }
+  const targets = activeCreators().filter(c => (c.tiktok_handle || '').trim());
+  if (!targets.length) { showToast('No active creators have a TikTok handle set'); return; }
+  if (!confirm(`Refresh live TikTok stats for ${targets.length} creator${targets.length>1?'s':''}? This uses ~${targets.length*2} TikHub credits.`)) return;
+
+  const btn = document.getElementById('crm-refresh-tt');
+  let done = 0, failed = 0;
+  for (const c of targets) {
+    if (btn) { btn.disabled = true; btn.textContent = `Refreshing ${done+1}/${targets.length}…`; }
+    try {
+      const res = await fetch(EMAIL_API + '/tiktok/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Staff-Token': token },
+        body: JSON.stringify({ handle: c.tiktok_handle }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
+      const patch = {
+        tiktok_followers:  data.follower_count ?? null,
+        tiktok_engagement: data.engagement_rate ?? null,
+        tiktok_avg_views:  data.avg_views ?? null,
+        tiktok_updated_at: data.fetched_at || new Date().toISOString(),
+      };
+      await DB._req('PATCH', 'creators', patch, '?id=eq.' + c.id);
+      Object.assign(c, patch);
+      DB._req('POST', 'creator_stats_history', [{
+        creator_id: c.id, tiktok_handle: c.tiktok_handle,
+        followers: data.follower_count, engagement: data.engagement_rate,
+        avg_views: data.avg_views, captured_at: data.fetched_at,
+      }], '').catch(()=>{});
+      done++;
+    } catch(e) { failed++; console.warn('TT refresh failed for', c.tiktok_handle, e.message); }
+    // Update the grid live as we go
+    Storage.set('creators', creators);
+    _applyCrmFilters();
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🎵 Refresh all stats'; }
+  showToast(`✅ Refreshed ${done}/${targets.length}${failed ? ` · ${failed} failed` : ''}`);
 }
 
 async function refreshTikTokStats(creatorId) {
