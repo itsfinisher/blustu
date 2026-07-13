@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-g (fix reply broken when body has quotes/newlines) -->
+<!-- blustu panel build 2026-07-13-i (snipe by-staff + auto follow-up 2wk + dark mode) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -20,6 +20,32 @@
   --shadow-md:0 4px 16px rgba(15,17,32,.08),0 2px 6px rgba(15,17,32,.05);
   --shadow-lg:0 12px 40px rgba(15,17,32,.12),0 4px 12px rgba(15,17,32,.06);
 }
+/* ── DARK MODE ── remaps the same tokens so the whole app follows ── */
+[data-theme="dark"] {
+  --blue:#3BA5F0;--blue-light:#16263A;--blue-dark:#5BB5F5;--blue-glow:rgba(59,165,240,.22);
+  --white:#1C1F2E;--off-white:#14161F;
+  --gray-50:#242838;--gray-100:#333849;--gray-200:#454B60;--gray-400:#9198AC;--gray-600:#C2C7D6;--gray-900:#F1F3F9;
+  --green:#34D399;--green-light:#0E2A22;--amber:#FBBF24;--amber-light:#2A2410;--red:#F87171;--red-light:#2C1618;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:0 4px 16px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.3);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+/* Dark-mode niceties for things that hard-code light colours */
+[data-theme="dark"] body { background: var(--off-white); }
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .form-textarea { background: var(--gray-50); color: var(--gray-900); border-color: var(--gray-200); }
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: var(--gray-400); }
+[data-theme="dark"] .inbox-email-body,
+[data-theme="dark"] .thread-msg-body .inbox-email-body { background: transparent; }
+/* Email bodies are sender-authored HTML (often white bg) — keep them on a light card so they stay readable */
+[data-theme="dark"] .inbox-email-body { background:#f5f6f8; color:#1a1a1a; border-radius:8px; padding:10px 12px; }
+[data-theme="dark"] #authScreen { background: linear-gradient(135deg,#161b26 0%,var(--white) 60%,#141922 100%); }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'DM Sans',sans-serif;background:var(--off-white);color:var(--gray-900);display:flex;min-height:100vh;font-size:14px;line-height:1.5;}
 
@@ -836,6 +862,14 @@ html, body { overflow-x: hidden; }
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
+<script>
+  // Apply saved theme immediately (before paint) to avoid a white flash on load.
+  try {
+    if (localStorage.getItem('blustu_theme') === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  } catch(e) {}
+</script>
 
 <!-- ══ SIDEBAR OVERLAY (mobile) ══ -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -1103,6 +1137,10 @@ html, body { overflow-x: hidden; }
       <div class="user-avatar" id="sidebarAvatar">U</div>
       <div class="user-info"><div class="name" id="sidebarName">Ubayy</div><div class="role" id="sidebarRole">Manager</div></div>
     </div>
+    <button class="logout-btn" id="themeToggleBtn" onclick="toggleTheme()" style="margin-bottom:6px">
+      <svg id="themeToggleIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <span id="themeToggleLabel">Dark mode</span>
+    </button>
     <button class="logout-btn" onclick="doLogout()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       Sign out
@@ -2313,6 +2351,7 @@ html, body { overflow-x: hidden; }
           <div style="display:inline-flex;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:8px;padding:2px">
             <button class="btn btn-sm" id="snipe-scope-mine" onclick="setSnipeScope('mine')" style="border-radius:6px">My Snipes</button>
             <button class="btn btn-ghost btn-sm" id="snipe-scope-all" onclick="setSnipeScope('all')" style="border-radius:6px">All Staff</button>
+            <button class="btn btn-ghost btn-sm" id="snipe-scope-staff" onclick="setSnipeScope('staff')" style="border-radius:6px">By Staff</button>
           </div>
           <select class="form-select" id="snipe-filter-owner" onchange="renderSnipes()" style="max-width:180px;display:none">
             <option value="">All staff</option>
@@ -2379,7 +2418,10 @@ html, body { overflow-x: hidden; }
         </div>
       </div>
 
-      <div class="card" style="padding:0">
+      <!-- By-Staff summary grid (shown only in 'staff' scope) -->
+      <div id="snipe-staff-breakdown" style="display:none;margin-bottom:12px"></div>
+
+      <div class="card" style="padding:0" id="snipe-table-card">
         <div class="table-wrap">
           <table id="snipesTable">
             <thead>
@@ -3541,6 +3583,37 @@ function can(cap) {
 // ── PERSISTENCE HELPERS (delegates to Storage layer) ──────────
 function saveToStorage(key, value) { return Storage.set(key, value); }
 function loadFromStorage(key, fallback) { return Storage.get(key, fallback); }
+
+// ── DARK MODE ──
+function applyTheme(theme) {
+  if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  try { localStorage.setItem('blustu_theme', theme); } catch(e) {}
+  // Update the toggle button label + icon
+  const label = document.getElementById('themeToggleLabel');
+  const icon  = document.getElementById('themeToggleIcon');
+  if (label) label.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+  if (icon) {
+    icon.innerHTML = theme === 'dark'
+      // sun icon
+      ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+      // moon icon
+      : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  }
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+// Sync the button label to the theme that was applied pre-paint
+(function _initThemeLabel(){
+  const boot = () => {
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    applyTheme(theme);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
 
 // ── LOAD STAFF FROM STORAGE ──
 let STAFF = loadFromStorage('staff', DEFAULT_STAFF);
@@ -12539,17 +12612,29 @@ async function loadSnipes() {
     snipes = rows;
     Storage.set('snipes', snipes);
   }
+  // One-time backfill: any snipe that's been sent but has no follow-up date gets
+  // one set to 2 weeks after it was sent (or created, if no sent timestamp).
+  _backfillSnipeFollowUps();
   // Ensure the scope toggle reflects current state on (re)load
   const mine = document.getElementById('snipe-scope-mine');
   const all  = document.getElementById('snipe-scope-all');
+  const staff = document.getElementById('snipe-scope-staff');
   if (mine && all) {
     mine.className = _snipeScope === 'mine' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
     all.className  = _snipeScope === 'all'  ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+    if (staff) staff.className = _snipeScope === 'staff' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
   }
+  const showOwner = (_snipeScope === 'all' || _snipeScope === 'staff');
   const ownerFilter = document.getElementById('snipe-filter-owner');
   const ownerCol    = document.getElementById('snipe-owner-col');
-  if (ownerFilter) ownerFilter.style.display = _snipeScope === 'all' ? '' : 'none';
-  if (ownerCol)    ownerCol.style.display    = _snipeScope === 'all' ? '' : 'none';
+  if (ownerFilter) ownerFilter.style.display = showOwner ? '' : 'none';
+  if (ownerCol)    ownerCol.style.display    = showOwner ? '' : 'none';
+  _populateSnipeOwnerFilter();
+  if (_snipeScope === 'staff') {
+    const breakdown = document.getElementById('snipe-staff-breakdown');
+    if (breakdown) breakdown.style.display = '';
+    renderSnipeStaffBreakdown();
+  }
   renderSnipes();
 }
 
@@ -12558,16 +12643,108 @@ function setSnipeScope(scope) {
   // Toggle button styling
   const mine = document.getElementById('snipe-scope-mine');
   const all  = document.getElementById('snipe-scope-all');
+  const staff = document.getElementById('snipe-scope-staff');
   if (mine && all) {
     mine.className = scope === 'mine' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
     all.className  = scope === 'all'  ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+    if (staff) staff.className = scope === 'staff' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
   }
-  // Owner filter + owner column only relevant in "all" mode
+  // Owner filter + owner column relevant in "all" and "staff" modes
   const ownerFilter = document.getElementById('snipe-filter-owner');
   const ownerCol    = document.getElementById('snipe-owner-col');
-  if (ownerFilter) ownerFilter.style.display = scope === 'all' ? '' : 'none';
-  if (ownerCol)    ownerCol.style.display    = scope === 'all' ? '' : 'none';
-  if (scope === 'mine' && ownerFilter) ownerFilter.value = '';
+  const showOwner = (scope === 'all' || scope === 'staff');
+  if (ownerFilter) ownerFilter.style.display = showOwner ? '' : 'none';
+  if (ownerCol)    ownerCol.style.display    = showOwner ? '' : 'none';
+  if (scope !== 'all' && scope !== 'staff' && ownerFilter) ownerFilter.value = '';
+  // Staff breakdown grid only in 'staff' mode
+  const breakdown = document.getElementById('snipe-staff-breakdown');
+  const tableCard = document.getElementById('snipe-table-card');
+  if (scope === 'staff') {
+    if (breakdown) breakdown.style.display = '';
+    renderSnipeStaffBreakdown();
+  } else {
+    if (breakdown) breakdown.style.display = 'none';
+  }
+  renderSnipes();
+}
+
+// Consistent colour per staff email — used for owner avatar chips.
+function _snipeOwnerColor(email) {
+  const key = (email || '').toLowerCase();
+  const hash = key.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0);
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+// Small coloured owner chip (avatar circle + name) for the owner column.
+function _snipeOwnerChip(s) {
+  const name = s.owner_name || s.owner_email || '—';
+  if (!s.owner_email) return `<span style="font-size:11px;color:var(--gray-400)">—</span>`;
+  const color = _snipeOwnerColor(s.owner_email);
+  const initial = (name[0] || '?').toUpperCase();
+  return `<div style="display:flex;align-items:center;gap:6px">
+    <div style="width:22px;height:22px;border-radius:50%;background:${color};color:white;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initial}</div>
+    <span style="font-size:11px;color:var(--gray-600);white-space:nowrap">${escapeHtml(name)}</span>
+  </div>`;
+}
+
+/** Render the per-staff summary cards. Click a card to filter the table to that staff member. */
+function renderSnipeStaffBreakdown() {
+  const wrap = document.getElementById('snipe-staff-breakdown');
+  if (!wrap) return;
+  // Aggregate snipe stats per owner
+  const byStaff = {};
+  for (const s of snipes) {
+    const email = s.owner_email || '__none__';
+    if (!byStaff[email]) {
+      byStaff[email] = { email, name: s.owner_name || s.owner_email || 'Unassigned', total: 0, sent: 0, signed: 0, waiting: 0, replied: 0 };
+    }
+    const b = byStaff[email];
+    b.total++;
+    if ((s.sent||'no').toLowerCase() === 'yes') b.sent++;
+    const st = s.reply_status || 'waiting';
+    if (st === 'signed') b.signed++;
+    else if (st === 'waiting') b.waiting++;
+    else if (st === 'replied' || st === 'talking' || st === 'interested') b.replied++;
+  }
+  const staffList = Object.values(byStaff).sort((a,b) => b.total - a.total);
+  if (!staffList.length) {
+    wrap.innerHTML = '<div class="card" style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">No snipes yet.</div>';
+    return;
+  }
+  const activeOwner = document.getElementById('snipe-filter-owner')?.value || '';
+  wrap.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+      ${staffList.map(b => {
+        const color = _snipeOwnerColor(b.email);
+        const initial = (b.name[0] || '?').toUpperCase();
+        const isActive = activeOwner === b.email;
+        return `<div onclick="filterSnipesByStaff('${b.email === '__none__' ? '' : b.email}')" style="cursor:pointer;border:2px solid ${isActive ? color : 'var(--gray-100)'};border-radius:12px;padding:14px;background:${isActive ? color+'10' : 'white'};transition:all .12s" title="Click to filter to ${escapeHtml(b.name)}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div style="width:34px;height:34px;border-radius:50%;background:${color};color:white;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initial}</div>
+            <div style="min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--gray-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(b.name)}</div>
+              <div style="font-size:11px;color:var(--gray-400)">${b.total} snipe${b.total===1?'':'s'}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span style="font-size:10px;background:var(--green-light,#dcfce7);color:#166534;padding:2px 7px;border-radius:6px;font-weight:600">${b.signed} signed</span>
+            <span style="font-size:10px;background:#eff6ff;color:#1e40af;padding:2px 7px;border-radius:6px;font-weight:600">${b.replied} warm</span>
+            <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:6px;font-weight:600">${b.waiting} waiting</span>
+            <span style="font-size:10px;background:var(--gray-50);color:var(--gray-500);padding:2px 7px;border-radius:6px;font-weight:600">${b.sent} sent</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+/** Click a staff card → filter the table to that person's snipes. */
+function filterSnipesByStaff(email) {
+  const ownerFilter = document.getElementById('snipe-filter-owner');
+  if (ownerFilter) {
+    // Toggle off if already selected
+    ownerFilter.value = (ownerFilter.value === email) ? '' : email;
+  }
+  renderSnipeStaffBreakdown();
   renderSnipes();
 }
 
@@ -12597,9 +12774,9 @@ function getFilteredSnipes() {
   const contactQ = document.getElementById('snipe-filter-contact')?.value || '';
   const searchQ = (document.getElementById('snipe-search')?.value || '').toLowerCase();
   const list = snipes.filter(s => {
-    // Scope
+    // Scope — 'mine' shows only yours; 'all' and 'staff' show everyone (owner filter narrows)
     if (_snipeScope === 'mine' && s.owner_email !== currentUser?.email) return false;
-    if (_snipeScope === 'all' && ownerQ && s.owner_email !== ownerQ) return false;
+    if ((_snipeScope === 'all' || _snipeScope === 'staff') && ownerQ && s.owner_email !== ownerQ) return false;
     if (statusQ && (s.reply_status || 'waiting') !== statusQ) return false;
     if (contactQ && (s.contact_method || '') !== contactQ) return false;
     if (searchQ) {
@@ -12647,6 +12824,10 @@ function setSnipeSort(v) { _snipeSort = v; renderSnipes(); }
 
 function renderSnipes() {
   _populateSnipeOwnerFilter();
+  if (_snipeScope === 'staff') {
+    const breakdown = document.getElementById('snipe-staff-breakdown');
+    if (breakdown && breakdown.style.display !== 'none') renderSnipeStaffBreakdown();
+  }
   const filtered = getFilteredSnipes();
 
   // Stats (over the filtered set)
@@ -12684,7 +12865,7 @@ function renderSnipes() {
     return;
   }
 
-  const showOwner = _snipeScope === 'all';
+  const showOwner = (_snipeScope === 'all' || _snipeScope === 'staff');
   tbody.innerHTML = filtered.map(s => {
     const st = s.reply_status || 'waiting';
     const stInfo = SNIPE_STATUS[st] || SNIPE_STATUS.waiting;
@@ -12708,7 +12889,7 @@ function renderSnipes() {
         </select>
       </td>
       <td><input value="${escapeHtml(s.follow_up||'')}" onchange="updateSnipeField('${s.id}','follow_up',this.value)" placeholder="—" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-100);border-radius:6px;width:110px"></td>
-      ${showOwner ? `<td style="font-size:11px;color:var(--gray-500)">${escapeHtml(s.owner_name||s.owner_email||'—')}</td>` : ''}
+      ${showOwner ? `<td>${_snipeOwnerChip(s)}</td>` : ''}
       <td style="text-align:right;white-space:nowrap">
         <div style="display:inline-flex;gap:6px;justify-content:flex-end">
           <button class="btn btn-ghost btn-sm" onclick="openEditSnipe('${s.id}')">Edit</button>
@@ -13046,22 +13227,72 @@ async function _markSnipeSentByEmail(toField) {
   if (!match) return;
   match.sent = 'yes';
   if (!match.reply_status || match.reply_status === 'waiting') match.reply_status = 'waiting';
+  const patch = { sent: 'yes', updated_at: new Date().toISOString() };
+  // Auto follow-up 2 weeks out if none set
+  if (!(match.follow_up || '').trim()) {
+    const fu = _followUpDateFromNow(14);
+    match.follow_up = fu;
+    patch.follow_up = fu;
+  }
   try {
-    await DB._req('PATCH', 'snipes', { sent: 'yes', updated_at: new Date().toISOString() }, '?id=eq.' + match.id);
+    await DB._req('PATCH', 'snipes', patch, '?id=eq.' + match.id);
     await loadSnipes();
-    showToast('📌 Snipe "' + match.name + '" marked as Sent');
+    showToast('📌 Snipe "' + match.name + '" marked as Sent' + (patch.follow_up ? ' · follow-up ' + patch.follow_up : ''));
   } catch(e) { /* non-fatal */ }
 }
 
 // ── Inline updates ──
+// Returns a date string (DD/MM/YYYY) N days from now — used for auto follow-ups.
+function _followUpDateFromNow(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toLocaleDateString('en-GB'); // DD/MM/YYYY
+}
+
+// Returns DD/MM/YYYY that is `days` after the given base date (ISO string or Date).
+function _followUpDateFrom(base, days) {
+  const d = base ? new Date(base) : new Date();
+  if (isNaN(d.getTime())) return _followUpDateFromNow(days);
+  d.setDate(d.getDate() + days);
+  return d.toLocaleDateString('en-GB');
+}
+
+// One-time backfill for sent snipes with no follow-up date. Writes to DB in the
+// background; runs quietly and only touches rows that actually need it.
+let _snipeBackfillDone = false;
+async function _backfillSnipeFollowUps() {
+  if (_snipeBackfillDone) return;
+  _snipeBackfillDone = true;
+  const needing = snipes.filter(s =>
+    (s.sent || 'no').toLowerCase() === 'yes' && !(s.follow_up || '').trim()
+  );
+  if (!needing.length) return;
+  for (const s of needing) {
+    // 2 weeks after the sent date (fallback to created_at, then now)
+    const base = s.sent_at || s.updated_at || s.created_at || null;
+    const fu = _followUpDateFrom(base, 14);
+    s.follow_up = fu;
+    // Fire and forget — don't block the UI
+    DB._req('PATCH', 'snipes', { follow_up: fu }, '?id=eq.' + s.id).catch(() => {});
+  }
+}
+
 async function toggleSnipeSent(id) {
   const s = snipes.find(x => String(x.id) === String(id));
   if (!s) return;
   const newVal = (s.sent||'no').toLowerCase() === 'yes' ? 'no' : 'yes';
   s.sent = newVal;
+  const patch = { sent: newVal, updated_at: new Date().toISOString() };
+  // When marking as SENT, auto-set a follow-up date 2 weeks out (only if none set yet)
+  if (newVal === 'yes' && !(s.follow_up || '').trim()) {
+    const fu = _followUpDateFromNow(14);
+    s.follow_up = fu;
+    patch.follow_up = fu;
+  }
   renderSnipes();
-  const r = await DB._req('PATCH', 'snipes', { sent: newVal, updated_at: new Date().toISOString() }, '?id=eq.' + id);
+  const r = await DB._req('PATCH', 'snipes', patch, '?id=eq.' + id);
   if (r === null) { showToast('Update failed'); loadSnipes(); }
+  else if (patch.follow_up) showToast('✓ Sent — follow-up set for ' + patch.follow_up);
 }
 async function updateSnipeStatus(id, status) {
   const s = snipes.find(x => String(x.id) === String(id));
