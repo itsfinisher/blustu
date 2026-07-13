@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-b (fix profile save surface + attachments + autofill) -->
+<!-- blustu panel build 2026-07-13-c (profile save resilient to missing updated_at) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3957,7 +3957,7 @@ async function saveProfile() {
     if (s) { s.snipe_from_mailbox = mailbox; s.email_signature = signature; }
     Storage.set('staff', STAFF);
     // Persist to DB — surface the real error so problems don't silently rot
-    const patch = { updated_at: new Date().toISOString() };
+    const patch = {};
     if (n) patch.name = n;
     patch.snipe_from_mailbox = mailbox;
     patch.email_signature = signature;
