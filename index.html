@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-a (email attachments + login autofill fix) -->
+<!-- blustu panel build 2026-07-13-b (fix profile save surface + attachments + autofill) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3956,17 +3956,31 @@ async function saveProfile() {
     const s = STAFF.find(x => x.email === currentUser.email);
     if (s) { s.snipe_from_mailbox = mailbox; s.email_signature = signature; }
     Storage.set('staff', STAFF);
-    // Persist to DB
+    // Persist to DB — surface the real error so problems don't silently rot
     const patch = { updated_at: new Date().toISOString() };
     if (n) patch.name = n;
     patch.snipe_from_mailbox = mailbox;
     patch.email_signature = signature;
+    let saveOk = false;
+    let saveErr = null;
     try {
-      await DB._req('PATCH', 'staff_accounts', patch, '?email=eq.' + encodeURIComponent(currentUser.email));
-    } catch(e) { console.warn('Profile save failed', e); }
+      const result = await DB._req('PATCH', 'staff_accounts', patch, '?email=eq.' + encodeURIComponent(currentUser.email));
+      if (result === null) {
+        saveErr = DB._lastError || 'unknown — run fix-email-signature.sql in Supabase?';
+      } else {
+        saveOk = true;
+      }
+    } catch(e) {
+      saveErr = e.message || String(e);
+    }
+    if (!saveOk) {
+      console.warn('Profile save failed:', saveErr);
+      showToast('⚠ Profile not saved to DB: ' + saveErr);
+      return;   // keep the modal open so the user can retry
+    }
   }
   closeModal('profileModal');
-  showToast('Profile updated!');
+  showToast('✅ Profile saved');
 }
 
 // ══ UTILS ══
