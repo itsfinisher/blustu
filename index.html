@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-l (crm cards show live tiktok stats + refresh all) -->
+<!-- blustu panel build 2026-07-13-m (crm cards show avg views instead of audience) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -4301,7 +4301,7 @@ function renderCRMGrid(list) {
             <div class="crm-gc-stat-val" style="color:var(--green)">${cs.engRate != null ? cs.engRate + '%' : '—'}</div>
             <div class="crm-gc-stat-lbl">Engagement</div>
           </div>
-          ${cs.audience ? `<div class="crm-gc-stat full"><div class="crm-gc-stat-val">${cs.audience}</div><div class="crm-gc-stat-lbl">Audience</div></div>` : (cs.avgViews ? `<div class="crm-gc-stat full"><div class="crm-gc-stat-val">${cs.avgViews}</div><div class="crm-gc-stat-lbl">Avg views</div></div>` : '')}
+          ${cs.avgViews ? `<div class="crm-gc-stat full"><div class="crm-gc-stat-val">${cs.avgViews}</div><div class="crm-gc-stat-lbl">Avg views</div></div>` : (cs.audience ? `<div class="crm-gc-stat full"><div class="crm-gc-stat-val">${cs.audience}</div><div class="crm-gc-stat-lbl">Audience</div></div>` : '')}
         </div>
       </div>`;
   }).join('');
@@ -6853,7 +6853,7 @@ function renderMgrDetail(email) {
       + '<div class="crm-gc-stats">'
       +   '<div class="crm-gc-stat"><div class="crm-gc-stat-val">' + (cs.followers || '—') + '</div><div class="crm-gc-stat-lbl">Followers</div></div>'
       +   '<div class="crm-gc-stat"><div class="crm-gc-stat-val" style="color:var(--green)">' + (cs.engRate != null ? cs.engRate + '%' : '—') + '</div><div class="crm-gc-stat-lbl">Engagement</div></div>'
-      +   (cs.audience ? '<div class="crm-gc-stat full"><div class="crm-gc-stat-val">' + cs.audience + '</div><div class="crm-gc-stat-lbl">Audience</div></div>' : (cs.avgViews ? '<div class="crm-gc-stat full"><div class="crm-gc-stat-val">' + cs.avgViews + '</div><div class="crm-gc-stat-lbl">Avg views</div></div>' : ''))
+      +   (cs.avgViews ? '<div class="crm-gc-stat full"><div class="crm-gc-stat-val">' + cs.avgViews + '</div><div class="crm-gc-stat-lbl">Avg views</div></div>' : (cs.audience ? '<div class="crm-gc-stat full"><div class="crm-gc-stat-val">' + cs.audience + '</div><div class="crm-gc-stat-lbl">Audience</div></div>' : ''))
       + '</div>'
       + '</div>';
   }).join('');
