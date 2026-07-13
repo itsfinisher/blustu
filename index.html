@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-e (email templates as dedicated page under More) -->
+<!-- blustu panel build 2026-07-13-f (inbox auto-opens assigned mailbox) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -14728,6 +14728,17 @@ async function initTeamInbox() {
   });
   sel.innerHTML = '<option value="">Choose a mailbox…</option>' +
     accounts.map(a => `<option value="${a.local}">${a.email}</option>`).join('');
+
+  // Auto-open the user's assigned mailbox (set in Profile → Email Settings)
+  // so they land straight in their inbox without hunting through the picker.
+  const myMailbox = (STAFF.find(x => x.email === currentUser?.email) || {}).snipe_from_mailbox
+    || currentUser?.snipe_from_mailbox
+    || '';
+  // Only auto-load if that mailbox is actually in the available list
+  if (myMailbox && accounts.some(a => a.local === myMailbox)) {
+    sel.value = myMailbox;
+    loadTeamInbox(myMailbox);
+  }
 }
 
 async function loadTeamInbox(mailbox, folder) {
