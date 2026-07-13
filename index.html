@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-10-l (email attachments — panel side, worker patch required) -->
+<!-- blustu panel build 2026-07-13-a (email attachments + login autofill fix) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -875,9 +875,11 @@ html, body { overflow-x: hidden; }
     <div class="auth-title">Staff Login</div>
     <div class="auth-sub">blustu™ Internal Panel — Authorised staff only</div>
     <div class="auth-error" id="authError">Invalid email or password. Please try again.</div>
-    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="loginEmail" type="email" placeholder="you@blustu.agency" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="loginPassword" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center;padding:12px" onclick="doLogin()">Sign In</button>
+    <form id="loginForm" method="post" action="#" onsubmit="event.preventDefault();doLogin();return false;" autocomplete="on">
+      <div class="form-group"><label class="form-label" for="loginEmail">Email</label><input class="form-input" id="loginEmail" name="username" type="email" placeholder="you@blustu.agency" autocomplete="username" required></div>
+      <div class="form-group"><label class="form-label" for="loginPassword">Password</label><input class="form-input" id="loginPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" required></div>
+      <button class="btn btn-primary" id="loginBtn" type="submit" style="width:100%;justify-content:center;padding:12px">Sign In</button>
+    </form>
     <div style="margin-top:16px;padding:12px;background:var(--gray-50);border-radius:10px;font-size:12px;color:var(--gray-400);text-align:center">
       Use your staff credentials to sign in
     </div>
