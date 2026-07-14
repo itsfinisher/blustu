@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-m (crm cards show avg views instead of audience) -->
+<!-- blustu panel build 2026-07-13-n (suggested rate estimator from live stats) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -8207,6 +8207,107 @@ function _fmtCompact(n) {
   return String(n);
 }
 
+// ── SUGGESTED RATE ESTIMATOR (reference only) ──
+// Grounded in 2026 industry benchmarks. The primary driver is CPM on average
+// views (the method brands actually use), adjusted for engagement quality and
+// niche, then sanity-checked against the known follower-tier band.
+//
+// Returns null if we don't have enough live data (need avg views OR followers).
+const _NICHE_MULTIPLIER = {
+  finance: 2.2, crypto: 2.2, business: 2.0, tech: 1.6, legal: 2.0,
+  beauty: 1.4, skincare: 1.4, fashion: 1.2, fitness: 1.3, health: 1.4,
+  food: 1.0, travel: 1.1, comedy: 1.0, gaming: 1.1, lifestyle: 1.0,
+  entertainment: 1.0, education: 1.2, general: 1.0,
+};
+// Base CPM (cost per 1000 views) in USD — mid-market TikTok reference.
+const _BASE_CPM = 12;
+
+function estimateCreatorRate(c) {
+  const followers = Number(c.tiktok_followers || 0);
+  const avgViews  = Number(c.tiktok_avg_views || 0);
+  const eng       = c.tiktok_engagement != null ? Number(c.tiktok_engagement) : null;
+  if (!avgViews && !followers) return null;
+
+  // Niche multiplier
+  const nicheKey = (c.niche || 'general').toLowerCase().split(/[\s,]+/)[0];
+  const nicheMult = _NICHE_MULTIPLIER[nicheKey] ?? 1.0;
+
+  // Engagement multiplier — reward strong ER, discount weak.
+  // TikTok: 5-10% good, 10%+ excellent, <2% weak.
+  let engMult = 1.0;
+  if (eng != null) {
+    if (eng >= 10) engMult = 1.5;
+    else if (eng >= 6) engMult = 1.25;
+    else if (eng >= 3) engMult = 1.0;
+    else if (eng >= 1.5) engMult = 0.85;
+    else engMult = 0.7;
+  }
+
+  // Primary estimate: CPM on average views.
+  let base;
+  if (avgViews) {
+    base = (avgViews / 1000) * _BASE_CPM;
+  } else {
+    // Fallback when we have followers but no view data: assume ~20% view/follower
+    base = (followers * 0.2 / 1000) * _BASE_CPM;
+  }
+  let mid = base * nicheMult * engMult;
+
+  // Sanity-clamp to the known follower-tier band (2026 benchmarks, USD/video)
+  const tierBand = _followerTierBand(followers);
+  if (tierBand) {
+    mid = Math.max(tierBand.floor, Math.min(mid, tierBand.ceil));
+  }
+
+  // Round to a sensible increment
+  const round = v => v >= 1000 ? Math.round(v/100)*100 : v >= 100 ? Math.round(v/10)*10 : Math.round(v/5)*5;
+  mid = round(mid);
+  const low  = round(mid * 0.75);
+  const high = round(mid * 1.35);
+  return { low, mid, high, nicheMult, engMult, nicheKey, tier: tierBand?.label || '—' };
+}
+
+function _followerTierBand(followers) {
+  // USD per in-feed TikTok video — conservative consensus of 2026 sources
+  if (followers < 1000)     return { label: 'Sub-nano', floor: 20,   ceil: 150 };
+  if (followers < 10000)    return { label: 'Nano',     floor: 40,   ceil: 350 };
+  if (followers < 50000)    return { label: 'Micro',    floor: 150,  ceil: 1200 };
+  if (followers < 100000)   return { label: 'Micro+',   floor: 400,  ceil: 2500 };
+  if (followers < 500000)   return { label: 'Mid-tier', floor: 1000, ceil: 8000 };
+  if (followers < 1000000)  return { label: 'Macro',    floor: 3000, ceil: 20000 };
+  return { label: 'Mega', floor: 8000, ceil: 100000 };
+}
+
+function _renderRateEstimatorCard(c) {
+  const est = estimateCreatorRate(c);
+  if (!est) {
+    return '';  // no live data yet — the stats card already prompts to refresh
+  }
+  const fmt = v => '$' + v.toLocaleString('en-US');
+  const nichePct = Math.round((est.nicheMult - 1) * 100);
+  const engPct   = Math.round((est.engMult - 1) * 100);
+  return `<div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <div class="card-title" style="margin:0">💷 Suggested Rate <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:6px;font-weight:600;vertical-align:middle">REFERENCE</span></div>
+      <div style="font-size:11px;color:var(--gray-400)">${est.tier} tier</div>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:8px;justify-content:center;padding:6px 0 10px">
+      <div style="font-size:14px;color:var(--gray-400)">${fmt(est.low)}</div>
+      <div style="font-size:30px;font-weight:700;font-family:'DM Serif Display',serif;color:var(--blue)">${fmt(est.mid)}</div>
+      <div style="font-size:14px;color:var(--gray-400)">${fmt(est.high)}</div>
+    </div>
+    <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-bottom:10px">per in-feed TikTok video · range low → suggested → high</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">
+      <span style="font-size:10px;background:var(--gray-50);color:var(--gray-600);padding:3px 8px;border-radius:6px">CPM $${_BASE_CPM} base</span>
+      <span style="font-size:10px;background:var(--gray-50);color:var(--gray-600);padding:3px 8px;border-radius:6px">Niche ${est.nicheKey} ${nichePct>=0?'+':''}${nichePct}%</span>
+      ${c.tiktok_engagement != null ? `<span style="font-size:10px;background:var(--gray-50);color:var(--gray-600);padding:3px 8px;border-radius:6px">Engagement ${engPct>=0?'+':''}${engPct}%</span>` : ''}
+    </div>
+    <div style="font-size:10px;color:var(--gray-400);margin-top:10px;text-align:center;line-height:1.5">
+      Estimate from live stats × 2026 market benchmarks. A reference for negotiation — actual rates vary with usage rights, exclusivity, whitelisting &amp; deliverables. Add ~20–50% for Spark Ads / paid usage.
+    </div>
+  </div>`;
+}
+
 function _renderTikTokStatsCard(c) {
   const handle = c.tiktok_handle || '';
   const canRefresh = currentUser && ['owner','admin','manager'].includes(currentUser.systemRole);
@@ -8381,6 +8482,8 @@ function renderProfileSocials(c) {
   el.innerHTML = `
     <!-- Live TikTok stats -->
     ${_renderTikTokStatsCard(c)}
+    <!-- Suggested rate (reference) -->
+    ${_renderRateEstimatorCard(c)}
     <!-- Socials -->
     <div class="card" style="margin-bottom:14px">
       <div class="card-title" style="margin-bottom:12px">Social Platforms</div>
