@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-n (suggested rate estimator from live stats) -->
+<!-- blustu panel build 2026-07-13-o (avg views: exclude pinned, newest-first, show sample) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -8346,6 +8346,7 @@ function _renderTikTokStatsCard(c) {
         <div style="font-size:11px;color:var(--gray-400)">Avg views</div>
       </div>
     </div>
+    ${c._tt_sample ? `<div style="font-size:10px;color:var(--gray-400);margin-top:8px;text-align:center">Based on last ${c._tt_sample} video${c._tt_sample>1?'s':''}${c._tt_excluded_pinned ? ` · ${c._tt_excluded_pinned} pinned excluded` : ''}${c._tt_median != null ? ` · median ${_fmtCompact(c._tt_median)} views` : ''}</div>` : ''}
     <div style="font-size:10px;color:var(--gray-400);margin-top:8px;text-align:right">Updated: ${updated}${c.tiktok_engagement != null ? ' · engagement = (likes+comments+shares)/views' : ''}</div>
   </div>`;
 }
@@ -8380,6 +8381,9 @@ async function refreshAllTikTokStats() {
       };
       await DB._req('PATCH', 'creators', patch, '?id=eq.' + c.id);
       Object.assign(c, patch);
+      c._tt_sample = data.sample_count || 0;
+      c._tt_median = data.median_views ?? null;
+      c._tt_excluded_pinned = data.excluded_pinned || 0;
       DB._req('POST', 'creator_stats_history', [{
         creator_id: c.id, tiktok_handle: c.tiktok_handle,
         followers: data.follower_count, engagement: data.engagement_rate,
@@ -8420,6 +8424,10 @@ async function refreshTikTokStats(creatorId) {
     const r = await DB._req('PATCH', 'creators', patch, '?id=eq.' + creatorId);
     if (r === null) { showToast('⚠ Fetched but failed to save — run tiktok-stats.sql?'); }
     Object.assign(c, patch);
+    // Keep sample metadata in memory (not persisted) so the card can show it
+    c._tt_sample = data.sample_count || 0;
+    c._tt_median = data.median_views ?? null;
+    c._tt_excluded_pinned = data.excluded_pinned || 0;
     Storage.set('creators', creators);
     // Log history (fire and forget)
     DB._req('POST', 'creator_stats_history', [{
@@ -8428,9 +8436,12 @@ async function refreshTikTokStats(creatorId) {
       avg_views: data.avg_views, captured_at: data.fetched_at,
     }], '').catch(()=>{});
     renderProfileSocials(c);
-    const msg = data.sample_count
-      ? `✅ ${_fmtCompact(data.follower_count)} followers · ${data.engagement_rate}% engagement (${data.sample_count} videos)`
-      : `✅ ${_fmtCompact(data.follower_count)} followers (no recent videos for engagement)`;
+    let msg;
+    if (data.sample_count) {
+      msg = `✅ ${_fmtCompact(data.follower_count)} followers · ${data.engagement_rate}% eng · ${_fmtCompact(data.avg_views)} avg views (${data.sample_count} videos${data.excluded_pinned ? `, ${data.excluded_pinned} pinned excluded` : ''})`;
+    } else {
+      msg = `✅ ${_fmtCompact(data.follower_count)} followers (no recent videos for engagement)`;
+    }
     showToast(msg);
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
