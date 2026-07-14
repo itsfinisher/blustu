@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-r (rate: content focus / niche clarity factor) -->
+<!-- blustu panel build 2026-07-13-t (snipes dark mode row colours) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -41,11 +41,41 @@
 [data-theme="dark"] .form-textarea { background: var(--gray-50); color: var(--gray-900); border-color: var(--gray-200); }
 [data-theme="dark"] input::placeholder,
 [data-theme="dark"] textarea::placeholder { color: var(--gray-400); }
-[data-theme="dark"] .inbox-email-body,
-[data-theme="dark"] .thread-msg-body .inbox-email-body { background: transparent; }
-/* Email bodies are sender-authored HTML (often white bg) — keep them on a light card so they stay readable */
-[data-theme="dark"] .inbox-email-body { background:#f5f6f8; color:#1a1a1a; border-radius:8px; padding:10px 12px; }
+/* Email bodies are sender-authored HTML that usually assumes a white background
+   with dark text. In dark mode we render them on a light card so they stay
+   readable, and force a dark default text colour for elements that don't set
+   their own. */
+[data-theme="dark"] .inbox-email-body {
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+[data-theme="dark"] .inbox-email-body * {
+  color: #1a1a1a;
+  border-color: #e0e0e0;
+}
+[data-theme="dark"] .inbox-email-body a { color: #1478C4 !important; }
 [data-theme="dark"] #authScreen { background: linear-gradient(135deg,#161b26 0%,var(--white) 60%,#141922 100%); }
+
+/* Snipe row status tints — light pastels in light mode, subtle transparent
+   tints in dark mode so text stays readable. */
+.snipe-row-talking    { background:#eff6ff; }
+.snipe-row-interested { background:#e0f2fe; }
+.snipe-row-replied    { background:#eff6ff; }
+.snipe-row-signed     { background:#dcfce7; }
+.snipe-row-rejected   { background:#fee2e2; }
+.snipe-row-no_reply   { background:#f9fafb; }
+[data-theme="dark"] .snipe-row-talking    { background:rgba(59,130,246,.12); }
+[data-theme="dark"] .snipe-row-interested { background:rgba(56,189,248,.14); }
+[data-theme="dark"] .snipe-row-replied    { background:rgba(59,130,246,.12); }
+[data-theme="dark"] .snipe-row-signed     { background:rgba(52,211,153,.14); }
+[data-theme="dark"] .snipe-row-rejected   { background:rgba(248,113,113,.13); }
+[data-theme="dark"] .snipe-row-no_reply   { background:rgba(255,255,255,.03); }
+/* Snipe table inline inputs/selects blend with the row tint rather than showing
+   as dark boxes. */
+[data-theme="dark"] #snipesTable td input,
+[data-theme="dark"] #snipesTable td select { background: rgba(255,255,255,.04) !important; color: var(--gray-900); border-color: var(--gray-200); }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'DM Sans',sans-serif;background:var(--off-white);color:var(--gray-900);display:flex;min-height:100vh;font-size:14px;line-height:1.5;}
 
@@ -3198,6 +3228,18 @@ html, body { overflow-x: hidden; }
 
 <!-- ══ INVOICE DETAILS MODAL ══ -->
 <!-- ══ ARCHIVE CREATOR MODAL ══ -->
+<!-- ══ ATTACHMENT PREVIEW LIGHTBOX ══ -->
+<div id="attachmentPreviewOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center" onclick="if(event.target===this)closeAttachmentPreview()">
+  <div style="position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:16px 20px;gap:12px">
+    <div id="attachmentPreviewTitle" style="color:#fff;font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></div>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button id="attachmentPreviewDownload" class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:none">⬇ Download</button>
+      <button onclick="closeAttachmentPreview()" class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:none">✕ Close</button>
+    </div>
+  </div>
+  <div id="attachmentPreviewBody" style="display:flex;align-items:center;justify-content:center;max-width:90vw;max-height:88vh"></div>
+</div>
+
 <!-- ══ RATE FACTORS MODAL ══ -->
 <div class="modal-overlay" id="rateFactorsModal">
   <div class="modal" style="max-width:560px">
@@ -13391,12 +13433,12 @@ function renderSnipes() {
   tbody.innerHTML = filtered.map(s => {
     const st = s.reply_status || 'waiting';
     const stInfo = SNIPE_STATUS[st] || SNIPE_STATUS.waiting;
-    const rowBg = stInfo.row ? `background:${stInfo.row}` : '';
+    const rowClass = `snipe-row-${st}`;
     const sentYes = (s.sent||'no').toLowerCase() === 'yes';
     const linkCell = s.link
       ? `<a href="${escapeHtml(s.link)}" target="_blank" rel="noopener" style="color:var(--blue);font-size:12px">${escapeHtml(_shortLink(s.link))}</a>`
       : '<span style="color:var(--gray-300)">—</span>';
-    return `<tr style="${rowBg}">
+    return `<tr class="${rowClass}">
       <td style="font-weight:500">${escapeHtml(s.name||'—')}${s.email ? `<div style="font-size:10px;color:var(--gray-400)">${escapeHtml(s.email)}</div>` : ''}</td>
       <td style="text-align:right;font-size:13px">${escapeHtml(s.followers||'—')}</td>
       <td style="font-size:12px;color:var(--gray-600)">${escapeHtml(s.location||'—')}</td>
@@ -13406,11 +13448,11 @@ function renderSnipes() {
         <button class="btn btn-ghost btn-sm" onclick="toggleSnipeSent('${s.id}')" style="padding:2px 10px;font-size:11px;${sentYes?'color:var(--green);font-weight:700':'color:var(--gray-400)'}">${sentYes ? '✓ Yes' : 'No'}</button>
       </td>
       <td>
-        <select onchange="updateSnipeStatus('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-100);border-radius:6px;background:var(--white);color:var(--gray-900)">
-          ${Object.entries(SNIPE_STATUS).map(([k,v]) => `<option value="${k}" ${st===k?'selected':''}>${v.label}</option>`).join('')}
+        <select onchange="updateSnipeStatus('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:6px;background:transparent;color:var(--gray-900)">
+          ${Object.entries(SNIPE_STATUS).map(([k,v]) => `<option value="${k}" ${st===k?'selected':''} style="background:var(--white);color:var(--gray-900)">${v.label}</option>`).join('')}
         </select>
       </td>
-      <td><input value="${escapeHtml(s.follow_up||'')}" onchange="updateSnipeField('${s.id}','follow_up',this.value)" placeholder="—" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-100);border-radius:6px;width:110px"></td>
+      <td><input value="${escapeHtml(s.follow_up||'')}" onchange="updateSnipeField('${s.id}','follow_up',this.value)" placeholder="—" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:6px;width:110px;background:transparent;color:var(--gray-900)"></td>
       ${showOwner ? `<td>${_snipeOwnerChip(s)}</td>` : ''}
       <td style="text-align:right;white-space:nowrap">
         <div style="display:inline-flex;gap:6px;justify-content:flex-end">
@@ -16091,19 +16133,36 @@ function _renderAttachmentsBlock(m, folder) {
     const size = _fmtFileSize(a.size || 0);
     const partId = encodeURIComponent(a.partId || '');
     const filename = (a.filename || 'attachment').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--gray-100);border-radius:8px;background:var(--gray-50);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background='var(--gray-50)'" onclick="downloadAttachment('${m.uid}','${folder}','${partId}','${filename}')">
+    const mime = (a.mimetype || '').replace(/"/g,'');
+    const canPreview = _canPreviewMime(a.mimetype || '', a.filename || '');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--gray-100);border-radius:8px;background:var(--gray-50)">
       <span style="font-size:24px">${icon}</span>
-      <div style="flex:1;min-width:0">
+      <div style="flex:1;min-width:0${canPreview ? ';cursor:pointer' : ''}" ${canPreview ? `onclick="previewAttachment('${m.uid}','${folder}','${partId}','${filename}','${mime}')"` : ''}>
         <div style="font-size:13px;font-weight:500;color:var(--gray-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${filename}</div>
-        <div style="font-size:11px;color:var(--gray-500)">${size} · Click to download</div>
+        <div style="font-size:11px;color:var(--gray-500)">${size}${canPreview ? ' · Click to preview' : ''}</div>
       </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--gray-400)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      ${canPreview ? `<button onclick="previewAttachment('${m.uid}','${folder}','${partId}','${filename}','${mime}')" title="Preview" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--gray-400)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>` : ''}
+      <button onclick="downloadAttachment('${m.uid}','${folder}','${partId}','${filename}')" title="Download" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--gray-400)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
     </div>`;
   }).join('');
   return `<div style="border-top:1px solid var(--gray-100);margin-top:12px;padding-top:12px">
     <div style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">📎 ${atts.length} attachment${atts.length === 1 ? '' : 's'}</div>
     <div style="display:flex;flex-direction:column;gap:6px">${items}</div>
   </div>`;
+}
+
+/** Which mime types we can render inline (image / pdf / plain text). */
+function _canPreviewMime(mime, filename) {
+  const mm = (mime || '').toLowerCase();
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  if (mm.startsWith('image/')) return true;
+  if (mm.includes('pdf') || ext === 'pdf') return true;
+  if (mm.startsWith('text/') || ['txt','csv','log','json'].includes(ext)) return true;
+  return false;
 }
 
 function _iconForMime(mime, filename) {
@@ -16126,6 +16185,71 @@ function _fmtFileSize(bytes) {
   if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
   if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(1) + ' MB';
   return (bytes/1024/1024/1024).toFixed(2) + ' GB';
+}
+
+// Track the current preview blob URL so we can revoke it on close
+let _previewBlobUrl = null;
+// Escape closes the preview lightbox (attached once)
+if (!window._attachPreviewEscBound) {
+  window._attachPreviewEscBound = true;
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const ov = document.getElementById('attachmentPreviewOverlay');
+      if (ov && ov.style.display === 'flex') closeAttachmentPreview();
+    }
+  });
+}
+
+/** Preview an attachment inline in a lightbox instead of downloading. */
+async function previewAttachment(uid, folder, partId, filename, mime) {
+  if (!_currentInbox?.mailbox) { showToast('No mailbox context'); return; }
+  const token = _emailAuthToken();
+  if (!token) { showToast('Not logged in to email'); return; }
+  const overlay = document.getElementById('attachmentPreviewOverlay');
+  const body = document.getElementById('attachmentPreviewBody');
+  const titleEl = document.getElementById('attachmentPreviewTitle');
+  titleEl.textContent = filename;
+  body.innerHTML = '<div style="color:#fff;padding:40px;text-align:center">Loading preview…</div>';
+  overlay.style.display = 'flex';
+  // Stash download params on the download button
+  const dlBtn = document.getElementById('attachmentPreviewDownload');
+  dlBtn.onclick = () => downloadAttachment(uid, folder, partId, filename);
+
+  const q = new URLSearchParams({
+    mailbox: _currentInbox.mailbox,
+    uid: String(uid),
+    folder: folder || _currentInbox.folder || 'INBOX',
+    partId: decodeURIComponent(partId),
+  }).toString();
+  try {
+    const res = await fetch(EMAIL_API + '/attachment?' + q, { headers: { 'X-Staff-Token': token } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    if (_previewBlobUrl) URL.revokeObjectURL(_previewBlobUrl);
+    _previewBlobUrl = URL.createObjectURL(blob);
+    const mm = (mime || blob.type || '').toLowerCase();
+    if (mm.startsWith('image/')) {
+      body.innerHTML = `<img src="${_previewBlobUrl}" style="max-width:100%;max-height:80vh;object-fit:contain;border-radius:6px" alt="${filename}">`;
+    } else if (mm.includes('pdf')) {
+      body.innerHTML = `<iframe src="${_previewBlobUrl}" style="width:85vw;height:85vh;border:none;border-radius:6px;background:#fff"></iframe>`;
+    } else if (mm.startsWith('text/') || /\.(txt|csv|log|json)$/i.test(filename)) {
+      const text = await blob.text();
+      const esc = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      body.innerHTML = `<pre style="background:#fff;color:#1a1a1a;padding:20px;border-radius:6px;max-width:85vw;max-height:82vh;overflow:auto;white-space:pre-wrap;font-size:13px;text-align:left">${esc}</pre>`;
+    } else {
+      body.innerHTML = `<div style="color:#fff;padding:40px;text-align:center">Can't preview this file type.<br><br>Use the Download button below.</div>`;
+    }
+  } catch(e) {
+    body.innerHTML = `<div style="color:#fff;padding:40px;text-align:center">❌ Preview failed: ${e.message}</div>`;
+  }
+}
+
+function closeAttachmentPreview() {
+  const overlay = document.getElementById('attachmentPreviewOverlay');
+  if (overlay) overlay.style.display = 'none';
+  const body = document.getElementById('attachmentPreviewBody');
+  if (body) body.innerHTML = '';
+  if (_previewBlobUrl) { URL.revokeObjectURL(_previewBlobUrl); _previewBlobUrl = null; }
 }
 
 /** Download an attachment via the Worker. Uses fetch + blob so the actual file
