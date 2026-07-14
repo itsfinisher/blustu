@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-p (rate estimator GBP + follower-floor, no low-view collapse) -->
+<!-- blustu panel build 2026-07-13-r (rate: content focus / niche clarity factor) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3198,6 +3198,36 @@ html, body { overflow-x: hidden; }
 
 <!-- ══ INVOICE DETAILS MODAL ══ -->
 <!-- ══ ARCHIVE CREATOR MODAL ══ -->
+<!-- ══ RATE FACTORS MODAL ══ -->
+<div class="modal-overlay" id="rateFactorsModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="rateFactorsTitle">⚙ Rate Factors</div>
+      <button class="modal-close" onclick="closeModal('rateFactorsModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rf-creator-id">
+      <div style="background:var(--blue-light);color:var(--blue);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px">
+        ℹ️ The live TikTok stats stay as solid data. These factors tune the <strong>suggested rate</strong> for this creator based on things the stats can't see — experience, content effort, audience quality, usage rights &amp; exclusivity.
+      </div>
+      <div id="rf-live-preview" style="text-align:center;padding:10px;background:var(--gray-50);border-radius:10px;margin-bottom:14px">
+        <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Suggested rate</div>
+        <div id="rf-preview-value" style="font-size:26px;font-weight:700;font-family:'DM Serif Display',serif;color:var(--blue)">—</div>
+        <div id="rf-preview-range" style="font-size:12px;color:var(--gray-400)"></div>
+      </div>
+      <div id="rf-factors-body"></div>
+      <div class="form-group" style="margin-top:6px">
+        <label class="form-label">Manual floor (optional) — never suggest below this</label>
+        <input class="form-input" id="rf-manual-floor" type="number" min="0" placeholder="e.g. 250" oninput="_rfLivePreview()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('rateFactorsModal')">Cancel</button>
+      <button class="btn btn-primary" id="rf-save-btn" onclick="saveRateFactors()">💾 Save factors</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="archiveCreatorModal">
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
@@ -8208,82 +8238,180 @@ function _fmtCompact(n) {
 }
 
 // ── SUGGESTED RATE ESTIMATOR (reference only) ──
-// Grounded in 2026 UK/global benchmarks. Real pricing at the nano/micro end is
-// driven more by follower base + effort than by raw views, so pricing purely on
-// views-CPM collapses for creators having a quiet run. We price on the HIGHER of:
-//   (a) views-CPM  — rewards creators whose videos out-perform their follower count
-//   (b) follower floor — a baseline any real audience commands regardless of a dip
-// then apply niche + engagement multipliers, clamp to the tier band, in GBP.
+// Base is driven by FOLLOWERS + ENGAGEMENT (the stable signals), with average
+// views used only as a light modifier (views swing too much to anchor on).
+// Then a stack of per-creator factor multipliers — grounded in 2026 benchmark
+// data — moves the number: content effort, audience geo/age, experience, niche,
+// usage rights, exclusivity. All GBP.
 const _NICHE_MULTIPLIER = {
   finance: 2.2, crypto: 2.2, business: 2.0, tech: 1.6, legal: 2.0,
   beauty: 1.4, skincare: 1.4, fashion: 1.3, fitness: 1.3, health: 1.4,
   food: 1.05, travel: 1.15, comedy: 1.0, gaming: 1.1, lifestyle: 1.0,
   entertainment: 1.0, education: 1.2, general: 1.0,
 };
-// Base CPM (cost per 1,000 views) in GBP — mid-market TikTok reference.
-const _BASE_CPM = 22;
 const _CUR = '£';
+
+// Factor option definitions — label + multiplier. Grounded in sourced 2026 data:
+// usage rights +20-100%, exclusivity +20-50%, geography +25-100%, effort scales
+// with production, experience reflects proven track record.
+const RATE_FACTORS = {
+  experience: {
+    label: 'Experience / track record',
+    help: 'Proven creators charge on value, not just metrics.',
+    options: [
+      { v: 'new',         label: 'New — few/no brand deals', mult: 0.85 },
+      { v: 'some',        label: 'Some — a handful of deals', mult: 1.0 },
+      { v: 'experienced', label: 'Experienced — regular partnerships', mult: 1.25 },
+      { v: 'veteran',     label: 'Veteran — established, in-demand', mult: 1.55 },
+    ], default: 'some',
+  },
+  content_effort: {
+    label: 'Content effort / production',
+    help: 'A scripted, edited video is worth far more than a talking head.',
+    options: [
+      { v: 'talking_head', label: 'Talking head — minimal edit', mult: 0.85 },
+      { v: 'standard',     label: 'Standard — light edit', mult: 1.0 },
+      { v: 'edited',       label: 'Edited — vlog style, good edit', mult: 1.25 },
+      { v: 'produced',     label: 'Produced — scripted, multi-shot', mult: 1.5 },
+    ], default: 'standard',
+  },
+  audience_geo: {
+    label: 'Audience location',
+    help: 'Western / high-purchasing-power audiences command a premium.',
+    options: [
+      { v: 'tier1', label: 'Mostly UK / US / Western', mult: 1.3 },
+      { v: 'mixed', label: 'Mixed / global', mult: 1.0 },
+      { v: 'tier3', label: 'Mostly lower-CPM regions', mult: 0.75 },
+    ], default: 'mixed',
+  },
+  audience_age: {
+    label: 'Audience age',
+    help: 'Older audiences with spending power can lift value for some brands.',
+    options: [
+      { v: 'young',  label: 'Mostly under 18', mult: 0.85 },
+      { v: 'core',   label: '18–34 core', mult: 1.0 },
+      { v: 'mature', label: '25–45 spending power', mult: 1.1 },
+    ], default: 'core',
+  },
+  usage_rights: {
+    label: 'Usage rights',
+    help: 'Repurposing for ads / whitelisting adds materially on top.',
+    options: [
+      { v: 'organic',   label: 'Organic post only', mult: 1.0 },
+      { v: 'paid30',    label: '+ Paid usage 30 days', mult: 1.25 },
+      { v: 'paid90',    label: '+ Paid usage 90 days', mult: 1.4 },
+      { v: 'whitelist', label: '+ Whitelisting / Spark Ads', mult: 1.7 },
+      { v: 'perpetual', label: '+ Perpetual / full buyout', mult: 2.0 },
+    ], default: 'organic',
+  },
+  content_focus: {
+    label: 'Content focus / niche clarity',
+    help: 'A creator with a clear, consistent niche is more valuable to brands than one posting random, unfocused content — even at the same follower count.',
+    options: [
+      { v: 'random',    label: 'Random / unfocused — posts anything', mult: 0.75 },
+      { v: 'loose',     label: 'Loose theme — mostly one vibe', mult: 0.9 },
+      { v: 'focused',   label: 'Focused — clear consistent niche', mult: 1.0 },
+      { v: 'authority', label: 'Authority — go-to in their niche', mult: 1.2 },
+    ], default: 'focused',
+  },
+  exclusivity: {
+    label: 'Exclusivity',
+    help: 'Restricting the creator from competitors adds 20–50%.',
+    options: [
+      { v: 'none',       label: 'None', mult: 1.0 },
+      { v: 'category30', label: 'Category, 30 days', mult: 1.2 },
+      { v: 'category90', label: 'Category, 90 days', mult: 1.35 },
+      { v: 'broad',      label: 'Broad / long-term', mult: 1.6 },
+    ], default: 'none',
+  },
+};
+
+function _rateFactorMult(c, key) {
+  const def = RATE_FACTORS[key];
+  const chosen = c['rate_' + key] || def.default;
+  const opt = def.options.find(o => o.v === chosen) || def.options.find(o => o.v === def.default);
+  return { mult: opt ? opt.mult : 1.0, chosen: opt ? opt.v : def.default, label: opt ? opt.label : '' };
+}
 
 function estimateCreatorRate(c) {
   const followers = Number(c.tiktok_followers || 0);
   const avgViews  = Number(c.tiktok_avg_views || 0);
   const eng       = c.tiktok_engagement != null ? Number(c.tiktok_engagement) : null;
-  if (!avgViews && !followers) return null;
+  if (!followers && !avgViews) return null;
 
-  // Niche multiplier
-  const nicheKey = (c.niche || 'general').toLowerCase().split(/[\s,]+/)[0];
-  const nicheMult = _NICHE_MULTIPLIER[nicheKey] ?? 1.0;
+  // ── BASE: followers + engagement ──
+  // Engagement-weighted follower value. Rate per 1,000 followers tapers by tier
+  // (nano premium), lifted or cut by engagement quality.
+  let perK;
+  if (followers < 10000)        perK = 14;
+  else if (followers < 50000)   perK = 12;
+  else if (followers < 100000)  perK = 10;
+  else if (followers < 500000)  perK = 7.5;
+  else if (followers < 1000000) perK = 5.5;
+  else                          perK = 4;
 
-  // Engagement multiplier — reward strong ER, gently discount weak.
-  // TikTok: 5-10% good, 10%+ excellent, <2% weak. Floor at 0.8 so a quiet
-  // period doesn't gut the rate.
+  // Engagement quality multiplier on the base
   let engMult = 1.0;
   if (eng != null) {
-    if (eng >= 12) engMult = 1.6;
-    else if (eng >= 8) engMult = 1.35;
+    if (eng >= 12) engMult = 1.5;
+    else if (eng >= 8) engMult = 1.3;
     else if (eng >= 5) engMult = 1.15;
     else if (eng >= 3) engMult = 1.0;
     else if (eng >= 1.5) engMult = 0.9;
     else engMult = 0.8;
   }
 
-  // (a) Views-based: CPM on average views
-  const viewsRate = avgViews ? (avgViews / 1000) * _BASE_CPM : 0;
+  let base = (followers / 1000) * perK * engMult;
 
-  // (b) Follower floor: a per-follower baseline that reflects what a real
-  // audience commands even on a quiet run. Tiered £ per 1,000 followers —
-  // higher rate-per-follower at the small end (nano/micro premium), tapering
-  // as audiences get large.
-  const followerFloor = _followerBaseRate(followers);
+  // Light views modifier: if recent avg views strongly out- or under-perform the
+  // follower base, nudge ±. Capped so a viral spike or quiet run only moves it a
+  // little — views are supporting evidence, not the anchor.
+  if (avgViews && followers) {
+    const viewRatio = avgViews / followers;         // ~0.1-0.5 typical
+    if (viewRatio >= 1.0)      base *= 1.25;         // videos out-reaching audience hugely
+    else if (viewRatio >= 0.5) base *= 1.12;
+    else if (viewRatio >= 0.2) base *= 1.0;
+    else if (viewRatio >= 0.08) base *= 0.92;
+    else base *= 0.85;                              // very low reach lately
+  }
 
-  // Price on the higher of the two signals.
-  let base = Math.max(viewsRate, followerFloor);
+  // ── NICHE ──
+  const nicheKey = (c.niche || 'general').toLowerCase().split(/[\s,]+/)[0];
+  const nicheMult = _NICHE_MULTIPLIER[nicheKey] ?? 1.0;
 
-  let mid = base * nicheMult * engMult;
+  // ── FACTOR STACK ──
+  const fExp   = _rateFactorMult(c, 'experience');
+  const fEff   = _rateFactorMult(c, 'content_effort');
+  const fFocus = _rateFactorMult(c, 'content_focus');
+  const fGeo   = _rateFactorMult(c, 'audience_geo');
+  const fAge   = _rateFactorMult(c, 'audience_age');
+  const fUsage = _rateFactorMult(c, 'usage_rights');
+  const fExcl  = _rateFactorMult(c, 'exclusivity');
 
-  // Clamp to the known follower-tier band (2026 benchmarks, GBP/video)
+  let mid = base
+    * nicheMult
+    * fExp.mult * fEff.mult * fFocus.mult * fGeo.mult * fAge.mult * fUsage.mult * fExcl.mult;
+
+  // Manual floor — never go below what the creator actually charges
+  const manualFloor = Number(c.rate_manual_floor || 0);
+  if (manualFloor > 0) mid = Math.max(mid, manualFloor);
+
+  // Tier ceiling sanity (prevents runaway stacking) — generous upper bound
   const tierBand = _followerTierBand(followers);
-  if (tierBand) mid = Math.max(tierBand.floor, Math.min(mid, tierBand.ceil));
+  if (tierBand) mid = Math.min(mid, tierBand.ceil * 1.5);
+  // Hard minimum floor for any real creator
+  mid = Math.max(mid, followers < 1000 ? 30 : 50);
 
-  // Round to a sensible increment
   const round = v => v >= 1000 ? Math.round(v/50)*50 : v >= 200 ? Math.round(v/25)*25 : v >= 50 ? Math.round(v/10)*10 : Math.round(v/5)*5;
   mid = round(mid);
   const low  = round(mid * 0.8);
   const high = round(mid * 1.4);
-  const driver = viewsRate >= followerFloor ? 'views' : 'audience';
-  return { low, mid, high, nicheMult, engMult, nicheKey, tier: tierBand?.label || '—', driver };
-}
-
-// Per-follower baseline in GBP. Higher rate-per-1k at the small end where
-// engagement is strongest, tapering for larger accounts.
-function _followerBaseRate(followers) {
-  if (!followers) return 0;
-  if (followers < 10000)   return (followers / 1000) * 12;   // nano: ~£12 per 1k
-  if (followers < 50000)   return (followers / 1000) * 10;   // micro
-  if (followers < 100000)  return (followers / 1000) * 8;    // micro+
-  if (followers < 500000)  return (followers / 1000) * 6;    // mid
-  if (followers < 1000000) return (followers / 1000) * 4.5;  // macro
-  return (followers / 1000) * 3.5;                            // mega
+  return {
+    low, mid, high, nicheKey, nicheMult,
+    engMult, tier: tierBand?.label || '—',
+    factors: { experience: fExp, content_effort: fEff, content_focus: fFocus, audience_geo: fGeo, audience_age: fAge, usage_rights: fUsage, exclusivity: fExcl },
+    manualFloor,
+  };
 }
 
 function _followerTierBand(followers) {
@@ -8303,28 +8431,113 @@ function _renderRateEstimatorCard(c) {
     return '';  // no live data yet — the stats card already prompts to refresh
   }
   const fmt = v => _CUR + v.toLocaleString('en-GB');
+  const canEdit = currentUser && ['owner','admin','manager'].includes(currentUser.systemRole);
   const nichePct = Math.round((est.nicheMult - 1) * 100);
-  const engPct   = Math.round((est.engMult - 1) * 100);
+  // Build factor chips — only show ones that move the price off neutral
+  const chips = [];
+  chips.push(`<span style="font-size:10px;background:var(--gray-50);color:var(--gray-600);padding:3px 8px;border-radius:6px">Niche ${est.nicheKey} ${nichePct>=0?'+':''}${nichePct}%</span>`);
+  const pct = m => Math.round((m - 1) * 100);
+  const factorChip = (f, name) => {
+    const p = pct(f.mult);
+    if (p === 0) return '';
+    return `<span style="font-size:10px;background:var(--gray-50);color:var(--gray-600);padding:3px 8px;border-radius:6px">${name} ${p>=0?'+':''}${p}%</span>`;
+  };
+  chips.push(factorChip(est.factors.experience, 'Experience'));
+  chips.push(factorChip(est.factors.content_effort, 'Effort'));
+  chips.push(factorChip(est.factors.content_focus, 'Focus'));
+  chips.push(factorChip(est.factors.audience_geo, 'Audience'));
+  chips.push(factorChip(est.factors.audience_age, 'Age'));
+  chips.push(factorChip(est.factors.usage_rights, 'Usage'));
+  chips.push(factorChip(est.factors.exclusivity, 'Exclusivity'));
+  const chipsHtml = chips.filter(Boolean).join('');
+
   return `<div class="card" style="margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <div class="card-title" style="margin:0">💷 Suggested Rate <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:6px;font-weight:600;vertical-align:middle">REFERENCE</span></div>
-      <div style="font-size:11px;color:var(--gray-400)">${est.tier} tier</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="font-size:11px;color:var(--gray-400)">${est.tier} tier</div>
+        ${canEdit ? `<button class="btn btn-ghost btn-sm" onclick="openRateFactors(${c.id})" style="font-size:11px">⚙ Edit factors</button>` : ''}
+      </div>
     </div>
     <div style="display:flex;align-items:baseline;gap:8px;justify-content:center;padding:6px 0 10px">
       <div style="font-size:14px;color:var(--gray-400)">${fmt(est.low)}</div>
       <div style="font-size:30px;font-weight:700;font-family:'DM Serif Display',serif;color:var(--blue)">${fmt(est.mid)}</div>
       <div style="font-size:14px;color:var(--gray-400)">${fmt(est.high)}</div>
     </div>
-    <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-bottom:10px">per in-feed TikTok video · range low → suggested → high</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">
-      <span style="font-size:10px;background:var(--gray-50);color:var(--gray-600);padding:3px 8px;border-radius:6px">Priced on ${est.driver === 'views' ? 'view performance' : 'audience size'}</span>
-      <span style="font-size:10px;background:var(--gray-50);color:var(--gray-600);padding:3px 8px;border-radius:6px">Niche ${est.nicheKey} ${nichePct>=0?'+':''}${nichePct}%</span>
-      ${c.tiktok_engagement != null ? `<span style="font-size:10px;background:var(--gray-50);color:var(--gray-600);padding:3px 8px;border-radius:6px">Engagement ${engPct>=0?'+':''}${engPct}%</span>` : ''}
-    </div>
+    <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-bottom:10px">per in-feed TikTok video · range low → suggested → high${est.manualFloor ? ` · floor ${fmt(est.manualFloor)}` : ''}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">${chipsHtml}</div>
     <div style="font-size:10px;color:var(--gray-400);margin-top:10px;text-align:center;line-height:1.5">
-      Estimate from live stats × 2026 UK market benchmarks. A reference for negotiation — actual rates vary with usage rights, exclusivity, whitelisting &amp; deliverables. Add ~20–50% for Spark Ads / paid usage.
+      Base from followers &amp; engagement, adjusted by the factors above (⚙ Edit to tune per creator). A reference for negotiation — real rates flex with deliverables &amp; scope.
     </div>
   </div>`;
+}
+
+// ── RATE FACTORS EDITOR ──
+let _rfCreatorId = null;
+
+function openRateFactors(creatorId) {
+  const c = creators.find(x => Number(x.id) === Number(creatorId));
+  if (!c) return;
+  _rfCreatorId = creatorId;
+  document.getElementById('rf-creator-id').value = creatorId;
+  document.getElementById('rateFactorsTitle').textContent = '⚙ Rate Factors — ' + c.name;
+  // Build the factor selects
+  const body = document.getElementById('rf-factors-body');
+  body.innerHTML = Object.entries(RATE_FACTORS).map(([key, def]) => {
+    const chosen = c['rate_' + key] || def.default;
+    const opts = def.options.map(o => `<option value="${o.v}"${o.v === chosen ? ' selected' : ''}>${o.label} (${o.mult >= 1 ? '×' + o.mult : '×' + o.mult})</option>`).join('');
+    return `<div class="form-group">
+      <label class="form-label">${def.label}</label>
+      <select class="form-select" id="rf-${key}" onchange="_rfLivePreview()">${opts}</select>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:3px">${def.help}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('rf-manual-floor').value = c.rate_manual_floor || '';
+  openModal('rateFactorsModal');
+  _rfLivePreview();
+}
+
+// Build a temp creator object from the modal's current selections for live preview
+function _rfDraftCreator() {
+  const c = creators.find(x => Number(x.id) === Number(_rfCreatorId));
+  const draft = { ...c };
+  for (const key of Object.keys(RATE_FACTORS)) {
+    const el = document.getElementById('rf-' + key);
+    if (el) draft['rate_' + key] = el.value;
+  }
+  const floor = document.getElementById('rf-manual-floor').value;
+  draft.rate_manual_floor = floor ? Number(floor) : null;
+  return draft;
+}
+
+function _rfLivePreview() {
+  const est = estimateCreatorRate(_rfDraftCreator());
+  const fmt = v => _CUR + Number(v).toLocaleString('en-GB');
+  if (!est) return;
+  document.getElementById('rf-preview-value').textContent = fmt(est.mid);
+  document.getElementById('rf-preview-range').textContent = `${fmt(est.low)} – ${fmt(est.high)}`;
+}
+
+async function saveRateFactors() {
+  const c = creators.find(x => Number(x.id) === Number(_rfCreatorId));
+  if (!c) return;
+  const btn = document.getElementById('rf-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const patch = { rate_factors_updated_at: new Date().toISOString() };
+  for (const key of Object.keys(RATE_FACTORS)) {
+    const el = document.getElementById('rf-' + key);
+    if (el) patch['rate_' + key] = el.value;
+  }
+  const floor = document.getElementById('rf-manual-floor').value;
+  patch.rate_manual_floor = floor ? Number(floor) : null;
+  const r = await DB._req('PATCH', 'creators', patch, '?id=eq.' + _rfCreatorId);
+  btn.disabled = false; btn.textContent = '💾 Save factors';
+  if (r === null) { showToast('⚠ Save failed — run rate-factors.sql in Supabase?'); return; }
+  Object.assign(c, patch);
+  Storage.set('creators', creators);
+  closeModal('rateFactorsModal');
+  renderProfileSocials(c);
+  showToast('✅ Rate factors saved');
 }
 
 function _renderTikTokStatsCard(c) {
