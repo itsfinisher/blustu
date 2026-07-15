@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-u (expanded niche catalog + main/sub niches) -->
+<!-- blustu panel build 2026-07-13-v (onboarding form upgraded: niche catalog + factors + handle) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -969,7 +969,7 @@ html, body { overflow-x: hidden; }
     <div class="portal-step active" id="pstep-1">
       <div class="portal-section">
         <div class="portal-section-title"><span>1</span>Your Social Platforms</div>
-        <div class="form-group"><label class="form-label">TikTok Profile URL</label><input class="form-input" id="ob-tiktok" placeholder="https://tiktok.com/@yourhandle"><div class="form-hint">e.g. https://tiktok.com/@yourhandle</div></div>
+        <div class="form-group"><label class="form-label">TikTok Profile URL</label><input class="form-input" id="ob-tiktok" placeholder="https://tiktok.com/@yourhandle"><div class="form-hint">e.g. https://tiktok.com/@yourhandle — we'll pull your live stats from this</div></div>
         <div class="form-group"><label class="form-label">Instagram Profile URL</label><input class="form-input" id="ob-instagram" placeholder="https://instagram.com/yourhandle"></div>
         <div class="form-group"><label class="form-label">YouTube Channel URL</label><input class="form-input" id="ob-youtube" placeholder="https://youtube.com/@yourchannel"></div>
         <div class="form-group"><label class="form-label">Other Platform <span style="color:var(--gray-400);font-weight:400">(optional)</span></label><input class="form-input" id="ob-other" placeholder="e.g. https://twitter.com/yourhandle"></div>
@@ -979,9 +979,9 @@ html, body { overflow-x: hidden; }
           <span style="background:var(--amber);color:white;width:20px;height:20px;border-radius:50%;font-size:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">★</span>
           Your Stats <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(optional)</span>
         </div>
-        <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px;margin-top:4px">Helps us build better brand pitches. Can be updated later.</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px;margin-top:4px">Helps us build better brand pitches. We also pull live TikTok stats automatically, so don't worry if you're unsure.</div>
         <div class="rate-grid">
-          <div class="form-group"><label class="form-label">Followers (any platform)</label><input class="form-input" id="ob-followers" placeholder="e.g. 45K or 45000"></div>
+          <div class="form-group"><label class="form-label">Followers (main platform)</label><input class="form-input" id="ob-followers" placeholder="e.g. 45K or 45000"></div>
           <div class="form-group"><label class="form-label">Avg. Views per video</label><input class="form-input" id="ob-avgviews" placeholder="e.g. 12K"></div>
         </div>
         <div class="rate-grid">
@@ -1019,9 +1019,69 @@ html, body { overflow-x: hidden; }
     <!-- Step 3: Background -->
     <div class="portal-step" id="pstep-3">
       <div class="portal-section">
-        <div class="portal-section-title"><span>3</span>About You</div>
+        <div class="portal-section-title"><span>3</span>About You & Your Content</div>
         <div class="form-group"><label class="form-label">Short Bio</label><textarea class="form-textarea" id="ob-bio" placeholder="Tell us about yourself and your content in a few sentences..." style="min-height:100px"></textarea></div>
-        <div class="form-group"><label class="form-label">Niche / Content Category</label><input class="form-input" id="ob-niche" placeholder="e.g. Fashion, Lifestyle, Fitness, Food..."></div>
+
+        <div class="form-group">
+          <label class="form-label">Main niche</label>
+          <select class="form-select" id="ob-niche"></select>
+          <div class="form-hint">Pick the category that best describes most of your content.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sub-niches <span style="color:var(--gray-400);font-weight:400">(optional — anything else you cover)</span></label>
+          <div id="ob-subniche-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+          <select class="form-select" id="ob-subniche-add" onchange="_obAddSubNiche(this.value)"><option value="">+ Add a sub-niche…</option></select>
+        </div>
+
+        <div style="margin:20px 0 10px;font-size:13px;font-weight:700;color:var(--gray-900)">A bit about your content &amp; audience</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px">This helps us pitch you accurately and price your work fairly. Be honest — there are no wrong answers.</div>
+
+        <div class="form-group">
+          <label class="form-label">How would you describe your content style?</label>
+          <select class="form-select" id="ob-content-effort">
+            <option value="talking_head">Talking head — quick, minimal editing</option>
+            <option value="standard" selected>Standard — some editing</option>
+            <option value="edited">Edited — vlog style, well edited</option>
+            <option value="produced">Produced — scripted, multi-shot, high effort</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">How focused is your content?</label>
+          <select class="form-select" id="ob-content-focus">
+            <option value="random">A bit of everything / random</option>
+            <option value="loose">Loosely themed</option>
+            <option value="focused" selected>Clear consistent niche</option>
+            <option value="authority">I'm a go-to name in my niche</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Your brand-deal experience</label>
+          <select class="form-select" id="ob-experience">
+            <option value="new">New — few or no paid deals yet</option>
+            <option value="some" selected>Some — a handful of deals</option>
+            <option value="experienced">Experienced — regular brand partnerships</option>
+            <option value="veteran">Veteran — very established, in-demand</option>
+          </select>
+        </div>
+        <div class="rate-grid">
+          <div class="form-group">
+            <label class="form-label">Where's most of your audience?</label>
+            <select class="form-select" id="ob-audience-geo">
+              <option value="tier1">Mostly UK / US / Western</option>
+              <option value="mixed" selected>Mixed / global</option>
+              <option value="tier3">Mostly elsewhere</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Main audience age</label>
+            <select class="form-select" id="ob-audience-age">
+              <option value="young">Mostly under 18</option>
+              <option value="core" selected>18–34</option>
+              <option value="mature">25–45+</option>
+            </select>
+          </div>
+        </div>
+
         <div class="form-group"><label class="form-label">Brand Restrictions <span style="color:var(--gray-400);font-weight:400">(optional)</span></label><textarea class="form-textarea" id="ob-restrictions" placeholder="Any brands or categories you won't work with? e.g. alcohol, gambling, fast food..."></textarea></div>
         <div class="form-group"><label class="form-label">Brand Preferences <span style="color:var(--gray-400);font-weight:400">(optional)</span></label><textarea class="form-textarea" id="ob-preferences" placeholder="Types of brands or partnerships you prefer..."></textarea></div>
       </div>
@@ -5486,9 +5546,16 @@ function checkPortalParam(){
     currentPortalCreatorId = id;
     console.log('Portal: creator id =', id, 'name =', name);
     document.getElementById('portalCreatorName').textContent = `Hi ${name}! Please complete your onboarding below.`;
-    // Pre-fill existing niche if available
+    // Populate the niche catalog select
+    const nicheSel = document.getElementById('ob-niche');
+    if (nicheSel) { nicheSel.innerHTML = _nicheOptionsHtml('lifestyle'); nicheSel.onchange = _obRenderSubNicheTags; }
+    _obSubNiches = [];
+    // Pre-fill existing data if the creator is already loaded in memory
     const c = creators.find(x => x.id === id);
-    if (c && c.niche) document.getElementById('ob-niche').value = c.niche;
+    if (c) _prefillPortalFromCreator(c);
+    // Otherwise fetch from DB in the background to prefill
+    else _fetchAndPrefillPortal(id);
+    _obRenderSubNicheTags();
     // Close any open modals that could sit above the portal
     document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
     showPortalStep(1);
@@ -5499,6 +5566,77 @@ function checkPortalParam(){
   } catch(e) {
     console.error('Portal decode error:', e);
   }
+}
+
+// Prefill portal fields from a creator record (handles existing onboarding data)
+function _prefillPortalFromCreator(c) {
+  const ob = c.onboarding || {};
+  const setV = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '') el.value = v; };
+  setV('ob-tiktok', ob.tiktok || (c.tiktok_handle ? 'https://tiktok.com/@' + c.tiktok_handle : ''));
+  setV('ob-instagram', ob.instagram);
+  setV('ob-youtube', ob.youtube);
+  setV('ob-other', ob.other);
+  setV('ob-followers', ob.followers);
+  setV('ob-avgviews', ob.avgViews);
+  setV('ob-engrate', ob.engagementRate);
+  setV('ob-audience', ob.audience);
+  setV('ob-bio', ob.bio);
+  setV('ob-restrictions', ob.restrictions);
+  setV('ob-preferences', ob.preferences);
+  // Niche + subs
+  const nicheSel = document.getElementById('ob-niche');
+  const nicheKey = _resolveNicheKey(c.niche || ob.niche);
+  if (nicheSel) { nicheSel.innerHTML = _nicheOptionsHtml(nicheKey); nicheSel.value = nicheKey; nicheSel.onchange = _obRenderSubNicheTags; }
+  _obSubNiches = Array.isArray(c.sub_niches) ? c.sub_niches.map(_resolveNicheKey).filter(k => k !== nicheKey) : [];
+  // Factor self-assessment prefill from existing values
+  setV('ob-content-effort', c.rate_content_effort);
+  setV('ob-content-focus', c.rate_content_focus);
+  setV('ob-experience', c.rate_experience);
+  setV('ob-audience-geo', c.rate_audience_geo);
+  setV('ob-audience-age', c.rate_audience_age);
+  _obRenderSubNicheTags();
+}
+
+async function _fetchAndPrefillPortal(id) {
+  try {
+    const rows = await DB._req('GET', 'creators', null, `?id=eq.${id}&limit=1`);
+    if (rows && rows.length) { creators.push(rows[0]); _prefillPortalFromCreator(rows[0]); }
+  } catch(e) { /* non-fatal */ }
+}
+
+// Portal sub-niche tag management (mirrors the CRM edit modal)
+let _obSubNiches = [];
+function _obRenderSubNicheTags() {
+  const wrap = document.getElementById('ob-subniche-tags');
+  if (!wrap) return;
+  wrap.innerHTML = _obSubNiches.length
+    ? _obSubNiches.map(k => {
+        const label = NICHE_CATALOG[k]?.label || k;
+        return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--blue-light);color:var(--blue);font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px">${label}<span onclick="_obRemoveSubNiche('${k}')" style="cursor:pointer;font-weight:700;opacity:.7">✕</span></span>`;
+      }).join('')
+    : '<span style="font-size:11px;color:var(--gray-400)">None yet</span>';
+  const mainKey = document.getElementById('ob-niche')?.value;
+  const sel = document.getElementById('ob-subniche-add');
+  if (sel) {
+    const groups = {};
+    for (const [k, v] of Object.entries(NICHE_CATALOG)) {
+      if (_obSubNiches.includes(k) || k === mainKey) continue;
+      (groups[v.group] = groups[v.group] || []).push([k, v]);
+    }
+    sel.innerHTML = '<option value="">+ Add a sub-niche…</option>' +
+      Object.entries(groups).map(([g, items]) => `<optgroup label="${g}">` + items.map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('') + `</optgroup>`).join('');
+  }
+}
+function _obAddSubNiche(key) { if (key && !_obSubNiches.includes(key)) _obSubNiches.push(key); _obRenderSubNicheTags(); }
+function _obRemoveSubNiche(key) { _obSubNiches = _obSubNiches.filter(k => k !== key); _obRenderSubNicheTags(); }
+
+// Extract a clean tiktok handle from a profile URL
+function _handleFromTikTokUrl(url) {
+  if (!url) return null;
+  const m = String(url).match(/@([\w.]+)/);
+  if (m) return m[1];
+  const m2 = String(url).match(/tiktok\.com\/([\w.]+)/i);
+  return m2 ? m2[1].replace(/^@/, '') : null;
 }
 
 function showPortalStep(n){
@@ -5536,9 +5674,17 @@ function collectPortalData(){
   };
   portalData.extraFees   = document.getElementById('ob-extra-fees').value.trim();
   portalData.bio         = document.getElementById('ob-bio').value.trim();
+  // Main niche is now a catalog key
   portalData.niche       = document.getElementById('ob-niche').value.trim();
+  portalData.subNiches   = [..._obSubNiches];
   portalData.restrictions= document.getElementById('ob-restrictions').value.trim();
   portalData.preferences = document.getElementById('ob-preferences').value.trim();
+  // Content + audience factor self-assessment
+  portalData.contentEffort = document.getElementById('ob-content-effort')?.value || 'standard';
+  portalData.contentFocus  = document.getElementById('ob-content-focus')?.value || 'focused';
+  portalData.experience    = document.getElementById('ob-experience')?.value || 'some';
+  portalData.audienceGeo   = document.getElementById('ob-audience-geo')?.value || 'mixed';
+  portalData.audienceAge   = document.getElementById('ob-audience-age')?.value || 'core';
   // Optional stats fields (from Your Stats section in step 1)
   const flrEl = document.getElementById('ob-followers');
   const engEl = document.getElementById('ob-engrate');
@@ -5553,6 +5699,8 @@ function collectPortalData(){
 function buildReview(){
   collectPortalData();
   const r=document.getElementById('ob-review');
+  const nicheLabel = NICHE_CATALOG[portalData.niche]?.label || portalData.niche || '—';
+  const subLabels = (portalData.subNiches || []).map(k => NICHE_CATALOG[k]?.label || k).join(', ');
   const entries=[
     ['TikTok',portalData.tiktok||'—'],
     ['Instagram',portalData.instagram||'—'],
@@ -5560,7 +5708,8 @@ function buildReview(){
     ['TikTok Rate',portalData.rates['TikTok Video']?'£'+portalData.rates['TikTok Video']:'Not set'],
     ['IG Reel Rate',portalData.rates['Instagram Reel']?'£'+portalData.rates['Instagram Reel']:'Not set'],
     ['Bio',portalData.bio||'—'],
-    ['Niche',portalData.niche||'—'],
+    ['Main niche',nicheLabel],
+    ['Sub-niches',subLabels||'None'],
     ['Restrictions',portalData.restrictions||'None'],
   ];
   r.innerHTML=entries.map(([k,v])=>`<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--gray-100)"><span style="color:var(--gray-400);width:120px;flex-shrink:0">${k}</span><span style="font-weight:500">${v}</span></div>`).join('');
@@ -5591,7 +5740,19 @@ async function submitOnboarding(){
 
   creator.onboarding = portalData;
   creator.status = 'Onboarded';  // Mark as Onboarded (was 'Active' — now correctly distinguished)
+  // Main niche + sub-niches
   if (portalData.niche) creator.niche = portalData.niche;
+  if (Array.isArray(portalData.subNiches)) creator.sub_niches = portalData.subNiches;
+  // Rate factor self-assessment → creator's rate factors (only fill if creator
+  // hasn't already had these set by staff — staff overrides win)
+  if (!creator.rate_content_effort && portalData.contentEffort) creator.rate_content_effort = portalData.contentEffort;
+  if (!creator.rate_content_focus && portalData.contentFocus)   creator.rate_content_focus  = portalData.contentFocus;
+  if (!creator.rate_experience && portalData.experience)        creator.rate_experience     = portalData.experience;
+  if (!creator.rate_audience_geo && portalData.audienceGeo)     creator.rate_audience_geo   = portalData.audienceGeo;
+  if (!creator.rate_audience_age && portalData.audienceAge)     creator.rate_audience_age   = portalData.audienceAge;
+  // Auto-extract TikTok handle from the profile URL for live stats
+  const ttHandle = _handleFromTikTokUrl(portalData.tiktok);
+  if (ttHandle && !creator.tiktok_handle) creator.tiktok_handle = ttHandle;
 
   console.log('[Onboarding] Saving creator:', creator.id, creator.name);
 
@@ -5614,7 +5775,14 @@ async function submitOnboarding(){
         body: JSON.stringify({
           onboarding: portalData,
           status: 'Onboarded',
-          niche: creator.niche
+          niche: creator.niche,
+          sub_niches: creator.sub_niches || [],
+          rate_content_effort: creator.rate_content_effort || null,
+          rate_content_focus: creator.rate_content_focus || null,
+          rate_experience: creator.rate_experience || null,
+          rate_audience_geo: creator.rate_audience_geo || null,
+          rate_audience_age: creator.rate_audience_age || null,
+          tiktok_handle: creator.tiktok_handle || null,
         })
       });
       const ptext = await pr.text();
