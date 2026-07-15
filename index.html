@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-b (bio editable on creator profile, flows to pitch doc) -->
+<!-- blustu panel build 2026-07-14-c (socials tab bio uses pitch_bio) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -9718,7 +9718,7 @@ function renderProfileSocials(c) {
     </div>
 
     <!-- Bio and restrictions -->
-    ${ob.bio ? `<div class="card" style="margin-bottom:14px"><div class="card-title" style="margin-bottom:6px">Bio</div><div style="font-size:13px;color:var(--gray-600)">${ob.bio}</div></div>` : ''}
+    ${(() => { const bio = (c.pitch_bio && c.pitch_bio.trim()) || (ob.bio || ''); return bio ? `<div class="card" style="margin-bottom:14px"><div class="card-title" style="margin-bottom:6px">Bio</div><div style="font-size:13px;color:var(--gray-600)">${bio.replace(/</g,'&lt;')}</div></div>` : ''; })()}
     ${ob.restrictions ? `<div class="card"><div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:4px">⚠️ Brand Restrictions</div><div style="font-size:12px;color:var(--gray-600)">${ob.restrictions}</div></div>` : ''}
   `;
 }
