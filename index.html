@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-a (editable per-creator pitch bio) -->
+<!-- blustu panel build 2026-07-14-b (bio editable on creator profile, flows to pitch doc) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2879,6 +2879,10 @@ html, body { overflow-x: hidden; }
       <div class="form-row">
         <div class="form-group"><label class="form-label">TikTok handle <span style="color:var(--gray-400);font-weight:400">(for live stats)</span></label><input class="form-input" id="ec-tiktok" placeholder="@username or username"></div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Bio <span style="color:var(--gray-400);font-weight:400">(appears on pitch documents)</span></label>
+        <textarea class="form-textarea" id="ec-bio" placeholder="A short, brand-facing bio for this creator…" style="min-height:70px"></textarea>
+      </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="ec-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="ec-status"><option>Active</option><option>Invited</option><option>Onboarded</option><option>Paused</option><option>Inactive</option></select></div>
@@ -5098,6 +5102,8 @@ function openEditCreator(){
   document.getElementById('ec-loc').value      = c.location === '—' ? '' : (c.location || '');
   const ecTt = document.getElementById('ec-tiktok');
   if (ecTt) ecTt.value = c.tiktok_handle || '';
+  const ecBio = document.getElementById('ec-bio');
+  if (ecBio) ecBio.value = (c.pitch_bio != null && c.pitch_bio !== '') ? c.pitch_bio : ((c.onboarding && c.onboarding.bio) || '');
   // Main niche — hidden select is source of truth, search input shows the label
   const nicheKey = _resolveNicheKey(c.niche);
   const nicheSel = document.getElementById('ec-niche');
@@ -5182,6 +5188,7 @@ async function saveCreatorEdit(){
   const role     = document.getElementById('ec-role').value;
   const status   = document.getElementById('ec-status').value;
   const tiktokHandle = (document.getElementById('ec-tiktok')?.value || '').trim().replace(/^@/, '') || null;
+  const pitchBio = (document.getElementById('ec-bio')?.value || '').trim() || null;
 
   // Staff assignment
   const assigned_staff = {
@@ -5195,7 +5202,7 @@ async function saveCreatorEdit(){
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showErr('Email address looks invalid'); return; }
 
   // Build update — preserve all existing fields not in this form (notes, onboarding, profile_image_url, etc.)
-  const update = { ...orig, name, email, niche, sub_niches, location, role, status, assigned_staff, tiktok_handle: tiktokHandle };
+  const update = { ...orig, name, email, niche, sub_niches, location, role, status, assigned_staff, tiktok_handle: tiktokHandle, pitch_bio: pitchBio };
 
   const btn = document.getElementById('ec-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -9184,29 +9191,14 @@ let _pitchSelected = new Set();
 
 function openPitchBuilder() {
   _pitchSelected = new Set();
-  _pitchBioDraft = {};
   _renderPitchCreatorList();
   _updatePitchCount();
   openModal('pitchBuilderModal');
 }
 
-function _captureVisibleBios() {
-  // Save any currently-shown bio textareas into the draft before a re-render
-  document.querySelectorAll('[id^="pitch-bio-"]').forEach(el => {
-    const id = Number(el.id.replace('pitch-bio-', ''));
-    _pitchBioDraft[id] = el.value;
-  });
-}
-
 function _pitchToggle(id, on) {
-  _captureVisibleBios();
   if (on) _pitchSelected.add(id); else _pitchSelected.delete(id);
   _renderPitchCreatorList();
-  // Restore draft values into the freshly rendered textareas
-  Object.entries(_pitchBioDraft).forEach(([cid, val]) => {
-    const el = document.getElementById('pitch-bio-' + cid);
-    if (el != null) el.value = val;
-  });
   _updatePitchCount();
 }
 
@@ -9223,8 +9215,10 @@ function _renderPitchCreatorList() {
     const currentBio = (c.pitch_bio && c.pitch_bio.trim()) || (c.onboarding && c.onboarding.bio) || '';
     const bioEditor = isSel ? `
       <div style="padding:0 10px 10px 36px">
-        <textarea id="pitch-bio-${c.id}" oninput="_pitchBioChanged(${c.id})" placeholder="Bio for this creator (appears on the doc)…" style="width:100%;font-family:'DM Sans',sans-serif;font-size:12px;padding:8px 10px;border:1px solid var(--gray-200);border-radius:8px;min-height:56px;background:var(--white);color:var(--gray-900)">${(currentBio || '').replace(/</g,'&lt;')}</textarea>
-        <div style="font-size:10px;color:var(--gray-400);margin-top:3px">Edits save to this creator when you generate. Leave blank to use their onboarding bio.</div>
+        <div style="font-size:11px;color:var(--gray-500);background:var(--gray-50);border-radius:8px;padding:8px 10px;line-height:1.5">
+          ${currentBio ? currentBio.replace(/</g,'&lt;') : '<em style="color:var(--gray-400)">No bio yet.</em>'}
+          <span style="color:var(--blue);cursor:pointer;font-weight:600;white-space:nowrap" onclick="closeModal('pitchBuilderModal');openEditCreator(${c.id})"> · Edit on profile</span>
+        </div>
       </div>` : '';
     return `<div style="border-bottom:1px solid var(--gray-50)">
       <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer">
@@ -9240,22 +9234,10 @@ function _renderPitchCreatorList() {
   }).join('');
 }
 
-// Track edited bios in-memory keyed by creator id
-let _pitchBioDraft = {};
-function _pitchBioChanged(id) {
-  const el = document.getElementById('pitch-bio-' + id);
-  if (el) _pitchBioDraft[id] = el.value;
-}
-
 function _pitchSelectAll(on) {
-  _captureVisibleBios();
   _pitchSelected = new Set();
   if (on) (typeof activeCreators === 'function' ? activeCreators() : creators).forEach(c => _pitchSelected.add(c.id));
   _renderPitchCreatorList();
-  Object.entries(_pitchBioDraft).forEach(([cid, val]) => {
-    const el = document.getElementById('pitch-bio-' + cid);
-    if (el != null) el.value = val;
-  });
   _updatePitchCount();
 }
 function _updatePitchCount() {
@@ -9289,21 +9271,6 @@ function _rateJustification(c, est) {
 function generatePitchDoc() {
   const ids = [..._pitchSelected];
   if (!ids.length) { showToast('Select at least one creator'); return; }
-  _captureVisibleBios();
-  // Persist any edited bios to their creators (pitch_bio column)
-  const bioSaves = [];
-  ids.forEach(id => {
-    const c = creators.find(x => x.id === id);
-    if (!c) return;
-    if (_pitchBioDraft[id] != null) {
-      const newBio = _pitchBioDraft[id].trim();
-      if (newBio !== (c.pitch_bio || '')) {
-        c.pitch_bio = newBio;
-        bioSaves.push(DB._req('PATCH', 'creators', { pitch_bio: newBio || null }, '?id=eq.' + id).catch(() => {}));
-      }
-    }
-  });
-  if (bioSaves.length) { Storage.set('creators', creators); Promise.all(bioSaves); }
   const title = (document.getElementById('pitch-title').value || 'BluStu Creator Roster').trim();
   const client = (document.getElementById('pitch-client').value || '').trim();
   const tierChoice = document.getElementById('pitch-rate-tier').value;
