@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-x (niche pickers: dropdown chevron + searchable) -->
+<!-- blustu panel build 2026-07-13-y (calendar: event modal + types + upcoming + dark mode) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -97,6 +97,7 @@
   pointer-events:auto; transition:transform .15s;
 }
 .niche-combo.open .niche-combo-chevron { transform:translateY(-50%) rotate(180deg); }
+@media(max-width:900px){ #cal-layout{ grid-template-columns:1fr !important; } }
 /* Snipe table inline inputs/selects blend with the row tint rather than showing
    as dark boxes. */
 [data-theme="dark"] #snipesTable td input,
@@ -2605,17 +2606,29 @@ html, body { overflow-x: hidden; }
           <button class="btn btn-primary" id="btn-add-event" onclick="openAddEvent()">+ Add Event</button>
         </div>
       </div>
-      <div class="card" style="padding:0;overflow:hidden">
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--gray-100)">
-          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Mon</div>
-          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Tue</div>
-          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Wed</div>
-          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Thu</div>
-          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Fri</div>
-          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Sat</div>
-          <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Sun</div>
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start" id="cal-layout">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--gray-100)">
+            <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Mon</div>
+            <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Tue</div>
+            <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Wed</div>
+            <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Thu</div>
+            <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Fri</div>
+            <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Sat</div>
+            <div style="padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">Sun</div>
+          </div>
+          <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr)"></div>
         </div>
-        <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr)"></div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:12px">📅 Upcoming</div>
+            <div id="cal-upcoming"></div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:10px;font-size:12px">Event types</div>
+            <div id="cal-legend" style="display:flex;flex-direction:column;gap:6px"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3349,6 +3362,51 @@ html, body { overflow-x: hidden; }
 </div>
 
 <!-- ══ RATE FACTORS MODAL ══ -->
+<!-- ══ CALENDAR EVENT MODAL ══ -->
+<div class="modal-overlay" id="calEventModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title" id="calEventModalTitle">Add Event</div>
+      <button class="modal-close" onclick="closeModal('calEventModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cal-event-id">
+      <div class="form-group">
+        <label class="form-label">Title *</label>
+        <input class="form-input" id="cal-title" placeholder="e.g. Content shoot with Maddie">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type</label>
+        <div id="cal-type-picker" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        <input type="hidden" id="cal-type" value="meeting">
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="cal-allday" onchange="toggleCalAllDay()" style="width:auto;margin:0">
+        <label for="cal-allday" style="margin:0;font-size:13px;cursor:pointer">All day</label>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Start *</label><input class="form-input" id="cal-start" type="datetime-local"></div>
+        <div class="form-group"><label class="form-label">End *</label><input class="form-input" id="cal-end" type="datetime-local"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Linked creator <span style="color:var(--gray-400);font-weight:400">(optional)</span></label><select class="form-select" id="cal-creator"><option value="">— None —</option></select></div>
+        <div class="form-group"><label class="form-label">Location <span style="color:var(--gray-400);font-weight:400">(optional)</span></label><input class="form-input" id="cal-location" placeholder="e.g. Studio / Zoom"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes <span style="color:var(--gray-400);font-weight:400">(optional)</span></label>
+        <textarea class="form-textarea" id="cal-notes" placeholder="Any details…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:space-between">
+      <button class="btn btn-danger" id="cal-delete-btn" onclick="deleteCalEvent()" style="display:none">🗑 Delete</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-ghost" onclick="closeModal('calEventModal')">Cancel</button>
+        <button class="btn btn-primary" id="cal-save-btn" onclick="saveCalEvent()">💾 Save Event</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="rateFactorsModal">
   <div class="modal" style="max-width:560px">
     <div class="modal-header">
@@ -4406,7 +4464,7 @@ function showPage(id, btn) {
   if (id === 'staffpayouts') { loadStaffPayouts(); }
   if (id === 'invoices')   { loadInvoices(); }
   if (id === 'snipes')     { loadSnipes(); }
-  if (id === 'calendar')   { renderCalendar(); }
+  if (id === 'calendar')   { loadCalEvents(); }
   if (id === 'managers')   { renderManagersPage(); }
 }
 
@@ -14662,6 +14720,19 @@ let calEvents = Storage.get('calEvents', []);
 let calYear   = new Date().getFullYear();
 let calMonth  = new Date().getMonth(); // 0-indexed
 
+// Event categories with colours + icons
+const CAL_EVENT_TYPES = {
+  meeting:  { label: 'Meeting',   color: '#2198ED', icon: '👥' },
+  shoot:    { label: 'Shoot',     color: '#EC4899', icon: '🎬' },
+  deadline: { label: 'Deadline',  color: '#EF4444', icon: '⏰' },
+  deal:     { label: 'Deal / Brand', color: '#10B981', icon: '🤝' },
+  content:  { label: 'Content',   color: '#8B5CF6', icon: '📱' },
+  personal: { label: 'Personal',  color: '#F59E0B', icon: '🌟' },
+  other:    { label: 'Other',     color: '#06B6D4', icon: '📌' },
+};
+function _calTypeColor(t) { return (CAL_EVENT_TYPES[t] || CAL_EVENT_TYPES.other).color; }
+function _calTypeIcon(t)  { return (CAL_EVENT_TYPES[t] || CAL_EVENT_TYPES.other).icon; }
+
 const CAL_COLORS = ['#2198ED','#10B981','#F59E0B','#8B5CF6','#EC4899','#EF4444','#06B6D4','#84CC16'];
 
 async function loadCalEvents() {
@@ -14726,9 +14797,10 @@ function renderCalendar() {
         return s.getFullYear() === calYear && s.getMonth() === calMonth && s.getDate() === dayNum;
       }).slice(0, 3);
       eventsHtml = dayEvents.map((ev, idx) => {
-        const color = CAL_COLORS[idx % CAL_COLORS.length];
-        const timeStr = ev.all_day ? 'All day' : new Date(ev.start_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-        return `<div onclick="event.stopPropagation();openViewEvent('${ev.id}')" style="background:${color};color:white;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:600;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${ev.title}">${timeStr} ${ev.title}</div>`;
+        const color = _calTypeColor(ev.event_type);
+        const icon = _calTypeIcon(ev.event_type);
+        const timeStr = ev.all_day ? '' : new Date(ev.start_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) + ' ';
+        return `<div onclick="event.stopPropagation();openViewEvent('${ev.id}')" style="background:${color};color:white;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:600;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(ev.title||'').replace(/"/g,'&quot;')}">${icon} ${timeStr}${ev.title}</div>`;
       }).join('');
       const extra = calEvents.filter(ev => {
         const s = new Date(ev.start_at);
@@ -14739,12 +14811,73 @@ function renderCalendar() {
 
     const clickHandler = isValid && canManage ? `onclick="openAddEventOnDate(${calYear},${calMonth},${dayNum})"` : '';
 
-    cells += `<div ${clickHandler} style="min-height:90px;border-right:1px solid var(--gray-100);border-bottom:1px solid var(--gray-100);padding:6px 8px;background:${isOtherMonth?'var(--gray-50)':isToday?'#EBF5FD':'white'};${canManage&&isValid?'cursor:pointer;':''}" ${canManage&&isValid?`onmouseenter="this.style.background='var(--blue-light)'" onmouseleave="this.style.background='${isToday?'#EBF5FD':'white'}'"`:''}>
+    cells += `<div ${clickHandler} style="min-height:90px;border-right:1px solid var(--gray-100);border-bottom:1px solid var(--gray-100);padding:6px 8px;background:${isOtherMonth?'var(--gray-50)':isToday?'var(--blue-light)':'var(--white)'};${canManage&&isValid?'cursor:pointer;':''}" ${canManage&&isValid?`onmouseenter="this.style.background='var(--blue-light)'" onmouseleave="this.style.background='${isToday?'var(--blue-light)':'var(--white)'}'"`:''}>
       <div style="font-size:12px;font-weight:${isToday?'800':'500'};color:${isToday?'var(--blue)':isOtherMonth?'var(--gray-200)':'var(--gray-600)'};margin-bottom:4px">${isValid?dayNum:''}</div>
       ${eventsHtml}
     </div>`;
   }
   grid.innerHTML = cells;
+  _renderCalUpcoming();
+  _renderCalLegend();
+}
+
+function _renderCalUpcoming() {
+  const wrap = document.getElementById('cal-upcoming');
+  if (!wrap) return;
+  const now = new Date();
+  const upcoming = calEvents
+    .filter(ev => new Date(ev.all_day ? ev.end_at : ev.end_at) >= now)
+    .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
+    .slice(0, 8);
+  if (!upcoming.length) {
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--gray-400);padding:8px 0">No upcoming events.</div>';
+    return;
+  }
+  wrap.innerHTML = upcoming.map(ev => {
+    const color = _calTypeColor(ev.event_type);
+    const d = new Date(ev.start_at);
+    const dateStr = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    const timeStr = ev.all_day ? 'All day' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const creator = ev.creator_id ? (creators.find(c => String(c.id) === String(ev.creator_id))?.name || '') : '';
+    return `<div onclick="openViewEvent('${ev.id}')" style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);cursor:pointer">
+      <div style="width:4px;border-radius:3px;background:${color};flex-shrink:0"></div>
+      <div style="min-width:0;flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--gray-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_calTypeIcon(ev.event_type)} ${ev.title}</div>
+        <div style="font-size:11px;color:var(--gray-400)">${dateStr} · ${timeStr}${creator ? ' · ' + creator : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _renderCalLegend() {
+  const wrap = document.getElementById('cal-legend');
+  if (!wrap) return;
+  wrap.innerHTML = Object.entries(CAL_EVENT_TYPES).map(([k, v]) =>
+    `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray-600)">
+      <span style="width:12px;height:12px;border-radius:3px;background:${v.color};flex-shrink:0"></span>
+      ${v.icon} ${v.label}
+    </div>`
+  ).join('');
+}
+
+function _renderCalTypePicker(selected) {
+  const wrap = document.getElementById('cal-type-picker');
+  if (!wrap) return;
+  wrap.innerHTML = Object.entries(CAL_EVENT_TYPES).map(([k, v]) => {
+    const active = k === selected;
+    return `<button type="button" onclick="_pickCalType('${k}')" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;border:2px solid ${active ? v.color : 'var(--gray-100)'};background:${active ? v.color + '18' : 'transparent'};color:${active ? v.color : 'var(--gray-600)'};font-size:12px;font-weight:600;cursor:pointer">${v.icon} ${v.label}</button>`;
+  }).join('');
+}
+function _pickCalType(k) {
+  document.getElementById('cal-type').value = k;
+  _renderCalTypePicker(k);
+}
+function _populateCalCreators(selectedId) {
+  const sel = document.getElementById('cal-creator');
+  if (!sel) return;
+  const list = (typeof activeCreators === 'function' ? activeCreators() : creators);
+  sel.innerHTML = '<option value="">— None —</option>' +
+    list.map(c => `<option value="${c.id}"${String(c.id) === String(selectedId) ? ' selected' : ''}>${c.name}</option>`).join('');
 }
 
 function openAddEvent() {
@@ -14754,12 +14887,19 @@ function openAddEvent() {
   set('calEventModalTitle', 'textContent', 'Add Event');
   set('cal-event-id', 'value', '');
   set('cal-title', 'value', '');
+  set('cal-type', 'value', 'meeting');
+  _renderCalTypePicker('meeting');
+  _populateCalCreators('');
   const allday = document.getElementById('cal-allday');
-  if (allday) allday.checked = false;
+  if (allday) { allday.checked = false; allday.disabled = false; }
   set('cal-location', 'value', '');
   set('cal-notes', 'value', '');
+  // Reset readonly (in case a read-only view left them locked)
+  ['cal-title','cal-start','cal-end','cal-location','cal-notes'].forEach(fid => { const el = document.getElementById(fid); if (el) el.readOnly = false; });
+  const saveBtn = document.getElementById('cal-save-btn'); if (saveBtn) saveBtn.style.display = '';
   const delBtn = document.getElementById('cal-delete-btn');
   if (delBtn) delBtn.style.display = 'none';
+  ['cal-start','cal-end'].forEach(id => { const el = document.getElementById(id); if (el) el.type = 'datetime-local'; });
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const dtStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
@@ -14793,7 +14933,11 @@ function openViewEvent(id) {
   document.getElementById('cal-allday').checked = ev.all_day || false;
   document.getElementById('cal-location').value = ev.location || '';
   document.getElementById('cal-notes').value    = ev.description || '';
+  document.getElementById('cal-type').value     = ev.event_type || 'meeting';
+  _renderCalTypePicker(ev.event_type || 'meeting');
+  _populateCalCreators(ev.creator_id || '');
   document.getElementById('cal-delete-btn').style.display = canManage ? '' : 'none';
+  const saveBtn = document.getElementById('cal-save-btn'); if (saveBtn) saveBtn.style.display = canManage ? '' : 'none';
 
   // Make fields readonly for read-only users
   ['cal-title','cal-start','cal-end','cal-location','cal-notes'].forEach(fid => {
@@ -14846,6 +14990,8 @@ async function saveCalEvent() {
   const endRaw   = document.getElementById('cal-end').value;
   const location = document.getElementById('cal-location').value.trim();
   const notes    = document.getElementById('cal-notes').value.trim();
+  const eventType = document.getElementById('cal-type')?.value || 'meeting';
+  const creatorId = document.getElementById('cal-creator')?.value || null;
 
   // Validate
   if (!title)    { showCalErr('Title is required.'); return; }
@@ -14865,6 +15011,8 @@ async function saveCalEvent() {
     start_at:    startAt,
     end_at:      endAt,
     all_day:     allDay,
+    event_type:  eventType,
+    creator_id:  creatorId ? Number(creatorId) : null,
     updated_at:  new Date().toISOString(),
     created_by:  currentUser.id || null,
   };
