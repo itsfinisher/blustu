@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-y (calendar: event modal + types + upcoming + dark mode) -->
+<!-- blustu panel build 2026-07-13-z (usage-rights rate tiers + pitch doc builder; fixed broken calendar modal) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1334,6 +1334,7 @@ html, body { overflow-x: hidden; }
       <div class="page-header">
         <div><h1>Creator CRM</h1><p>Full roster — <span id="crm-count">25</span> creators</p></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="openPitchBuilder()" title="Generate a brand pitch document for selected creators">📄 Pitch Doc</button>
           <button class="btn btn-ghost btn-sm" id="crm-refresh-tt" onclick="refreshAllTikTokStats()" title="Pull live TikTok stats for all active creators with a handle set">🎵 Refresh all stats</button>
           <button class="btn btn-primary" onclick="openModal('addCreatorModal')">+ Add Creator</button>
         </div>
@@ -3363,6 +3364,49 @@ html, body { overflow-x: hidden; }
 
 <!-- ══ RATE FACTORS MODAL ══ -->
 <!-- ══ CALENDAR EVENT MODAL ══ -->
+<!-- ══ PITCH DOC BUILDER ══ -->
+<div class="modal-overlay" id="pitchBuilderModal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <div class="modal-title">📄 Build Pitch Document</div>
+      <button class="modal-close" onclick="closeModal('pitchBuilderModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--blue-light);color:var(--blue);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px">
+        ℹ️ Generates a polished, brand-ready document with each creator's stats, niche, audience and suggested rates + justification. Opens in a new tab — use your browser's Print → Save as PDF to export.
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Document title</label><input class="form-input" id="pitch-title" value="BluStu Creator Roster" placeholder="e.g. BluStu Creators — Beauty"></div>
+        <div class="form-group"><label class="form-label">For (brand/client)</label><input class="form-input" id="pitch-client" placeholder="e.g. Glossier"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Which rate to show</label>
+        <select class="form-select" id="pitch-rate-tier">
+          <option value="organic">Organic post only (base)</option>
+          <option value="paid30">+ Paid usage 30 days</option>
+          <option value="paid90">+ Paid usage 90 days</option>
+          <option value="whitelist">+ Whitelisting / Spark Ads</option>
+          <option value="perpetual">+ Perpetual / full buyout</option>
+          <option value="all">Show all usage tiers</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px">
+        <label class="form-label" style="margin:0">Select creators</label>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-ghost btn-sm" onclick="_pitchSelectAll(true)">Select all active</button>
+          <button class="btn btn-ghost btn-sm" onclick="_pitchSelectAll(false)">Clear</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px"><span id="pitch-count">0</span> selected</div>
+      <div id="pitch-creator-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--gray-100);border-radius:10px;padding:6px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('pitchBuilderModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="generatePitchDoc()">📄 Generate document</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="calEventModal">
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
@@ -9060,6 +9104,33 @@ function _followerTierBand(followers) {
   return { label: 'Mega', floor: 12000, ceil: 150000 };
 }
 
+// Compute suggested rates across every usage-rights tier, holding the creator's
+// other factors constant. Organic is the base; each usage tier scales up from
+// the SAME underlying base (we divide out the creator's stored usage factor so
+// their saved setting doesn't double-count). Returns null if no live data.
+function estimateRateTiers(c) {
+  const baseEst = estimateCreatorRate(c);
+  if (!baseEst) return null;
+  // The stored estimate already baked in the creator's saved usage factor.
+  // Divide it out to get the "organic" mid, then re-apply each tier's factor.
+  const storedUsageMult = (baseEst.factors.usage_rights?.mult) || 1.0;
+  const round = v => v >= 1000 ? Math.round(v/50)*50 : v >= 200 ? Math.round(v/25)*25 : v >= 50 ? Math.round(v/10)*10 : Math.round(v/5)*5;
+  const organicMid = baseEst.mid / storedUsageMult;
+  const tiers = RATE_FACTORS.usage_rights.options.map(opt => {
+    const mid = round(organicMid * opt.mult);
+    return {
+      key: opt.v,
+      label: opt.label,
+      mult: opt.mult,
+      low: round(mid * 0.8),
+      mid,
+      high: round(mid * 1.4),
+      isBase: opt.v === 'organic',
+    };
+  });
+  return { tiers, base: baseEst };
+}
+
 function _renderRateEstimatorCard(c) {
   const est = estimateCreatorRate(c);
   if (!est) {
@@ -9100,10 +9171,210 @@ function _renderRateEstimatorCard(c) {
       <div style="font-size:14px;color:var(--gray-400)">${fmt(est.high)}</div>
     </div>
     <div style="text-align:center;font-size:11px;color:var(--gray-400);margin-bottom:10px">per in-feed TikTok video · range low → suggested → high${est.manualFloor ? ` · floor ${fmt(est.manualFloor)}` : ''}</div>
+    ${_renderUsageTierTable(c)}
     <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">${chipsHtml}</div>
     <div style="font-size:10px;color:var(--gray-400);margin-top:10px;text-align:center;line-height:1.5">
       Base from followers &amp; engagement, adjusted by the factors above (⚙ Edit to tune per creator). A reference for negotiation — real rates flex with deliverables &amp; scope.
     </div>
+  </div>`;
+}
+
+// ── PITCH DOCUMENT BUILDER ──
+let _pitchSelected = new Set();
+
+function openPitchBuilder() {
+  _pitchSelected = new Set();
+  // Default title with client if CRM filtered
+  _renderPitchCreatorList();
+  _updatePitchCount();
+  openModal('pitchBuilderModal');
+}
+
+function _renderPitchCreatorList() {
+  const wrap = document.getElementById('pitch-creator-list');
+  if (!wrap) return;
+  const list = (typeof activeCreators === 'function' ? activeCreators() : creators);
+  if (!list.length) { wrap.innerHTML = '<div style="padding:16px;text-align:center;color:var(--gray-400);font-size:13px">No active creators.</div>'; return; }
+  wrap.innerHTML = list.map(c => {
+    const hasStats = c.tiktok_followers != null;
+    const checked = _pitchSelected.has(c.id) ? 'checked' : '';
+    const niche = NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || '—';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='transparent'">
+      <input type="checkbox" ${checked} onchange="_pitchToggle(${c.id},this.checked)" style="width:16px;height:16px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--gray-900)">${c.name}</div>
+        <div style="font-size:11px;color:var(--gray-400)">${niche}${c.tiktok_followers != null ? ' · ' + _fmtCompact(c.tiktok_followers) + ' followers' : ' · no live stats'}</div>
+      </div>
+      ${hasStats ? '<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:6px;font-weight:700">● LIVE</span>' : ''}
+    </label>`;
+  }).join('');
+}
+
+function _pitchToggle(id, on) {
+  if (on) _pitchSelected.add(id); else _pitchSelected.delete(id);
+  _updatePitchCount();
+}
+function _pitchSelectAll(on) {
+  _pitchSelected = new Set();
+  if (on) (typeof activeCreators === 'function' ? activeCreators() : creators).forEach(c => _pitchSelected.add(c.id));
+  _renderPitchCreatorList();
+  _updatePitchCount();
+}
+function _updatePitchCount() {
+  const el = document.getElementById('pitch-count');
+  if (el) el.textContent = _pitchSelected.size;
+}
+
+// Human-readable justification for a creator's rate
+function _rateJustification(c, est) {
+  const bits = [];
+  if (c.tiktok_followers != null) bits.push(`${_fmtCompact(c.tiktok_followers)} followers`);
+  if (c.tiktok_engagement != null) {
+    const e = Number(c.tiktok_engagement);
+    const q = e >= 8 ? 'excellent' : e >= 5 ? 'strong' : e >= 3 ? 'solid' : 'developing';
+    bits.push(`${e}% engagement (${q})`);
+  }
+  if (c.tiktok_avg_views != null) bits.push(`${_fmtCompact(c.tiktok_avg_views)} avg views`);
+  const f = est.factors;
+  const notable = [];
+  if (f.experience.mult >= 1.25) notable.push('proven brand-deal track record');
+  if (f.content_effort.mult >= 1.25) notable.push('high-production content');
+  if (f.content_focus.mult >= 1.2) notable.push('niche authority');
+  if (f.audience_geo.mult >= 1.3) notable.push('premium Western audience');
+  const nicheLabel = NICHE_CATALOG[est.nicheKey]?.label || est.nicheKey;
+  let just = `Priced on ${bits.join(', ')}.`;
+  if (est.nicheMult > 1.1) just += ` ${nicheLabel} is a premium niche (×${est.nicheMult}).`;
+  if (notable.length) just += ` Uplift for ${notable.join(', ')}.`;
+  return just;
+}
+
+function generatePitchDoc() {
+  const ids = [..._pitchSelected];
+  if (!ids.length) { showToast('Select at least one creator'); return; }
+  const title = (document.getElementById('pitch-title').value || 'BluStu Creator Roster').trim();
+  const client = (document.getElementById('pitch-client').value || '').trim();
+  const tierChoice = document.getElementById('pitch-rate-tier').value;
+  const picked = ids.map(id => creators.find(c => c.id === id)).filter(Boolean);
+  const fmt = v => '£' + Number(v).toLocaleString('en-GB');
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const cards = picked.map(c => {
+    const est = estimateCreatorRate(c);
+    const pkg = estimateRateTiers(c);
+    const niche = NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || '—';
+    const subs = Array.isArray(c.sub_niches) && c.sub_niches.length ? c.sub_niches.map(k => NICHE_CATALOG[k]?.label || k).join(', ') : '';
+    const r = (typeof resolveCreator === 'function') ? resolveCreator(c) : {};
+    const audience = r.audience || (c.onboarding && c.onboarding.audience) || '—';
+    const handle = c.tiktok_handle ? '@' + c.tiktok_handle : '';
+    const bio = (c.onboarding && c.onboarding.bio) || '';
+
+    // Stats block
+    const statCells = [];
+    if (c.tiktok_followers != null) statCells.push(['Followers', _fmtCompact(c.tiktok_followers)]);
+    if (c.tiktok_engagement != null) statCells.push(['Engagement', c.tiktok_engagement + '%']);
+    if (c.tiktok_avg_views != null) statCells.push(['Avg views', _fmtCompact(c.tiktok_avg_views)]);
+    const statsHtml = statCells.map(([l, v]) => `<div class="stat"><div class="sv">${v}</div><div class="sl">${l}</div></div>`).join('');
+
+    // Rate block
+    let rateHtml = '';
+    if (pkg) {
+      if (tierChoice === 'all') {
+        rateHtml = `<table class="rate-table"><thead><tr><th>Usage rights</th><th>Rate / video</th></tr></thead><tbody>` +
+          pkg.tiers.map(t => `<tr${t.isBase ? ' class="base"' : ''}><td>${t.label}${t.isBase ? ' <span class="base-tag">base</span>' : ''}</td><td>${fmt(t.mid)}</td></tr>`).join('') +
+          `</tbody></table>`;
+      } else {
+        const t = pkg.tiers.find(x => x.key === tierChoice) || pkg.tiers[0];
+        rateHtml = `<div class="single-rate"><span class="sr-label">${t.label}</span><span class="sr-val">${fmt(t.low)} – <strong>${fmt(t.mid)}</strong> – ${fmt(t.high)}</span></div>`;
+      }
+    }
+    const justification = est ? _rateJustification(c, est) : '';
+
+    return `<div class="creator-card">
+      <div class="cc-head">
+        <div>
+          <div class="cc-name">${c.name}</div>
+          <div class="cc-niche">${niche}${subs ? ' · ' + subs : ''}${handle ? ' · ' + handle : ''}</div>
+        </div>
+      </div>
+      ${bio ? `<div class="cc-bio">${bio}</div>` : ''}
+      ${statsHtml ? `<div class="stats-row">${statsHtml}</div>` : ''}
+      <div class="cc-meta"><strong>Audience:</strong> ${audience}</div>
+      ${rateHtml ? `<div class="rate-block"><div class="rb-title">Suggested Rate${tierChoice === 'all' ? 's' : ''}</div>${rateHtml}</div>` : ''}
+      ${justification ? `<div class="cc-just"><strong>Rate rationale:</strong> ${justification}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'DM Sans',sans-serif; color:#1a1a1a; padding:40px; max-width:900px; margin:0 auto; font-size:14px; line-height:1.5; }
+    .doc-head { border-bottom:3px solid #2198ED; padding-bottom:20px; margin-bottom:28px; }
+    .doc-logo { font-family:'DM Serif Display',serif; font-size:26px; color:#2198ED; font-weight:700; }
+    .doc-title { font-size:22px; font-weight:700; margin-top:12px; }
+    .doc-sub { color:#666; font-size:13px; margin-top:4px; }
+    .creator-card { border:1px solid #e5e7eb; border-radius:12px; padding:22px; margin-bottom:20px; page-break-inside:avoid; }
+    .cc-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+    .cc-name { font-family:'DM Serif Display',serif; font-size:20px; color:#111; }
+    .cc-niche { font-size:12px; color:#2198ED; font-weight:600; margin-top:2px; }
+    .cc-bio { font-size:13px; color:#444; margin:10px 0; font-style:italic; }
+    .stats-row { display:flex; gap:20px; margin:14px 0; padding:14px; background:#f8f9fc; border-radius:10px; }
+    .stat { text-align:center; flex:1; }
+    .stat .sv { font-size:20px; font-weight:700; font-family:'DM Serif Display',serif; }
+    .stat .sl { font-size:11px; color:#888; text-transform:uppercase; letter-spacing:.5px; }
+    .cc-meta { font-size:13px; color:#444; margin:8px 0; }
+    .rate-block { margin-top:14px; padding:14px; background:#eff6ff; border-radius:10px; }
+    .rb-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#2198ED; margin-bottom:8px; }
+    .rate-table { width:100%; border-collapse:collapse; }
+    .rate-table th { text-align:left; font-size:11px; color:#888; text-transform:uppercase; padding:4px 8px; border-bottom:1px solid #d0dae8; }
+    .rate-table td { padding:6px 8px; font-size:13px; border-bottom:1px solid #e5e9f0; }
+    .rate-table tr.base td { font-weight:700; color:#1478C4; }
+    .base-tag { font-size:9px; background:#2198ED; color:white; padding:1px 5px; border-radius:4px; vertical-align:middle; }
+    .single-rate { display:flex; justify-content:space-between; align-items:center; }
+    .sr-label { font-size:13px; font-weight:600; }
+    .sr-val { font-size:16px; }
+    .cc-just { font-size:12px; color:#555; margin-top:12px; padding-top:12px; border-top:1px solid #eee; line-height:1.6; }
+    .doc-foot { margin-top:30px; padding-top:16px; border-top:1px solid #e5e7eb; font-size:11px; color:#999; text-align:center; }
+    @media print { body { padding:20px; } .creator-card { border-color:#ddd; } }
+  </style></head><body>
+    <div class="doc-head">
+      <div class="doc-logo">BluStu</div>
+      <div class="doc-title">${title}</div>
+      <div class="doc-sub">${client ? 'Prepared for ' + client + ' · ' : ''}${picked.length} creator${picked.length > 1 ? 's' : ''} · ${today}</div>
+    </div>
+    ${cards}
+    <div class="doc-foot">
+      All rates are per in-feed TikTok video and are a starting point for negotiation. Stats are pulled live from TikTok. Rates flex with deliverables, volume, exclusivity and campaign scope.<br>
+      BluStu Agency · blustu.agency · Generated ${today}
+    </div>
+    <script>window.onload=()=>{setTimeout(()=>window.print(),600);}<\/script>
+  </body></html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=1100');
+  if (!win) { showToast('Popup blocked — allow popups to generate the document'); return; }
+  win.document.write(html);
+  win.document.close();
+  closeModal('pitchBuilderModal');
+  showToast(`✅ Pitch doc for ${picked.length} creator${picked.length > 1 ? 's' : ''} generated`);
+}
+
+function _renderUsageTierTable(c) {
+  const pkg = estimateRateTiers(c);
+  if (!pkg) return '';
+  const fmt = v => _CUR + v.toLocaleString('en-GB');
+  const rows = pkg.tiers.map(t => {
+    const addPct = Math.round((t.mult - 1) * 100);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:8px;background:${t.isBase ? 'var(--blue-light)' : 'var(--gray-50)'};${t.isBase ? 'border:1px solid #bfdbfe' : ''}">
+      <div style="min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--gray-900)">${t.label}${t.isBase ? ' <span style="font-size:9px;color:var(--blue);font-weight:700">← BASE</span>' : ''}</div>
+        ${addPct > 0 ? `<div style="font-size:10px;color:var(--gray-400)">+${addPct}% on organic</div>` : `<div style="font-size:10px;color:var(--gray-400)">post only, no ad usage</div>`}
+      </div>
+      <div style="font-size:14px;font-weight:700;color:${t.isBase ? 'var(--blue)' : 'var(--gray-900)'};white-space:nowrap">${fmt(t.mid)}</div>
+    </div>`;
+  }).join('');
+  return `<div style="margin:6px 0 12px">
+    <div style="font-size:11px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Rate by usage rights</div>
+    <div style="display:flex;flex-direction:column;gap:6px">${rows}</div>
   </div>`;
 }
 
@@ -18127,47 +18398,3 @@ async function deleteMailboxPassword() {
     </div>
   </div>
 </div>
-
-<!-- ══ ADD / EDIT CALENDAR EVENT MODAL ══ -->
-
-
-
-<div class="modal-overlay" id="calEventModal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="calEventModalTitle">Add Event</div>
-      <button class="modal-close" onclick="closeModal('calEventModal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="cal-event-id">
-      <div class="form-group">
-        <label class="form-label">Title *</label>
-        <input class="form-input" id="cal-title" placeholder="e.g. Brand call — Nike UK">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Start Date & Time *</label>
-          <input class="form-input" id="cal-start" type="datetime-local">
-        </div>
-        <div class="form-group">
-          <label class="form-label">End Date & Time *</label>
-          <input class="form-input" id="cal-end" type="datetime-local">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="cal-allday" onchange="toggleCalAllDay()" style="width:16px;height:16px">
-          All-day event
-        </label>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Location (optional)</label>
-        <input class="form-input" id="cal-location" placeholder="e.g. Zoom / Office / London">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Notes (optional)</label>
-        <textarea class="form-textarea" id="cal-notes" placeholder="Meeting agenda, links, etc."></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-danger btn-sm" id="cal-delete-btn" onclick="deleteCalEvent()" style="display:none">De
