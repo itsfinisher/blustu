@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-v (onboarding form upgraded: niche catalog + factors + handle) -->
+<!-- blustu panel build 2026-07-13-x (niche pickers: dropdown chevron + searchable) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -72,6 +72,31 @@
 [data-theme="dark"] .snipe-row-signed     { background:rgba(52,211,153,.14); }
 [data-theme="dark"] .snipe-row-rejected   { background:rgba(248,113,113,.13); }
 [data-theme="dark"] .snipe-row-no_reply   { background:rgba(255,255,255,.03); }
+
+/* Searchable niche dropdown */
+.niche-dropdown {
+  position:absolute; top:100%; left:0; right:0; z-index:50;
+  max-height:260px; overflow-y:auto; margin-top:4px;
+  background:var(--white); border:1px solid var(--gray-200);
+  border-radius:10px; box-shadow:var(--shadow-lg);
+}
+.niche-dropdown .nd-group {
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+  color:var(--gray-400); padding:8px 12px 4px; position:sticky; top:0; background:var(--white);
+}
+.niche-dropdown .nd-item {
+  padding:8px 12px; font-size:13px; cursor:pointer; color:var(--gray-900);
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+}
+.niche-dropdown .nd-item:hover, .niche-dropdown .nd-item.active { background:var(--blue-light); color:var(--blue); }
+.niche-dropdown .nd-item .nd-mult { font-size:11px; color:var(--gray-400); }
+.niche-dropdown .nd-empty { padding:14px 12px; font-size:12px; color:var(--gray-400); text-align:center; }
+.niche-combo-chevron {
+  position:absolute; right:10px; top:50%; transform:translateY(-50%);
+  color:var(--gray-400); cursor:pointer; display:flex; align-items:center;
+  pointer-events:auto; transition:transform .15s;
+}
+.niche-combo.open .niche-combo-chevron { transform:translateY(-50%) rotate(180deg); }
 /* Snipe table inline inputs/selects blend with the row tint rather than showing
    as dark boxes. */
 [data-theme="dark"] #snipesTable td input,
@@ -2811,13 +2836,31 @@ html, body { overflow-x: hidden; }
         ℹ️ Changing the email changes which blustu.agency mailbox shows in this creator's Email tab. The old mailbox's stored password stays linked to the old address.
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Main niche</label><select class="form-select" id="ec-niche"></select></div>
+        <div class="form-group">
+          <label class="form-label">Main niche</label>
+          <div class="niche-combo" style="position:relative">
+            <input class="form-input" id="ec-niche-search" placeholder="Select or search niche…" autocomplete="off" style="padding-right:34px;cursor:pointer"
+              onfocus="_openNicheDropdown('ec-niche')" oninput="_filterNicheDropdown('ec-niche',this.value)" onkeydown="_nicheDropdownKey(event,'ec-niche')">
+            <span class="niche-combo-chevron" onclick="_toggleNicheDropdown('ec-niche')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </span>
+            <div id="ec-niche-dropdown" class="niche-dropdown" style="display:none"></div>
+          </div>
+          <select class="form-select" id="ec-niche" style="display:none"></select>
+        </div>
         <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="ec-loc" placeholder="e.g. UK"></div>
       </div>
       <div class="form-group">
         <label class="form-label">Sub-niches <span style="color:var(--gray-400);font-weight:400">(optional — pick any that also apply)</span></label>
         <div id="ec-subniche-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-        <select class="form-select" id="ec-subniche-add" onchange="_addSubNiche(this.value)"><option value="">+ Add a sub-niche…</option></select>
+        <div class="niche-combo" style="position:relative">
+          <input class="form-input" id="ec-subniche-search" placeholder="Select or search to add a sub-niche…" autocomplete="off" style="padding-right:34px;cursor:pointer"
+            onfocus="_openSubNicheDropdown()" oninput="_filterSubNicheDropdown(this.value)" onkeydown="_subNicheDropdownKey(event)">
+          <span class="niche-combo-chevron" onclick="_toggleSubNicheDropdown()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </span>
+          <div id="ec-subniche-dropdown" class="niche-dropdown" style="display:none"></div>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">TikTok handle <span style="color:var(--gray-400);font-weight:400">(for live stats)</span></label><input class="form-input" id="ec-tiktok" placeholder="@username or username"></div>
@@ -4953,14 +4996,19 @@ function openEditCreator(){
   document.getElementById('ec-loc').value      = c.location === '—' ? '' : (c.location || '');
   const ecTt = document.getElementById('ec-tiktok');
   if (ecTt) ecTt.value = c.tiktok_handle || '';
-  // Main niche — grouped catalog select
+  // Main niche — hidden select is source of truth, search input shows the label
   const nicheKey = _resolveNicheKey(c.niche);
   const nicheSel = document.getElementById('ec-niche');
   if (nicheSel) {
     nicheSel.innerHTML = _nicheOptionsHtml(nicheKey);
     nicheSel.value = nicheKey;
-    nicheSel.onchange = _renderSubNicheTags;
   }
+  const nicheSearch = document.getElementById('ec-niche-search');
+  if (nicheSearch) nicheSearch.value = NICHE_CATALOG[nicheKey]?.label || nicheKey;
+  const subSearch = document.getElementById('ec-subniche-search');
+  if (subSearch) subSearch.value = '';
+  const nd1 = document.getElementById('ec-niche-dropdown'); if (nd1) nd1.style.display = 'none';
+  const nd2 = document.getElementById('ec-subniche-dropdown'); if (nd2) nd2.style.display = 'none';
   // Sub-niches
   _ecSubNiches = Array.isArray(c.sub_niches) ? c.sub_niches.map(_resolveNicheKey).filter(k => k !== nicheKey) : [];
   _renderSubNicheTags();
@@ -8632,22 +8680,6 @@ function _renderSubNicheTags() {
       </span>`;
     }).join('');
   }
-  // Rebuild the add-dropdown excluding already-picked + the main niche
-  const mainKey = document.getElementById('ec-niche')?.value;
-  const sel = document.getElementById('ec-subniche-add');
-  if (sel) {
-    const groups = {};
-    for (const [k, v] of Object.entries(NICHE_CATALOG)) {
-      if (_ecSubNiches.includes(k) || k === mainKey) continue;
-      (groups[v.group] = groups[v.group] || []).push([k, v]);
-    }
-    sel.innerHTML = '<option value="">+ Add a sub-niche…</option>' +
-      Object.entries(groups).map(([group, items]) =>
-        `<optgroup label="${group}">` +
-        items.map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('') +
-        `</optgroup>`
-      ).join('');
-  }
 }
 
 function _addSubNiche(key) {
@@ -8658,6 +8690,141 @@ function _addSubNiche(key) {
 function _removeSubNiche(key) {
   _ecSubNiches = _ecSubNiches.filter(k => k !== key);
   _renderSubNicheTags();
+}
+
+// ── SEARCHABLE NICHE COMBOBOX (main niche) ──
+// The hidden <select id="ec-niche"> stays the source of truth; the search input
+// filters a custom dropdown and sets that select + a visible label.
+let _nicheActiveIdx = -1;
+
+function _nicheDropdownItems(filter, excludeKeys) {
+  const f = (filter || '').toLowerCase().trim();
+  const groups = {};
+  for (const [k, v] of Object.entries(NICHE_CATALOG)) {
+    if (excludeKeys && excludeKeys.includes(k)) continue;
+    if (f && !(v.label.toLowerCase().includes(f) || k.includes(f) || v.group.toLowerCase().includes(f))) continue;
+    (groups[v.group] = groups[v.group] || []).push([k, v]);
+  }
+  return groups;
+}
+
+function _renderNicheDropdown(dropdownId, filter, onPickAttr, excludeKeys) {
+  const dd = document.getElementById(dropdownId);
+  if (!dd) return;
+  const groups = _nicheDropdownItems(filter, excludeKeys);
+  const entries = Object.entries(groups);
+  if (!entries.length) { dd.innerHTML = '<div class="nd-empty">No niches match</div>'; return; }
+  let idx = 0;
+  dd.innerHTML = entries.map(([group, items]) =>
+    `<div class="nd-group">${group}</div>` +
+    items.map(([k, v]) => {
+      const row = `<div class="nd-item" data-key="${k}" data-idx="${idx}" ${onPickAttr(k)}><span>${v.label}</span><span class="nd-mult">×${v.mult}</span></div>`;
+      idx++;
+      return row;
+    }).join('')
+  ).join('');
+}
+
+function _openNicheDropdown(selectId) {
+  _nicheActiveIdx = -1;
+  const search = document.getElementById(selectId + '-search');
+  _renderNicheDropdown(selectId + '-dropdown', search ? search.value : '', k => `onclick="_pickMainNiche('${k}')"`, null);
+  const dd = document.getElementById(selectId + '-dropdown');
+  dd.style.display = 'block';
+  dd.closest('.niche-combo')?.classList.add('open');
+}
+function _toggleNicheDropdown(selectId) {
+  const dd = document.getElementById(selectId + '-dropdown');
+  if (dd && dd.style.display === 'block') {
+    dd.style.display = 'none';
+    dd.closest('.niche-combo')?.classList.remove('open');
+  } else {
+    document.getElementById(selectId + '-search')?.focus();
+    _openNicheDropdown(selectId);
+  }
+}
+function _filterNicheDropdown(selectId, val) {
+  _nicheActiveIdx = -1;
+  _renderNicheDropdown(selectId + '-dropdown', val, k => `onclick="_pickMainNiche('${k}')"`, null);
+  const dd = document.getElementById(selectId + '-dropdown');
+  dd.style.display = 'block';
+  dd.closest('.niche-combo')?.classList.add('open');
+}
+function _pickMainNiche(key) {
+  const sel = document.getElementById('ec-niche');
+  if (sel) { if (!sel.querySelector(`option[value="${key}"]`)) sel.innerHTML = _nicheOptionsHtml(key); sel.value = key; }
+  const search = document.getElementById('ec-niche-search');
+  if (search) search.value = NICHE_CATALOG[key]?.label || key;
+  const dd = document.getElementById('ec-niche-dropdown');
+  dd.style.display = 'none';
+  dd.closest('.niche-combo')?.classList.remove('open');
+  _renderSubNicheTags();
+}
+
+// ── SEARCHABLE SUB-NICHE COMBOBOX ──
+function _openSubNicheDropdown() {
+  _nicheActiveIdx = -1;
+  const mainKey = document.getElementById('ec-niche')?.value;
+  const search = document.getElementById('ec-subniche-search');
+  _renderNicheDropdown('ec-subniche-dropdown', search ? search.value : '', k => `onclick="_pickSubNiche('${k}')"`, [..._ecSubNiches, mainKey]);
+  const dd = document.getElementById('ec-subniche-dropdown');
+  dd.style.display = 'block';
+  dd.closest('.niche-combo')?.classList.add('open');
+}
+function _toggleSubNicheDropdown() {
+  const dd = document.getElementById('ec-subniche-dropdown');
+  if (dd && dd.style.display === 'block') {
+    dd.style.display = 'none';
+    dd.closest('.niche-combo')?.classList.remove('open');
+  } else {
+    document.getElementById('ec-subniche-search')?.focus();
+    _openSubNicheDropdown();
+  }
+}
+function _filterSubNicheDropdown(val) {
+  _nicheActiveIdx = -1;
+  const mainKey = document.getElementById('ec-niche')?.value;
+  _renderNicheDropdown('ec-subniche-dropdown', val, k => `onclick="_pickSubNiche('${k}')"`, [..._ecSubNiches, mainKey]);
+  const dd = document.getElementById('ec-subniche-dropdown');
+  dd.style.display = 'block';
+  dd.closest('.niche-combo')?.classList.add('open');
+}
+function _pickSubNiche(key) {
+  _addSubNiche(key);
+  const search = document.getElementById('ec-subniche-search');
+  if (search) search.value = '';
+  const dd = document.getElementById('ec-subniche-dropdown');
+  dd.style.display = 'none';
+  dd.closest('.niche-combo')?.classList.remove('open');
+}
+
+// Keyboard nav (arrows + enter + escape) shared by both comboboxes
+function _nicheDropdownNav(event, dropdownId, onEnter) {
+  const dd = document.getElementById(dropdownId);
+  if (!dd || dd.style.display === 'none') return;
+  const items = [...dd.querySelectorAll('.nd-item')];
+  if (event.key === 'ArrowDown') { event.preventDefault(); _nicheActiveIdx = Math.min(_nicheActiveIdx + 1, items.length - 1); }
+  else if (event.key === 'ArrowUp') { event.preventDefault(); _nicheActiveIdx = Math.max(_nicheActiveIdx - 1, 0); }
+  else if (event.key === 'Enter') { event.preventDefault(); if (items[_nicheActiveIdx]) onEnter(items[_nicheActiveIdx].dataset.key); return; }
+  else if (event.key === 'Escape') { dd.style.display = 'none'; return; }
+  else return;
+  items.forEach((el, i) => el.classList.toggle('active', i === _nicheActiveIdx));
+  if (items[_nicheActiveIdx]) items[_nicheActiveIdx].scrollIntoView({ block: 'nearest' });
+}
+function _nicheDropdownKey(event, selectId) { _nicheDropdownNav(event, selectId + '-dropdown', _pickMainNiche); }
+function _subNicheDropdownKey(event) { _nicheDropdownNav(event, 'ec-subniche-dropdown', _pickSubNiche); }
+
+// Close dropdowns when clicking outside
+if (!window._nicheDropdownOutsideBound) {
+  window._nicheDropdownOutsideBound = true;
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#ec-niche-search') && !e.target.closest('#ec-niche-dropdown') && !e.target.closest('.niche-combo-chevron')) {
+      const d = document.getElementById('ec-niche-dropdown'); if (d) { d.style.display = 'none'; d.closest('.niche-combo')?.classList.remove('open'); }
+    }
+    if (!e.target.closest('#ec-subniche-search') && !e.target.closest('#ec-subniche-dropdown') && !e.target.closest('.niche-combo-chevron')) {
+      const d = document.getElementById('ec-subniche-dropdown'); if (d) { d.style.display = 'none'; d.closest('.niche-combo')?.classList.remove('open'); }
+    }
+  });
 }
 
 // Factor option definitions — label + multiplier. Grounded in sourced 2026 data:
