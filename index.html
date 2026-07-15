@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-13-t (snipes dark mode row colours) -->
+<!-- blustu panel build 2026-07-13-u (expanded niche catalog + main/sub niches) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2730,7 +2730,7 @@ html, body { overflow-x: hidden; }
     <div class="modal-header"><div class="modal-title">Add Creator</div><button class="modal-close" onclick="closeModal('addCreatorModal')">✕</button></div>
     <div class="modal-body">
       <div class="form-row"><div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="nc-name" placeholder="e.g. Alex or Kim"></div><div class="form-group"><label class="form-label">Email</label><input class="form-input" id="nc-email" placeholder="name@blustu.agency"></div></div>
-      <div class="form-row"><div class="form-group"><label class="form-label">Niche</label><select class="form-select" id="nc-niche"><option>Lifestyle</option><option>Fashion</option><option>Fitness</option><option>Food</option><option>Tech</option><option>Travel</option><option>Entertainment</option></select></div><div class="form-group"><label class="form-label">Location</label><input class="form-input" id="nc-loc" placeholder="e.g. UK"></div></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Niche</label><select class="form-select" id="nc-niche"></select></div><div class="form-group"><label class="form-label">Location</label><input class="form-input" id="nc-loc" placeholder="e.g. UK"></div></div>
       <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="nc-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('addCreatorModal')">Cancel</button><button class="btn btn-primary" onclick="addCreator()">Add to Roster</button></div>
@@ -2751,8 +2751,13 @@ html, body { overflow-x: hidden; }
         ℹ️ Changing the email changes which blustu.agency mailbox shows in this creator's Email tab. The old mailbox's stored password stays linked to the old address.
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Niche</label><select class="form-select" id="ec-niche"><option>Lifestyle</option><option>Fashion</option><option>Fitness</option><option>Food</option><option>Tech</option><option>Travel</option><option>Entertainment</option></select></div>
+        <div class="form-group"><label class="form-label">Main niche</label><select class="form-select" id="ec-niche"></select></div>
         <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="ec-loc" placeholder="e.g. UK"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sub-niches <span style="color:var(--gray-400);font-weight:400">(optional — pick any that also apply)</span></label>
+        <div id="ec-subniche-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <select class="form-select" id="ec-subniche-add" onchange="_addSubNiche(this.value)"><option value="">+ Add a sub-niche…</option></select>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">TikTok handle <span style="color:var(--gray-400);font-weight:400">(for live stats)</span></label><input class="form-input" id="ec-tiktok" placeholder="@username or username"></div>
@@ -3977,12 +3982,17 @@ function creatorCardStats(c) {
   // Avg views
   let avgViews = r.avgViews || null;
   if (c.tiktok_avg_views != null) avgViews = _fmtCompact(c.tiktok_avg_views);
+  // Niche display — readable label + count of sub-niches
+  const mainNicheKey = _resolveNicheKey(r.niche || c.niche);
+  let nicheDisplay = NICHE_CATALOG[mainNicheKey]?.label || (r.niche || c.niche || '—');
+  const subCount = Array.isArray(c.sub_niches) ? c.sub_niches.length : 0;
+  if (subCount) nicheDisplay += ` +${subCount}`;
   return {
     followers,
     engRate,
     avgViews,
     audience: r.audience || null,
-    niche: r.niche || c.niche || '—',
+    niche: nicheDisplay,
     isLive: hasLive,
   };
 }
@@ -4211,6 +4221,11 @@ function showToast(msg) {
 function openModal(id) {
   const el=document.getElementById(id);
   if(!el){showToast('This feature is coming soon');return;}
+  // Populate the new-creator niche select from the catalog on open
+  if (id === 'addCreatorModal') {
+    const sel = document.getElementById('nc-niche');
+    if (sel && !sel.options.length) sel.innerHTML = _nicheOptionsHtml('lifestyle');
+  }
   el.classList.add('open');
 }
 function closeModal(id) {
@@ -4574,12 +4589,17 @@ function _applyCrmFilters() {
   // Search
   const s = (_crmFilters.search || '').toLowerCase();
   if (s) {
-    list = list.filter(c =>
-      (c.name||'').toLowerCase().includes(s) ||
-      (c.email||'').toLowerCase().includes(s) ||
-      (c.location||'').toLowerCase().includes(s) ||
-      (c.niche||'').toLowerCase().includes(s)
-    );
+    list = list.filter(c => {
+      const subLabels = Array.isArray(c.sub_niches)
+        ? c.sub_niches.map(k => (NICHE_CATALOG[k]?.label || k)).join(' ').toLowerCase() : '';
+      const nicheLabel = (NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || '').toLowerCase();
+      return (c.name||'').toLowerCase().includes(s) ||
+        (c.email||'').toLowerCase().includes(s) ||
+        (c.location||'').toLowerCase().includes(s) ||
+        (c.niche||'').toLowerCase().includes(s) ||
+        nicheLabel.includes(s) ||
+        subLabels.includes(s);
+    });
   }
   // Status
   const v = _crmFilters.status;
@@ -4873,7 +4893,17 @@ function openEditCreator(){
   document.getElementById('ec-loc').value      = c.location === '—' ? '' : (c.location || '');
   const ecTt = document.getElementById('ec-tiktok');
   if (ecTt) ecTt.value = c.tiktok_handle || '';
-  _setSelectIfPresent('ec-niche',  c.niche  || 'Lifestyle');
+  // Main niche — grouped catalog select
+  const nicheKey = _resolveNicheKey(c.niche);
+  const nicheSel = document.getElementById('ec-niche');
+  if (nicheSel) {
+    nicheSel.innerHTML = _nicheOptionsHtml(nicheKey);
+    nicheSel.value = nicheKey;
+    nicheSel.onchange = _renderSubNicheTags;
+  }
+  // Sub-niches
+  _ecSubNiches = Array.isArray(c.sub_niches) ? c.sub_niches.map(_resolveNicheKey).filter(k => k !== nicheKey) : [];
+  _renderSubNicheTags();
   _setSelectIfPresent('ec-role',   c.role   || 'Creator');
   _setSelectIfPresent('ec-status', c.status || 'Active');
 
@@ -4937,6 +4967,7 @@ async function saveCreatorEdit(){
   const name     = document.getElementById('ec-name').value.trim();
   const email    = document.getElementById('ec-email').value.trim();
   const niche    = document.getElementById('ec-niche').value;
+  const sub_niches = [..._ecSubNiches];
   const location = document.getElementById('ec-loc').value.trim() || '—';
   const role     = document.getElementById('ec-role').value;
   const status   = document.getElementById('ec-status').value;
@@ -4954,7 +4985,7 @@ async function saveCreatorEdit(){
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showErr('Email address looks invalid'); return; }
 
   // Build update — preserve all existing fields not in this form (notes, onboarding, profile_image_url, etc.)
-  const update = { ...orig, name, email, niche, location, role, status, assigned_staff, tiktok_handle: tiktokHandle };
+  const update = { ...orig, name, email, niche, sub_niches, location, role, status, assigned_staff, tiktok_handle: tiktokHandle };
 
   const btn = document.getElementById('ec-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -5108,7 +5139,7 @@ function openCreatorProfile(id){
     <div style="display:flex;flex-direction:column;gap:8px">
       <div style="display:flex;gap:8px"><span style="font-size:12px;color:var(--gray-400);width:80px;flex-shrink:0">Role</span><span style="font-size:13px;font-weight:500">${c.role}</span></div>
       <div style="display:flex;gap:8px"><span style="font-size:12px;color:var(--gray-400);width:80px;flex-shrink:0">Location</span><span style="font-size:13px;font-weight:500">${c.location}</span></div>
-      <div style="display:flex;gap:8px"><span style="font-size:12px;color:var(--gray-400);width:80px;flex-shrink:0">Niche</span><span style="font-size:13px;font-weight:500">${c.niche}</span></div>
+      <div style="display:flex;gap:8px"><span style="font-size:12px;color:var(--gray-400);width:80px;flex-shrink:0">Niche</span><span style="font-size:13px;font-weight:500">${NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || '—'}${Array.isArray(c.sub_niches) && c.sub_niches.length ? ' <span style="font-weight:400;color:var(--gray-400)">+ ' + c.sub_niches.map(k => NICHE_CATALOG[k]?.label || k).join(', ') + '</span>' : ''}</span></div>
       <div style="display:flex;gap:8px"><span style="font-size:12px;color:var(--gray-400);width:80px;flex-shrink:0">Email</span><span style="font-size:13px;font-weight:500">${c.email}</span></div>
     </div>`;
 
@@ -8285,13 +8316,181 @@ function _fmtCompact(n) {
 // Then a stack of per-creator factor multipliers — grounded in 2026 benchmark
 // data — moves the number: content effort, audience geo/age, experience, niche,
 // usage rights, exclusivity. All GBP.
-const _NICHE_MULTIPLIER = {
-  finance: 2.2, crypto: 2.2, business: 2.0, tech: 1.6, legal: 2.0,
-  beauty: 1.4, skincare: 1.4, fashion: 1.3, fitness: 1.3, health: 1.4,
-  food: 1.05, travel: 1.15, comedy: 1.0, gaming: 1.1, lifestyle: 1.0,
-  entertainment: 1.0, education: 1.2, general: 1.0,
+// ── NICHE CATALOG ──
+// Each niche has a rate multiplier (brand-value premium) and a group (for the
+// picker + grouping). Multipliers grounded in 2026 benchmark data: finance/tech/
+// B2B command 2-3x lifestyle; beauty/health premium; entertainment/general baseline.
+const NICHE_CATALOG = {
+  // Finance & business (highest brand value)
+  finance:        { label: 'Finance', mult: 2.2, group: 'Finance & Business' },
+  investing:      { label: 'Investing / Stocks', mult: 2.3, group: 'Finance & Business' },
+  crypto:         { label: 'Crypto / Web3', mult: 2.2, group: 'Finance & Business' },
+  personal_finance:{ label: 'Personal Finance / Budgeting', mult: 2.0, group: 'Finance & Business' },
+  business:       { label: 'Business / Entrepreneurship', mult: 2.0, group: 'Finance & Business' },
+  marketing:      { label: 'Marketing / Sales', mult: 1.8, group: 'Finance & Business' },
+  real_estate:    { label: 'Real Estate / Property', mult: 1.9, group: 'Finance & Business' },
+  side_hustle:    { label: 'Side Hustles / Make Money', mult: 1.7, group: 'Finance & Business' },
+  // Tech
+  tech:           { label: 'Tech / Gadgets', mult: 1.6, group: 'Tech' },
+  ai:             { label: 'AI / Software', mult: 1.8, group: 'Tech' },
+  coding:         { label: 'Coding / Dev', mult: 1.7, group: 'Tech' },
+  productivity:   { label: 'Productivity / Apps', mult: 1.4, group: 'Tech' },
+  // Health & wellness
+  health:         { label: 'Health / Wellness', mult: 1.4, group: 'Health & Fitness' },
+  fitness:        { label: 'Fitness / Gym', mult: 1.3, group: 'Health & Fitness' },
+  nutrition:      { label: 'Nutrition / Diet', mult: 1.4, group: 'Health & Fitness' },
+  mental_health:  { label: 'Mental Health', mult: 1.3, group: 'Health & Fitness' },
+  weightloss:     { label: 'Weight Loss', mult: 1.5, group: 'Health & Fitness' },
+  yoga:           { label: 'Yoga / Pilates', mult: 1.25, group: 'Health & Fitness' },
+  sports:         { label: 'Sports / Athletics', mult: 1.2, group: 'Health & Fitness' },
+  // Beauty & fashion
+  beauty:         { label: 'Beauty / Makeup', mult: 1.4, group: 'Beauty & Fashion' },
+  skincare:       { label: 'Skincare', mult: 1.45, group: 'Beauty & Fashion' },
+  haircare:       { label: 'Hair / Haircare', mult: 1.3, group: 'Beauty & Fashion' },
+  fashion:        { label: 'Fashion / Style', mult: 1.3, group: 'Beauty & Fashion' },
+  luxury:         { label: 'Luxury / High-end', mult: 1.8, group: 'Beauty & Fashion' },
+  streetwear:     { label: 'Streetwear / Sneakers', mult: 1.3, group: 'Beauty & Fashion' },
+  nails:          { label: 'Nails / Beauty detail', mult: 1.2, group: 'Beauty & Fashion' },
+  // Food
+  food:           { label: 'Food / Recipes', mult: 1.05, group: 'Food & Drink' },
+  cooking:        { label: 'Cooking / Chef', mult: 1.1, group: 'Food & Drink' },
+  baking:         { label: 'Baking / Desserts', mult: 1.05, group: 'Food & Drink' },
+  restaurants:    { label: 'Restaurants / Food reviews', mult: 1.1, group: 'Food & Drink' },
+  drinks:         { label: 'Drinks / Cocktails', mult: 1.15, group: 'Food & Drink' },
+  // Lifestyle & home
+  lifestyle:      { label: 'Lifestyle', mult: 1.0, group: 'Lifestyle & Home' },
+  vlog:           { label: 'Vlogs / Daily life', mult: 0.95, group: 'Lifestyle & Home' },
+  home:           { label: 'Home / Interior', mult: 1.25, group: 'Lifestyle & Home' },
+  diy:            { label: 'DIY / Crafts', mult: 1.1, group: 'Lifestyle & Home' },
+  cleaning:       { label: 'Cleaning / Organising', mult: 1.15, group: 'Lifestyle & Home' },
+  garden:         { label: 'Garden / Plants', mult: 1.1, group: 'Lifestyle & Home' },
+  parenting:      { label: 'Parenting / Family', mult: 1.25, group: 'Lifestyle & Home' },
+  relationships:  { label: 'Relationships / Dating', mult: 1.0, group: 'Lifestyle & Home' },
+  wedding:        { label: 'Weddings', mult: 1.3, group: 'Lifestyle & Home' },
+  // Travel
+  travel:         { label: 'Travel', mult: 1.15, group: 'Travel & Auto' },
+  luxury_travel:  { label: 'Luxury Travel', mult: 1.6, group: 'Travel & Auto' },
+  budget_travel:  { label: 'Budget Travel', mult: 1.05, group: 'Travel & Auto' },
+  auto:           { label: 'Cars / Automotive', mult: 1.4, group: 'Travel & Auto' },
+  // Entertainment & content
+  comedy:         { label: 'Comedy / Humour', mult: 1.0, group: 'Entertainment' },
+  entertainment:  { label: 'Entertainment', mult: 1.0, group: 'Entertainment' },
+  dance:          { label: 'Dance', mult: 1.0, group: 'Entertainment' },
+  music:          { label: 'Music', mult: 1.1, group: 'Entertainment' },
+  gaming:         { label: 'Gaming', mult: 1.1, group: 'Entertainment' },
+  film:           { label: 'Film / TV / Reviews', mult: 1.05, group: 'Entertainment' },
+  books:          { label: 'Books / BookTok', mult: 1.05, group: 'Entertainment' },
+  art:            { label: 'Art / Illustration', mult: 1.1, group: 'Entertainment' },
+  photography:    { label: 'Photography', mult: 1.2, group: 'Entertainment' },
+  pets:           { label: 'Pets / Animals', mult: 1.1, group: 'Entertainment' },
+  // Education & niche interest
+  education:      { label: 'Education / How-to', mult: 1.2, group: 'Education & Other' },
+  science:        { label: 'Science / Facts', mult: 1.2, group: 'Education & Other' },
+  language:       { label: 'Language Learning', mult: 1.3, group: 'Education & Other' },
+  career:         { label: 'Career / Job advice', mult: 1.5, group: 'Education & Other' },
+  study:          { label: 'Study / Student life', mult: 1.1, group: 'Education & Other' },
+  motivation:     { label: 'Motivation / Self-improvement', mult: 1.3, group: 'Education & Other' },
+  spirituality:   { label: 'Spirituality / Astrology', mult: 1.1, group: 'Education & Other' },
+  news:           { label: 'News / Politics', mult: 1.1, group: 'Education & Other' },
+  general:        { label: 'General / Mixed', mult: 1.0, group: 'Education & Other' },
 };
+
+// Legacy map kept so any old code referencing it still resolves.
+const _NICHE_MULTIPLIER = Object.fromEntries(
+  Object.entries(NICHE_CATALOG).map(([k, v]) => [k, v.mult])
+);
+
+// Resolve a free-text or key niche string to a catalog key.
+function _resolveNicheKey(raw) {
+  if (!raw) return 'general';
+  const s = String(raw).toLowerCase().trim();
+  if (NICHE_CATALOG[s]) return s;
+  // Try first word / loose contains match against labels + keys
+  const first = s.split(/[\s,\/]+/)[0];
+  if (NICHE_CATALOG[first]) return first;
+  for (const [k, v] of Object.entries(NICHE_CATALOG)) {
+    if (v.label.toLowerCase().includes(s) || s.includes(k)) return k;
+  }
+  return 'general';
+}
+
+// Combined niche multiplier from a main niche + optional sub-niches.
+// Uses the MAX multiplier across all (a creator's highest-value niche sets their
+// premium), with a small blend so multiple strong niches nudge slightly higher.
+function _combinedNicheMult(c) {
+  const keys = [];
+  keys.push(_resolveNicheKey(c.niche));
+  const subs = Array.isArray(c.sub_niches) ? c.sub_niches : [];
+  subs.forEach(s => keys.push(_resolveNicheKey(s)));
+  const mults = keys.map(k => NICHE_CATALOG[k]?.mult ?? 1.0);
+  if (!mults.length) return { mult: 1.0, key: 'general' };
+  const maxMult = Math.max(...mults);
+  const maxKey = keys[mults.indexOf(maxMult)];
+  // Small bonus if there are 2+ distinct strong niches (>1.2), capped
+  const strongCount = mults.filter(m => m > 1.2).length;
+  const blend = strongCount >= 2 ? 1.08 : 1.0;
+  return { mult: +(maxMult * blend).toFixed(2), key: maxKey };
+}
+
 const _CUR = '£';
+
+// Build grouped <option> HTML for a niche <select>.
+function _nicheOptionsHtml(selectedKey) {
+  const groups = {};
+  for (const [k, v] of Object.entries(NICHE_CATALOG)) {
+    (groups[v.group] = groups[v.group] || []).push([k, v]);
+  }
+  return Object.entries(groups).map(([group, items]) =>
+    `<optgroup label="${group}">` +
+    items.map(([k, v]) => `<option value="${k}"${k === selectedKey ? ' selected' : ''}>${v.label}</option>`).join('') +
+    `</optgroup>`
+  ).join('');
+}
+
+// Working list of sub-niches while the edit modal is open
+let _ecSubNiches = [];
+
+function _renderSubNicheTags() {
+  const wrap = document.getElementById('ec-subniche-tags');
+  if (!wrap) return;
+  if (!_ecSubNiches.length) {
+    wrap.innerHTML = '<span style="font-size:11px;color:var(--gray-400)">None yet</span>';
+  } else {
+    wrap.innerHTML = _ecSubNiches.map(k => {
+      const label = NICHE_CATALOG[k]?.label || k;
+      return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--blue-light);color:var(--blue);font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px">
+        ${label}
+        <span onclick="_removeSubNiche('${k}')" style="cursor:pointer;font-weight:700;opacity:.7">✕</span>
+      </span>`;
+    }).join('');
+  }
+  // Rebuild the add-dropdown excluding already-picked + the main niche
+  const mainKey = document.getElementById('ec-niche')?.value;
+  const sel = document.getElementById('ec-subniche-add');
+  if (sel) {
+    const groups = {};
+    for (const [k, v] of Object.entries(NICHE_CATALOG)) {
+      if (_ecSubNiches.includes(k) || k === mainKey) continue;
+      (groups[v.group] = groups[v.group] || []).push([k, v]);
+    }
+    sel.innerHTML = '<option value="">+ Add a sub-niche…</option>' +
+      Object.entries(groups).map(([group, items]) =>
+        `<optgroup label="${group}">` +
+        items.map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('') +
+        `</optgroup>`
+      ).join('');
+  }
+}
+
+function _addSubNiche(key) {
+  if (!key) return;
+  if (!_ecSubNiches.includes(key)) _ecSubNiches.push(key);
+  _renderSubNicheTags();
+}
+function _removeSubNiche(key) {
+  _ecSubNiches = _ecSubNiches.filter(k => k !== key);
+  _renderSubNicheTags();
+}
 
 // Factor option definitions — label + multiplier. Grounded in sourced 2026 data:
 // usage rights +20-100%, exclusivity +20-50%, geography +25-100%, effort scales
@@ -8417,9 +8616,10 @@ function estimateCreatorRate(c) {
     else base *= 0.85;                              // very low reach lately
   }
 
-  // ── NICHE ──
-  const nicheKey = (c.niche || 'general').toLowerCase().split(/[\s,]+/)[0];
-  const nicheMult = _NICHE_MULTIPLIER[nicheKey] ?? 1.0;
+  // ── NICHE (main + sub-niches) ──
+  const nicheInfo = _combinedNicheMult(c);
+  const nicheKey = nicheInfo.key;
+  const nicheMult = nicheInfo.mult;
 
   // ── FACTOR STACK ──
   const fExp   = _rateFactorMult(c, 'experience');
