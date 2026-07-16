@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-g (campaign: live total fix + multi-currency with GBP conversion) -->
+<!-- blustu panel build 2026-07-14-h (campaign save fix: empty dates→null, error surfacing, fallback retry) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3757,9 +3757,11 @@ const DB = {
       console.log(`[DB] upsertOne ${table} => ${r.status}`, text.slice(0, 200));
       if (!r.ok) {
         console.error(`[DB] upsertOne FAILED ${r.status}:`, text);
+        this._lastError = `${r.status}: ${text.slice(0, 300)}`;
         showToast('Save error ' + r.status + ' — open browser console for details');
         return null;
       }
+      this._lastError = null;
       return text ? JSON.parse(text) : [];
     } catch(e) {
       console.error(`[DB] upsertOne network error:`, e);
@@ -6106,12 +6108,12 @@ async function openCampaignDetail(id) {
   _cdIsNew = (id == null);
   if (_cdIsNew) {
     _cdCampaign = {
-      id: Date.now() % 2147483647, brand: '', creator: '', value: 0, deadline: '',
+      id: Date.now() % 2147483647, brand: '', creator: '', value: 0, deadline: null,
       status: 'Negotiating', deliverables: '', progress: 0, notes: '',
       brand_logo: '', brand_website: '', campaign_creators: [], lead_staff: currentUser?.email || '',
       support_staff: [], contact_staff: '', brand_contact_name: '', brand_contact_email: '',
       brand_contact_phone: '', emergency_contact: '', contract_status: 'none', contract_url: '',
-      start_date: '', priority: 'normal',
+      start_date: null, priority: 'normal',
     };
     _cdCreators = [];
     _cdNotes = [];
@@ -6444,8 +6446,35 @@ async function saveCampaignDetail() {
   _cdCampaign.value_original = Math.round(_cdTotalInCurrency());  // amount in the deal currency
   _cdCampaign.currency = _cdCurrency();
   _cdCampaign.updated_at = new Date().toISOString();
-  const r = await DB.upsertOne('campaigns', _cdCampaign);
-  if (!r) { showToast('❌ Save failed — did you run campaign-upgrade.sql?'); return; }
+
+  // Build a clean payload — Postgres rejects empty strings for date columns,
+  // so coerce empty dates to null and ensure the right types.
+  const payload = { ..._cdCampaign };
+  ['start_date', 'deadline'].forEach(k => { if (!payload[k]) payload[k] = null; });
+  if (payload.value === '' || payload.value == null) payload.value = 0;
+  if (payload.value_original === '' || payload.value_original == null) payload.value_original = 0;
+  if (!Array.isArray(payload.support_staff)) payload.support_staff = [];
+  if (!Array.isArray(payload.campaign_creators)) payload.campaign_creators = [];
+  // Drop any accidental undefined keys
+  Object.keys(payload).forEach(k => { if (payload[k] === undefined) delete payload[k]; });
+
+  const r = await DB.upsertOne('campaigns', payload);
+  if (!r) {
+    // Fallback: some new columns may be missing — retry with the known column
+    // set only, so a save is never blocked. Surface the underlying error.
+    const err = DB._lastError || '';
+    console.warn('[Campaign] Full save failed, retrying core fields. Error:', err);
+    const coreKeys = ['id','brand','creator','creatorId','creatorIds','value','deadline','status','deliverables','progress','notes','campaignId',
+                      'brand_logo','brand_website','campaign_creators','lead_staff','support_staff','contact_staff',
+                      'brand_contact_name','brand_contact_email','brand_contact_phone','emergency_contact',
+                      'contract_status','contract_url','start_date','priority','currency','value_original','updated_at'];
+    const core = {};
+    coreKeys.forEach(k => { if (payload[k] !== undefined) core[k] = payload[k]; });
+    ['start_date','deadline'].forEach(k => { if (!core[k]) core[k] = null; });
+    const r2 = await DB.upsertOne('campaigns', core);
+    if (!r2) { showToast('❌ Save failed: ' + (DB._lastError || err || 'unknown — check console')); return; }
+  }
+  _cdCampaign = { ...payload };
   await refetch('campaigns');
   if (_cdIsNew) { addActivity(`Campaign created: <strong>${_cdCampaign.brand}</strong>`); _cdIsNew = false; document.getElementById('cd-delete-btn').style.display = ''; }
   updateDashStats();
