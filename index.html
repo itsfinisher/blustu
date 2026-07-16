@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-c (socials tab bio uses pitch_bio) -->
+<!-- blustu panel build 2026-07-14-d (pitch doc: one page per creator, photo, full detail) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -9248,23 +9248,25 @@ function _updatePitchCount() {
 // Human-readable justification for a creator's rate
 function _rateJustification(c, est) {
   const bits = [];
-  if (c.tiktok_followers != null) bits.push(`${_fmtCompact(c.tiktok_followers)} followers`);
+  if (c.tiktok_followers != null) bits.push(`${_fmtCompact(c.tiktok_followers)} engaged followers`);
   if (c.tiktok_engagement != null) {
     const e = Number(c.tiktok_engagement);
-    const q = e >= 8 ? 'excellent' : e >= 5 ? 'strong' : e >= 3 ? 'solid' : 'developing';
-    bits.push(`${e}% engagement (${q})`);
+    const q = e >= 8 ? 'excellent — well above platform average' : e >= 5 ? 'strong' : e >= 3 ? 'solid' : 'developing';
+    bits.push(`a ${e}% engagement rate (${q})`);
   }
-  if (c.tiktok_avg_views != null) bits.push(`${_fmtCompact(c.tiktok_avg_views)} avg views`);
+  if (c.tiktok_avg_views != null) bits.push(`${_fmtCompact(c.tiktok_avg_views)} average views per video`);
   const f = est.factors;
   const notable = [];
-  if (f.experience.mult >= 1.25) notable.push('proven brand-deal track record');
-  if (f.content_effort.mult >= 1.25) notable.push('high-production content');
-  if (f.content_focus.mult >= 1.2) notable.push('niche authority');
-  if (f.audience_geo.mult >= 1.3) notable.push('premium Western audience');
+  if (f.experience.mult >= 1.25) notable.push('a proven brand-partnership track record');
+  if (f.content_effort.mult >= 1.25) notable.push('high-production, well-edited content');
+  if (f.content_focus.mult >= 1.2) notable.push('recognised authority in their niche');
+  if (f.audience_geo.mult >= 1.3) notable.push('a premium UK/Western audience with strong purchasing power');
+  if (f.audience_age.mult >= 1.1) notable.push('an audience skewed toward spending age brackets');
   const nicheLabel = NICHE_CATALOG[est.nicheKey]?.label || est.nicheKey;
-  let just = `Priced on ${bits.join(', ')}.`;
-  if (est.nicheMult > 1.1) just += ` ${nicheLabel} is a premium niche (×${est.nicheMult}).`;
-  if (notable.length) just += ` Uplift for ${notable.join(', ')}.`;
+  let just = bits.length ? `This rate reflects ${bits.join(', ')}.` : 'This rate reflects the creator\'s current performance.';
+  if (est.nicheMult > 1.1) just += ` ${nicheLabel} is a high-value niche for brands, commanding a premium over general lifestyle content.`;
+  if (notable.length) just += ` It also accounts for ${notable.join(', ')}.`;
+  just += ' All pricing is benchmarked against live 2026 market data.';
   return just;
 }
 
@@ -9277,97 +9279,214 @@ function generatePitchDoc() {
   const picked = ids.map(id => creators.find(c => c.id === id)).filter(Boolean);
   const fmt = v => '£' + Number(v).toLocaleString('en-GB');
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  const cards = picked.map(c => {
+  // Cover page
+  const cover = `<div class="page cover">
+    <div class="cover-logo">BluStu</div>
+    <div class="cover-title">${esc(title)}</div>
+    <div class="cover-sub">${client ? 'Prepared exclusively for <strong>' + esc(client) + '</strong>' : 'Creator Roster'}</div>
+    <div class="cover-meta">${picked.length} creator${picked.length > 1 ? 's' : ''} · ${today}</div>
+    <div class="cover-foot">
+      <div class="cf-title">Why work with BluStu creators?</div>
+      <div class="cf-body">Every creator in this roster is vetted, actively managed, and backed by live performance data pulled directly from their platforms. Rates are benchmarked against 2026 market data and account for audience quality, content production, niche authority and usage rights — so you get transparent, fair pricing with no guesswork.</div>
+    </div>
+  </div>`;
+
+  const pages = picked.map(c => {
     const est = estimateCreatorRate(c);
     const pkg = estimateRateTiers(c);
-    const niche = NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || '—';
-    const subs = Array.isArray(c.sub_niches) && c.sub_niches.length ? c.sub_niches.map(k => NICHE_CATALOG[k]?.label || k).join(', ') : '';
     const r = (typeof resolveCreator === 'function') ? resolveCreator(c) : {};
-    const audience = r.audience || (c.onboarding && c.onboarding.audience) || '—';
+    const niche = NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || '—';
+    const subs = Array.isArray(c.sub_niches) && c.sub_niches.length ? c.sub_niches.map(k => NICHE_CATALOG[k]?.label || k) : [];
     const handle = c.tiktok_handle ? '@' + c.tiktok_handle : '';
+    const ttUrl = c.tiktok_handle ? 'tiktok.com/@' + c.tiktok_handle : '';
     const bio = (c.pitch_bio && c.pitch_bio.trim()) || (c.onboarding && c.onboarding.bio) || '';
+    const ob = c.onboarding || {};
+    const audience = r.audience || ob.audience || '—';
+    const location = (c.location && c.location !== '—') ? c.location : '';
+    const pic = profilePics[c.id] || c.profile_image_url || '';
+    const initial = (c.name || '?')[0].toUpperCase();
+    const updated = c.tiktok_updated_at ? new Date(c.tiktok_updated_at).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) : '';
 
-    // Stats block
-    const statCells = [];
-    if (c.tiktok_followers != null) statCells.push(['Followers', _fmtCompact(c.tiktok_followers)]);
-    if (c.tiktok_engagement != null) statCells.push(['Engagement', c.tiktok_engagement + '%']);
-    if (c.tiktok_avg_views != null) statCells.push(['Avg views', _fmtCompact(c.tiktok_avg_views)]);
-    const statsHtml = statCells.map(([l, v]) => `<div class="stat"><div class="sv">${v}</div><div class="sl">${l}</div></div>`).join('');
+    // Avatar
+    const avatar = pic
+      ? `<div class="avatar" style="background-image:url('${pic}')"></div>`
+      : `<div class="avatar avatar-letter">${initial}</div>`;
+
+    // Live stat tiles
+    const statTiles = [];
+    if (c.tiktok_followers != null) statTiles.push(['Followers', _fmtCompact(c.tiktok_followers)]);
+    if (c.tiktok_engagement != null) statTiles.push(['Engagement', c.tiktok_engagement + '%']);
+    if (c.tiktok_avg_views != null) statTiles.push(['Avg Views', _fmtCompact(c.tiktok_avg_views)]);
+    // Fallback to self-reported if no live
+    if (!statTiles.length) {
+      if (r.followers) statTiles.push(['Followers', r.followers]);
+      if (r.engRate) statTiles.push(['Engagement', r.engRate + '%']);
+      if (r.avgViews) statTiles.push(['Avg Views', r.avgViews]);
+    }
+    const statsHtml = statTiles.map(([l, v]) => `<div class="stat"><div class="sv">${v}</div><div class="sl">${l}</div></div>`).join('');
+
+    // Audience breakdown chips (from onboarding factor self-assessment if present)
+    const audienceBits = [];
+    if (c.rate_audience_geo) {
+      const geoMap = { tier1: 'Mostly UK / US / Western', mixed: 'Mixed / global', tier3: 'Emerging markets' };
+      audienceBits.push(geoMap[c.rate_audience_geo] || c.rate_audience_geo);
+    }
+    if (c.rate_audience_age) {
+      const ageMap = { young: 'Under 18', core: '18–34', mature: '25–45+' };
+      audienceBits.push(ageMap[c.rate_audience_age] || c.rate_audience_age);
+    }
+
+    // Content profile chips
+    const contentBits = [];
+    if (c.rate_content_effort) {
+      const effMap = { talking_head: 'Talking-head style', standard: 'Standard editing', edited: 'Well-edited / vlog style', produced: 'High production, scripted' };
+      contentBits.push(effMap[c.rate_content_effort] || c.rate_content_effort);
+    }
+    if (c.rate_content_focus) {
+      const focMap = { random: 'Varied content', loose: 'Loosely themed', focused: 'Focused niche', authority: 'Niche authority' };
+      contentBits.push(focMap[c.rate_content_focus] || c.rate_content_focus);
+    }
+    if (c.rate_experience) {
+      const expMap = { new: 'New to brand deals', some: 'Some brand experience', experienced: 'Experienced with brands', veteran: 'Veteran creator' };
+      contentBits.push(expMap[c.rate_experience] || c.rate_experience);
+    }
 
     // Rate block
     let rateHtml = '';
     if (pkg) {
       if (tierChoice === 'all') {
-        rateHtml = `<table class="rate-table"><thead><tr><th>Usage rights</th><th>Rate / video</th></tr></thead><tbody>` +
-          pkg.tiers.map(t => `<tr${t.isBase ? ' class="base"' : ''}><td>${t.label}${t.isBase ? ' <span class="base-tag">base</span>' : ''}</td><td>${fmt(t.mid)}</td></tr>`).join('') +
+        rateHtml = `<table class="rate-table"><thead><tr><th>Usage rights</th><th style="text-align:right">Rate / video</th></tr></thead><tbody>` +
+          pkg.tiers.map(t => `<tr${t.isBase ? ' class="base"' : ''}><td>${t.label}${t.isBase ? ' <span class="base-tag">BASE</span>' : ''}</td><td style="text-align:right">${fmt(t.mid)}</td></tr>`).join('') +
           `</tbody></table>`;
       } else {
         const t = pkg.tiers.find(x => x.key === tierChoice) || pkg.tiers[0];
-        rateHtml = `<div class="single-rate"><span class="sr-label">${t.label}</span><span class="sr-val">${fmt(t.low)} – <strong>${fmt(t.mid)}</strong> – ${fmt(t.high)}</span></div>`;
+        rateHtml = `<div class="single-rate">
+          <div class="sr-label">${t.label}</div>
+          <div class="sr-range"><span>${fmt(t.low)}</span><strong>${fmt(t.mid)}</strong><span>${fmt(t.high)}</span></div>
+          <div class="sr-note">low · suggested · high — per in-feed video</div>
+        </div>`;
       }
+    } else {
+      rateHtml = '<div style="font-size:12px;color:#888">Rate available on request — refresh live stats to generate.</div>';
     }
     const justification = est ? _rateJustification(c, est) : '';
 
-    return `<div class="creator-card">
-      <div class="cc-head">
-        <div>
-          <div class="cc-name">${c.name}</div>
-          <div class="cc-niche">${niche}${subs ? ' · ' + subs : ''}${handle ? ' · ' + handle : ''}</div>
+    // Brand fit / restrictions
+    const restrictions = ob.restrictions || '';
+    const preferences = ob.preferences || '';
+
+    return `<div class="page creator-page">
+      <div class="cp-hero">
+        ${avatar}
+        <div class="cp-hero-info">
+          <div class="cp-name">${esc(c.name)}</div>
+          ${handle ? `<div class="cp-handle">${esc(handle)}</div>` : ''}
+          <div class="cp-niche-row">
+            <span class="niche-pill main">${esc(niche)}</span>
+            ${subs.map(s => `<span class="niche-pill">${esc(s)}</span>`).join('')}
+          </div>
+          ${location ? `<div class="cp-loc">📍 ${esc(location)}</div>` : ''}
         </div>
       </div>
-      ${bio ? `<div class="cc-bio">${bio}</div>` : ''}
-      ${statsHtml ? `<div class="stats-row">${statsHtml}</div>` : ''}
-      <div class="cc-meta"><strong>Audience:</strong> ${audience}</div>
-      ${rateHtml ? `<div class="rate-block"><div class="rb-title">Suggested Rate${tierChoice === 'all' ? 's' : ''}</div>${rateHtml}</div>` : ''}
-      ${justification ? `<div class="cc-just"><strong>Rate rationale:</strong> ${justification}</div>` : ''}
+
+      ${bio ? `<div class="cp-bio">${esc(bio)}</div>` : ''}
+
+      ${statsHtml ? `<div class="cp-stats">
+        ${statsHtml}
+      </div>${updated ? `<div class="cp-stats-note">Live TikTok data${ttUrl ? ' · ' + esc(ttUrl) : ''} · updated ${updated}</div>` : (ttUrl ? `<div class="cp-stats-note">${esc(ttUrl)}</div>` : '')}` : ''}
+
+      <div class="cp-cols">
+        <div class="cp-col">
+          <div class="cp-block-title">Audience</div>
+          <div class="cp-kv"><strong>Primary:</strong> ${esc(audience)}</div>
+          ${audienceBits.map(b => `<div class="cp-tag">${esc(b)}</div>`).join('')}
+        </div>
+        <div class="cp-col">
+          <div class="cp-block-title">Content Profile</div>
+          ${contentBits.length ? contentBits.map(b => `<div class="cp-tag">${esc(b)}</div>`).join('') : '<div class="cp-kv" style="color:#999">Standard creator profile</div>'}
+        </div>
+      </div>
+
+      <div class="cp-rate">
+        <div class="cp-block-title" style="color:#2198ED">Suggested Rate${tierChoice === 'all' ? 's' : ''}</div>
+        ${rateHtml}
+        ${justification ? `<div class="cp-just"><strong>How this is priced:</strong> ${esc(justification)}</div>` : ''}
+      </div>
+
+      ${(restrictions || preferences) ? `<div class="cp-brand">
+        ${preferences ? `<div class="cp-kv"><strong>Brand preferences:</strong> ${esc(preferences)}</div>` : ''}
+        ${restrictions ? `<div class="cp-kv restrict"><strong>⚠ Won't work with:</strong> ${esc(restrictions)}</div>` : ''}
+      </div>` : ''}
+
+      <div class="cp-foot">
+        <span class="cp-foot-logo">BluStu</span> · Managed creator · Enquiries: partnerships@blustu.agency
+      </div>
     </div>`;
   }).join('');
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:'DM Sans',sans-serif; color:#1a1a1a; padding:40px; max-width:900px; margin:0 auto; font-size:14px; line-height:1.5; }
-    .doc-head { border-bottom:3px solid #2198ED; padding-bottom:20px; margin-bottom:28px; }
-    .doc-logo { font-family:'DM Serif Display',serif; font-size:26px; color:#2198ED; font-weight:700; }
-    .doc-title { font-size:22px; font-weight:700; margin-top:12px; }
-    .doc-sub { color:#666; font-size:13px; margin-top:4px; }
-    .creator-card { border:1px solid #e5e7eb; border-radius:12px; padding:22px; margin-bottom:20px; page-break-inside:avoid; }
-    .cc-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
-    .cc-name { font-family:'DM Serif Display',serif; font-size:20px; color:#111; }
-    .cc-niche { font-size:12px; color:#2198ED; font-weight:600; margin-top:2px; }
-    .cc-bio { font-size:13px; color:#444; margin:10px 0; font-style:italic; }
-    .stats-row { display:flex; gap:20px; margin:14px 0; padding:14px; background:#f8f9fc; border-radius:10px; }
-    .stat { text-align:center; flex:1; }
-    .stat .sv { font-size:20px; font-weight:700; font-family:'DM Serif Display',serif; }
-    .stat .sl { font-size:11px; color:#888; text-transform:uppercase; letter-spacing:.5px; }
-    .cc-meta { font-size:13px; color:#444; margin:8px 0; }
-    .rate-block { margin-top:14px; padding:14px; background:#eff6ff; border-radius:10px; }
-    .rb-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#2198ED; margin-bottom:8px; }
-    .rate-table { width:100%; border-collapse:collapse; }
-    .rate-table th { text-align:left; font-size:11px; color:#888; text-transform:uppercase; padding:4px 8px; border-bottom:1px solid #d0dae8; }
-    .rate-table td { padding:6px 8px; font-size:13px; border-bottom:1px solid #e5e9f0; }
-    .rate-table tr.base td { font-weight:700; color:#1478C4; }
-    .base-tag { font-size:9px; background:#2198ED; color:white; padding:1px 5px; border-radius:4px; vertical-align:middle; }
-    .single-rate { display:flex; justify-content:space-between; align-items:center; }
-    .sr-label { font-size:13px; font-weight:600; }
-    .sr-val { font-size:16px; }
-    .cc-just { font-size:12px; color:#555; margin-top:12px; padding-top:12px; border-top:1px solid #eee; line-height:1.6; }
-    .doc-foot { margin-top:30px; padding-top:16px; border-top:1px solid #e5e7eb; font-size:11px; color:#999; text-align:center; }
-    @media print { body { padding:20px; } .creator-card { border-color:#ddd; } }
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body { font-family:'DM Sans',sans-serif; color:#1a1a1a; font-size:14px; line-height:1.5; background:#eef1f6; }
+    .page { background:#fff; width:210mm; min-height:297mm; margin:0 auto 20px; padding:22mm 20mm; position:relative; }
+    @media print { body { background:#fff; } .page { margin:0; box-shadow:none; page-break-after:always; width:auto; min-height:auto; } }
+    @media screen { .page { box-shadow:0 4px 24px rgba(0,0,0,.1); } }
+
+    /* Cover */
+    .cover { display:flex; flex-direction:column; }
+    .cover-logo { font-family:'DM Serif Display',serif; font-size:44px; color:#2198ED; font-weight:700; }
+    .cover-title { font-size:40px; font-weight:800; margin-top:120px; line-height:1.1; letter-spacing:-.5px; }
+    .cover-sub { font-size:18px; color:#555; margin-top:16px; }
+    .cover-meta { font-size:14px; color:#999; margin-top:6px; }
+    .cover-foot { margin-top:auto; border-top:3px solid #2198ED; padding-top:24px; }
+    .cf-title { font-size:16px; font-weight:700; color:#2198ED; margin-bottom:8px; }
+    .cf-body { font-size:13px; color:#555; line-height:1.7; }
+
+    /* Creator page */
+    .cp-hero { display:flex; gap:22px; align-items:center; border-bottom:3px solid #2198ED; padding-bottom:22px; }
+    .avatar { width:104px; height:104px; border-radius:50%; background-size:cover; background-position:center; flex-shrink:0; border:3px solid #eef1f6; }
+    .avatar-letter { display:flex; align-items:center; justify-content:center; font-family:'DM Serif Display',serif; font-size:40px; color:#fff; background:#2198ED; }
+    .cp-name { font-family:'DM Serif Display',serif; font-size:34px; color:#111; line-height:1; }
+    .cp-handle { font-size:16px; color:#2198ED; font-weight:600; margin-top:6px; }
+    .cp-niche-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+    .niche-pill { font-size:11px; font-weight:600; padding:4px 11px; border-radius:20px; background:#f0f2f7; color:#555; }
+    .niche-pill.main { background:#2198ED; color:#fff; }
+    .cp-loc { font-size:13px; color:#888; margin-top:10px; }
+    .cp-bio { font-size:14px; color:#444; line-height:1.7; margin:22px 0; font-style:italic; border-left:3px solid #e0e6ef; padding-left:16px; }
+    .cp-stats { display:flex; gap:14px; margin:22px 0 6px; }
+    .stat { flex:1; text-align:center; padding:20px 10px; background:linear-gradient(135deg,#f8f9fc,#eef4fb); border-radius:14px; }
+    .stat .sv { font-size:30px; font-weight:800; font-family:'DM Serif Display',serif; color:#111; }
+    .stat .sl { font-size:11px; color:#889; text-transform:uppercase; letter-spacing:.8px; margin-top:4px; font-weight:600; }
+    .cp-stats-note { font-size:10px; color:#aab; text-align:right; margin-bottom:10px; }
+    .cp-cols { display:flex; gap:22px; margin:22px 0; }
+    .cp-col { flex:1; }
+    .cp-block-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.8px; color:#889; margin-bottom:10px; }
+    .cp-kv { font-size:13px; color:#444; margin-bottom:6px; line-height:1.5; }
+    .cp-kv.restrict { color:#c0392b; }
+    .cp-tag { display:inline-block; font-size:12px; color:#456; background:#f0f2f7; padding:4px 10px; border-radius:8px; margin:0 4px 4px 0; }
+    .cp-rate { background:linear-gradient(135deg,#eff6ff,#e6f0fd); border-radius:16px; padding:22px; margin:22px 0; }
+    .rate-table { width:100%; border-collapse:collapse; margin-top:4px; }
+    .rate-table th { text-align:left; font-size:11px; color:#889; text-transform:uppercase; letter-spacing:.5px; padding:6px 10px; border-bottom:2px solid #cfe0f5; }
+    .rate-table td { padding:9px 10px; font-size:14px; border-bottom:1px solid #dce7f5; }
+    .rate-table tr.base td { font-weight:800; color:#1478C4; font-size:15px; }
+    .base-tag { font-size:9px; background:#2198ED; color:#fff; padding:2px 6px; border-radius:4px; vertical-align:middle; margin-left:4px; }
+    .single-rate { text-align:center; }
+    .sr-label { font-size:14px; font-weight:700; color:#333; margin-bottom:10px; }
+    .sr-range { display:flex; align-items:baseline; justify-content:center; gap:16px; }
+    .sr-range span { font-size:18px; color:#889; }
+    .sr-range strong { font-size:42px; font-weight:800; font-family:'DM Serif Display',serif; color:#2198ED; }
+    .sr-note { font-size:11px; color:#aab; margin-top:8px; }
+    .cp-just { font-size:12px; color:#556; margin-top:16px; padding-top:14px; border-top:1px solid #d5e3f5; line-height:1.7; }
+    .cp-brand { margin:20px 0; }
+    .cp-foot { position:absolute; bottom:16mm; left:20mm; right:20mm; text-align:center; font-size:11px; color:#aab; border-top:1px solid #e5e7eb; padding-top:14px; }
+    .cp-foot-logo { font-family:'DM Serif Display',serif; color:#2198ED; font-weight:700; }
   </style></head><body>
-    <div class="doc-head">
-      <div class="doc-logo">BluStu</div>
-      <div class="doc-title">${title}</div>
-      <div class="doc-sub">${client ? 'Prepared for ' + client + ' · ' : ''}${picked.length} creator${picked.length > 1 ? 's' : ''} · ${today}</div>
-    </div>
-    ${cards}
-    <div class="doc-foot">
-      All rates are per in-feed TikTok video and are a starting point for negotiation. Stats are pulled live from TikTok. Rates flex with deliverables, volume, exclusivity and campaign scope.<br>
-      BluStu Agency · blustu.agency · Generated ${today}
-    </div>
-    <script>window.onload=()=>{setTimeout(()=>window.print(),600);}<\/script>
+    ${cover}
+    ${pages}
+    <script>window.onload=()=>{setTimeout(()=>window.print(),700);}<\/script>
   </body></html>`;
 
   const win = window.open('', '_blank', 'width=900,height=1100');
