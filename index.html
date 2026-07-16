@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-f (campaign management overhaul: detail page, multi-creator, team, contract, timeline) -->
+<!-- blustu panel build 2026-07-14-g (campaign: live total fix + multi-currency with GBP conversion) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -6194,12 +6194,19 @@ function _renderCampaignDetail() {
 
         <!-- Creators -->
         <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
             <div class="card-title" style="margin:0">Creators <span style="font-size:11px;color:var(--gray-400);font-weight:400">(${creatorCount})</span></div>
-            <button class="btn btn-ghost btn-sm" onclick="_cdAddCreators()">+ Add creators</button>
+            <div style="display:flex;gap:8px;align-items:center">
+              <label style="font-size:11px;color:var(--gray-400)">Currency</label>
+              <select class="form-select" id="cd-currency" onchange="_cdSetCurrency(this.value)" style="width:auto;font-size:13px;padding:4px 8px">
+                <option value="GBP"${(c.currency||'GBP')==='GBP'?' selected':''}>🇬🇧 GBP £</option>
+                ${FX_CURRENCIES.map(fx=>`<option value="${fx.code}"${c.currency===fx.code?' selected':''}>${fx.flag} ${fx.code} ${fx.symbol}</option>`).join('')}
+              </select>
+              <button class="btn btn-ghost btn-sm" onclick="_cdAddCreators()">+ Add creators</button>
+            </div>
           </div>
           <div id="cd-creators-list"></div>
-          <div style="text-align:right;margin-top:12px;font-size:14px;font-weight:700;color:var(--blue)">Total: ${fmtMoney(_cdTotalValue())}</div>
+          <div id="cd-total-block" style="text-align:right;margin-top:12px">${_cdTotalHtml()}</div>
         </div>
 
         <!-- Timeline / Notes (NHS-style) -->
@@ -6254,19 +6261,59 @@ function _cdField(key, val) {
   _cdCampaign[key] = val;
   if (key === 'brand') document.getElementById('cd-heading').textContent = val || 'New Campaign';
 }
-function _cdTotalValue() {
+// Currency helpers — rate in campaign currency → GBP for storage
+function _cdCurrency() { return _cdCampaign.currency || 'GBP'; }
+function _cdFx() {
+  const code = _cdCurrency();
+  if (code === 'GBP') return { code:'GBP', symbol:'£', rate:1, decimals:0 };
+  return FX_CURRENCIES.find(f => f.code === code) || { code:'GBP', symbol:'£', rate:1, decimals:0 };
+}
+function _cdToGBP(amount) {
+  const fx = _cdFx();
+  return (Number(amount) || 0) / (fx.rate || 1);   // rate = units per £1
+}
+// Sum of creator rates in the campaign's own currency
+function _cdTotalInCurrency() {
   const fromCreators = _cdCreators.reduce((s, cr) => s + (Number(cr.rate) || 0), 0);
-  return fromCreators > 0 ? fromCreators : (Number(_cdCampaign.value) || 0);
+  if (fromCreators > 0) return fromCreators;
+  // Fallback: stored value is GBP — show it back in currency
+  const fx = _cdFx();
+  return (Number(_cdCampaign.value) || 0) * (fx.rate || 1);
+}
+// Total converted to GBP (what we store)
+function _cdTotalValue() {
+  return Math.round(_cdToGBP(_cdTotalInCurrency()));
+}
+
+function _cdTotalHtml() {
+  const fx = _cdFx();
+  const inCur = _cdTotalInCurrency();
+  const gbp = _cdTotalValue();
+  if (fx.code === 'GBP') {
+    return `<div style="font-size:14px;font-weight:700;color:var(--blue)">Total: ${fmtMoney(gbp)}</div>`;
+  }
+  return `<div style="font-size:14px;font-weight:700;color:var(--gray-900)">Total: ${fx.symbol}${Math.round(inCur).toLocaleString('en-GB')} ${fx.code}</div>
+    <div style="font-size:12px;color:var(--blue);font-weight:600;margin-top:2px">≈ ${fmtMoney(gbp)} <span style="color:var(--gray-400);font-weight:400">(stored in GBP · £1 = ${fx.symbol}${fx.rate})</span></div>`;
+}
+
+function _cdSetCurrency(code) {
+  _cdCampaign.currency = code;
+  _renderCdCreators();   // re-label rate fields with new symbol
+  _cdUpdateTotal();
 }
 
 function _renderCdCreators() {
   const wrap = document.getElementById('cd-creators-list');
   if (!wrap) return;
   if (!_cdCreators.length) { wrap.innerHTML = '<div style="font-size:13px;color:var(--gray-400);padding:10px 0">No creators added yet. Click "+ Add creators".</div>'; return; }
+  const fx = _cdFx();
   wrap.innerHTML = _cdCreators.map((cr, i) => {
     const creator = creators.find(x => x.id === cr.creator_id);
     const est = creator ? estimateCreatorRate(creator) : null;
-    const suggested = est ? est.mid : null;
+    // Suggested rate is always GBP — convert into campaign currency for the clicker
+    const suggestedGBP = est ? est.mid : null;
+    const suggestedCur = suggestedGBP != null ? Math.round(suggestedGBP * (fx.rate || 1)) : null;
+    const gbpNote = fx.code !== 'GBP' && cr.rate ? ` <span style="font-size:10px;color:var(--gray-400)">≈ ${fmtMoney(Math.round(_cdToGBP(cr.rate)))}</span>` : '';
     return `<div style="border:1px solid var(--gray-100);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--gray-50)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
         <div style="font-size:14px;font-weight:600">${cr.name}</div>
@@ -6274,10 +6321,10 @@ function _renderCdCreators() {
       </div>
       <div class="form-row" style="margin-bottom:8px">
         <div class="form-group" style="margin:0">
-          <label class="form-label" style="font-size:11px">Rate (£)</label>
+          <label class="form-label" style="font-size:11px">Rate (${fx.symbol} ${fx.code})${gbpNote}</label>
           <div style="display:flex;gap:6px">
             <input class="form-input" type="number" value="${cr.rate||''}" placeholder="0" oninput="_cdCreatorField(${i},'rate',this.value)" style="font-size:13px">
-            ${suggested?`<button class="btn btn-ghost btn-sm" onclick="_cdUseSuggested(${i},${suggested})" title="Use suggested rate £${suggested}" style="white-space:nowrap;font-size:11px">↩ £${_fmtCompact(suggested)}</button>`:''}
+            ${suggestedCur?`<button class="btn btn-ghost btn-sm" onclick="_cdUseSuggested(${i},${suggestedCur})" title="Use suggested rate (${fmtMoney(suggestedGBP)})" style="white-space:nowrap;font-size:11px">↩ ${fx.symbol}${_fmtCompact(suggestedCur)}</button>`:''}
           </div>
         </div>
         <div class="form-group" style="margin:0"><label class="form-label" style="font-size:11px">Status</label><select class="form-select" onchange="_cdCreatorField(${i},'status',this.value)" style="font-size:13px">${CD_CREATOR_STATUS.map(s=>`<option value="${s}"${cr.status===s?' selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}</select></div>
@@ -6287,11 +6334,17 @@ function _renderCdCreators() {
     </div>`;
   }).join('');
 }
-function _cdCreatorField(i, key, val) { if (_cdCreators[i]) { _cdCreators[i][key] = val; if (key === 'rate') _cdUpdateTotal(); } }
+function _cdCreatorField(i, key, val) { if (_cdCreators[i]) { _cdCreators[i][key] = val; if (key === 'rate') { _cdUpdateTotal(); _cdUpdateGbpNotes(); } } }
 function _cdUseSuggested(i, val) { if (_cdCreators[i]) { _cdCreators[i].rate = val; _renderCdCreators(); _cdUpdateTotal(); } }
+// Update both the card total block and the subheading live
 function _cdUpdateTotal() {
-  document.getElementById('cd-subheading').textContent = `${_cdCreators.length} creator${_cdCreators.length!==1?'s':''} · ${fmtMoney(_cdTotalValue())}`;
+  const totalBlock = document.getElementById('cd-total-block');
+  if (totalBlock) totalBlock.innerHTML = _cdTotalHtml();
+  const sub = document.getElementById('cd-subheading');
+  if (sub) sub.textContent = `${_cdCreators.length} creator${_cdCreators.length!==1?'s':''} · ${fmtMoney(_cdTotalValue())}`;
 }
+// Lightweight refresh of the per-creator "≈ £X" note without full re-render (keeps focus)
+function _cdUpdateGbpNotes() { /* notes update on next full render; total is live */ }
 function _cdRemoveCreator(i) { _cdCreators.splice(i, 1); _renderCdCreators(); _cdUpdateTotal(); }
 function _cdAddCreators() {
   openCreatorGrid(function(sel) {
@@ -6387,7 +6440,9 @@ async function saveCampaignDetail() {
   _cdCampaign.creator = _cdCreators.map(c => c.name).join(', ') || _cdCampaign.creator || '';
   _cdCampaign.creatorIds = _cdCreators.map(c => c.creator_id);
   _cdCampaign.creatorId = _cdCreators[0]?.creator_id || null;
-  _cdCampaign.value = _cdTotalValue();
+  _cdCampaign.value = _cdTotalValue();               // GBP (converted) — the canonical stored value
+  _cdCampaign.value_original = Math.round(_cdTotalInCurrency());  // amount in the deal currency
+  _cdCampaign.currency = _cdCurrency();
   _cdCampaign.updated_at = new Date().toISOString();
   const r = await DB.upsertOne('campaigns', _cdCampaign);
   if (!r) { showToast('❌ Save failed — did you run campaign-upgrade.sql?'); return; }
