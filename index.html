@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-h (campaign save fix: empty dates→null, error surfacing, fallback retry) -->
+<!-- blustu panel build 2026-07-14-i (extra TikTok side metrics: likes/comments/shares, views-follower, posting rate, verified) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -9605,6 +9605,49 @@ function estimateRateTiers(c) {
   return { tiers, base: baseEst };
 }
 
+// ── EXTRA TIKTOK METRICS (informational side data — not used for rates) ──
+function _renderTikTokExtraMetrics(c) {
+  // Only show if we have at least some extra data
+  const has = ['tiktok_total_likes','tiktok_following','tiktok_video_count','tiktok_avg_likes','tiktok_views_follower','tiktok_posts_week','tiktok_best_views','tiktok_verified','tiktok_region'].some(k => c[k] != null);
+  if (!has) return '';
+  const tile = (label, value, sub) => value == null || value === '' ? '' : `<div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center">
+    <div style="font-size:18px;font-weight:700;font-family:'DM Serif Display',serif;color:var(--gray-900)">${value}</div>
+    <div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.4px;margin-top:2px">${label}</div>
+    ${sub ? `<div style="font-size:10px;color:var(--gray-400);margin-top:1px">${sub}</div>` : ''}
+  </div>`;
+
+  // Views/follower interpretation
+  let vfNote = '';
+  const vf = c.tiktok_views_follower;
+  if (vf != null) {
+    vfNote = vf >= 1 ? 'reaches beyond audience' : vf >= 0.5 ? 'strong reach' : vf >= 0.2 ? 'typical reach' : 'below-audience reach';
+  }
+
+  const tiles = [
+    tile('Total likes', c.tiktok_total_likes != null ? _fmtCompact(c.tiktok_total_likes) : null),
+    tile('Following', c.tiktok_following != null ? _fmtCompact(c.tiktok_following) : null),
+    tile('Total videos', c.tiktok_video_count != null ? _fmtCompact(c.tiktok_video_count) : null),
+    tile('Avg likes', c.tiktok_avg_likes != null ? _fmtCompact(c.tiktok_avg_likes) : null, 'per video'),
+    tile('Avg comments', c.tiktok_avg_comments != null ? _fmtCompact(c.tiktok_avg_comments) : null, 'per video'),
+    tile('Avg shares', c.tiktok_avg_shares != null ? _fmtCompact(c.tiktok_avg_shares) : null, 'per video'),
+    tile('Views/follower', vf != null ? vf + '×' : null, vfNote),
+    tile('Posting rate', c.tiktok_posts_week != null ? c.tiktok_posts_week + '/wk' : null),
+    tile('Best recent', c.tiktok_best_views != null ? _fmtCompact(c.tiktok_best_views) : null, 'views'),
+  ].filter(Boolean).join('');
+
+  const badges = [];
+  if (c.tiktok_verified) badges.push('<span style="font-size:11px;background:#dbeafe;color:#1e40af;padding:3px 9px;border-radius:6px;font-weight:600">✓ Verified</span>');
+  if (c.tiktok_region) badges.push(`<span style="font-size:11px;background:var(--gray-50);color:var(--gray-600);padding:3px 9px;border-radius:6px">📍 ${c.tiktok_region}</span>`);
+
+  return `<div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="card-title" style="margin:0">📊 More Stats <span style="font-size:10px;color:var(--gray-400);font-weight:400">— reference only, not used for rate</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${badges.join('')}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">${tiles}</div>
+  </div>`;
+}
+
 function _renderRateEstimatorCard(c) {
   const est = estimateCreatorRate(c);
   if (!est) {
@@ -10169,6 +10212,17 @@ async function refreshAllTikTokStats() {
         tiktok_engagement: data.engagement_rate ?? null,
         tiktok_avg_views:  data.avg_views ?? null,
         tiktok_updated_at: data.fetched_at || new Date().toISOString(),
+        tiktok_following:      data.following_count ?? null,
+        tiktok_total_likes:    data.total_likes ?? null,
+        tiktok_video_count:    data.video_count ?? null,
+        tiktok_verified:       data.verified ?? null,
+        tiktok_region:         data.region ?? null,
+        tiktok_avg_likes:      data.avg_likes ?? null,
+        tiktok_avg_comments:   data.avg_comments ?? null,
+        tiktok_avg_shares:     data.avg_shares ?? null,
+        tiktok_views_follower: data.views_to_follower ?? null,
+        tiktok_posts_week:     data.posts_per_week ?? null,
+        tiktok_best_views:     data.best_video ? data.best_video.views : null,
       };
       await DB._req('PATCH', 'creators', patch, '?id=eq.' + c.id);
       Object.assign(c, patch);
@@ -10211,9 +10265,21 @@ async function refreshTikTokStats(creatorId) {
       tiktok_engagement: data.engagement_rate ?? null,
       tiktok_avg_views:  data.avg_views ?? null,
       tiktok_updated_at: data.fetched_at || new Date().toISOString(),
+      // Extra side metrics (informational)
+      tiktok_following:      data.following_count ?? null,
+      tiktok_total_likes:    data.total_likes ?? null,
+      tiktok_video_count:    data.video_count ?? null,
+      tiktok_verified:       data.verified ?? null,
+      tiktok_region:         data.region ?? null,
+      tiktok_avg_likes:      data.avg_likes ?? null,
+      tiktok_avg_comments:   data.avg_comments ?? null,
+      tiktok_avg_shares:     data.avg_shares ?? null,
+      tiktok_views_follower: data.views_to_follower ?? null,
+      tiktok_posts_week:     data.posts_per_week ?? null,
+      tiktok_best_views:     data.best_video ? data.best_video.views : null,
     };
     const r = await DB._req('PATCH', 'creators', patch, '?id=eq.' + creatorId);
-    if (r === null) { showToast('⚠ Fetched but failed to save — run tiktok-stats.sql?'); }
+    if (r === null) { showToast('⚠ Fetched but failed to save — run tiktok-metrics.sql?'); }
     Object.assign(c, patch);
     // Keep sample metadata in memory (not persisted) so the card can show it
     c._tt_sample = data.sample_count || 0;
@@ -10286,6 +10352,8 @@ function renderProfileSocials(c) {
     ${_renderTikTokStatsCard(c)}
     <!-- Suggested rate (reference) -->
     ${_renderRateEstimatorCard(c)}
+    <!-- Extra TikTok metrics (informational) -->
+    ${_renderTikTokExtraMetrics(c)}
     <!-- Socials -->
     <div class="card" style="margin-bottom:14px">
       <div class="card-title" style="margin-bottom:12px">Social Platforms</div>
