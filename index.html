@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-i (extra TikTok side metrics: likes/comments/shares, views-follower, posting rate, verified) -->
+<!-- blustu panel build 2026-07-14-j (inbox: message body cache + retry, fixes 'Failed to fetch' on thread switch) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -17051,6 +17051,37 @@ function _emailAuthToken() {
 }
 
 /** Call the Worker. Auto-injects staff token. */
+/** Persistent cache of fully-fetched message bodies, keyed by mailbox|folder|uid.
+ *  Survives across thread switches so an already-loaded message never shows
+ *  "Failed to fetch" just because you opened another thread. */
+const _msgBodyCache = {};
+function _msgCacheKey(mailbox, folder, uid) { return `${mailbox}|${folder||'INBOX'}|${uid}`; }
+
+/** Fetch a single message body, using the cache first and retrying once on a
+ *  transient network failure. Returns the message object (with _folder) or
+ *  throws only after cache miss + retry both fail. */
+async function _fetchMessageCached(mailbox, folder, uid) {
+  const key = _msgCacheKey(mailbox, folder, uid);
+  if (_msgBodyCache[key]) return _msgBodyCache[key];
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await emailApi('/message', { mailbox, uid, folder: folder || 'INBOX' });
+      if (r && r.message) {
+        const msg = { ...r.message, _folder: folder || 'INBOX' };
+        _msgBodyCache[key] = msg;   // cache the success
+        return msg;
+      }
+      lastErr = new Error('Empty message');
+    } catch(e) {
+      lastErr = e;
+      // brief backoff before the single retry
+      if (attempt === 0) await new Promise(res => setTimeout(res, 400));
+    }
+  }
+  throw lastErr || new Error('Failed to load');
+}
+
 async function emailApi(path, body) {
   const token = _emailAuthToken();
   if (!token) throw new Error('Not logged in');
@@ -17691,6 +17722,8 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
  * Older messages collapsed to a one-line summary; newest one expanded.
  */
 async function openEmailThread(threadKey, isCreatorTab, creatorId) {
+  _lastThreadWasCreatorTab = isCreatorTab;
+  _lastThreadCreatorId = creatorId;
   const paneId = isCreatorTab ? `ce-pane-${creatorId}` : 'inboxPane';
   const pane = document.getElementById(paneId);
   if (!pane) return;
@@ -17711,18 +17744,26 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
 
   pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--gray-400)">Loading conversation (${thread.messages.length} message${thread.messages.length>1?'s':''})…</div>`;
 
-  // Fetch all messages in the thread in parallel — each from its own source folder
+  // Mark which thread this render is for, so a slow fetch that resolves after
+  // the user switched threads doesn't overwrite the newer view.
+  _activeThreadKey = threadKey;
+
+  // Fetch each message (cache-first, with retry). Cached ones resolve instantly,
+  // so re-opening a thread never re-hits the network or shows a spurious error.
   let fullMessages;
   try {
     fullMessages = await Promise.all(thread.messages.map(m =>
-      emailApi('/message', { mailbox: _currentInbox.mailbox, uid: m.uid, folder: m._folder || _currentInbox.folder })
-        .then(r => r.message ? { ...r.message, _folder: m._folder || _currentInbox.folder } : r.message)
+      _fetchMessageCached(_currentInbox.mailbox, m._folder || _currentInbox.folder, m.uid)
         .catch(e => ({ uid: m.uid, error: e.message, ...m }))
     ));
   } catch(e) {
     pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--red)">❌ ${e.message}</div>`;
     return;
   }
+
+  // If the user switched to a different thread while we were fetching, stop —
+  // don't clobber the newer thread's view with this one.
+  if (_activeThreadKey !== threadKey) return;
 
   // Latest message is the most recent — expanded by default
   const subjectLine = (thread.subject || '(no subject)').replace(/</g,'&lt;');
@@ -17736,7 +17777,10 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
 
   const messagesHtml = fullMessages.map((m, idx) => {
     if (m.error) {
-      return `<div class="thread-msg" style="padding:14px;background:#fee2e2;color:#991b1b;border-radius:8px;margin-bottom:8px;font-size:12px">⚠️ Could not load this message: ${m.error}</div>`;
+      return `<div class="thread-msg" style="padding:14px;background:#fee2e2;color:#991b1b;border-radius:8px;margin-bottom:8px;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span>⚠️ Could not load this message: ${m.error}</span>
+        <button class="btn btn-ghost btn-sm" onclick="_retryThreadMessage('${threadKey}')" style="white-space:nowrap">↻ Retry</button>
+      </div>`;
     }
     const fromName = _parseFromName(m.from);
     const fromAddr = _parseFromAddress(m.from);
@@ -18124,6 +18168,17 @@ async function openCompose(presetMailbox) {
 // keyed by UID. Reply buttons look up from here instead of embedding the whole
 // message (which breaks inline onclick when bodies contain quotes/newlines).
 let _threadMsgCache = {};
+let _activeThreadKey = null;
+let _lastThreadWasCreatorTab = false;
+let _lastThreadCreatorId = null;
+
+/** Retry loading a thread whose messages failed — reopens it (cache-first for
+ *  the ones that succeeded, re-fetch for the ones that didn't). */
+function _retryThreadMessage(threadKey) {
+  // Re-open the currently viewed thread; successful messages are cached, failed
+  // ones aren't, so only the failures get re-fetched.
+  openEmailThread(threadKey, _lastThreadWasCreatorTab, _lastThreadCreatorId);
+}
 
 /** Reply to a message by UID, pulling its full data from the thread cache. */
 function replyToCachedMessage(uid) {
