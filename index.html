@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-k (added 60-day usage rate tier) -->
+<!-- blustu panel build 2026-07-14-l (Brand Snipes v1: 3 target types, tracker, templates, email compose) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1189,6 +1189,15 @@ html, body { overflow-x: hidden; }
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
       Deal Pipeline
     </button>
+    <button class="nav-item" onclick="showPage('brandsnipes',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      Brand Snipes
+      <span class="nav-badge" id="brandSnipesBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" onclick="showPage('brandtemplates',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v16"/></svg>
+      Brand Templates
+    </button>
     <div class="nav-section-label">Finance & Team</div>
     <button class="nav-item" onclick="showPage('earnings',this)">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -1834,6 +1843,109 @@ html, body { overflow-x: hidden; }
         </div>
       </div>
       <div id="cd-body"></div>
+    </div>
+
+    <!-- ══ BRAND SNIPES ══ -->
+    <div class="page" id="page-brandsnipes">
+      <div class="page-header">
+        <div>
+          <h1>🎯 Brand Snipes</h1>
+          <p>Proactively hunt brand deals. Target a brand directly, a person you found (LinkedIn etc.), or a marketing agency that needs talent.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="exportBrandSnipesCSV()">⬇ Export CSV</button>
+        </div>
+      </div>
+
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
+        <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="bs-stat-total">0</div><div class="stat-change neutral" id="bs-stat-scope">Your snipes</div></div>
+        <div class="stat-card"><div class="stat-label">Waiting</div><div class="stat-value" id="bs-stat-waiting" style="color:var(--amber)">0</div><div class="stat-change neutral">Sent, no reply</div></div>
+        <div class="stat-card"><div class="stat-label">In talks</div><div class="stat-value" id="bs-stat-talking" style="color:var(--blue)">0</div><div class="stat-change neutral">Live conversations</div></div>
+        <div class="stat-card"><div class="stat-label">Deals</div><div class="stat-value" id="bs-stat-deal" style="color:var(--green)">0</div><div class="stat-change up">Won 🎉</div></div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="card" style="margin-bottom:12px;padding:12px 16px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div style="display:inline-flex;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:8px;padding:2px">
+            <button class="btn btn-sm" id="bs-scope-mine" onclick="setBrandSnipeScope('mine')" style="border-radius:6px">Mine</button>
+            <button class="btn btn-ghost btn-sm" id="bs-scope-all" onclick="setBrandSnipeScope('all')" style="border-radius:6px">All Staff</button>
+          </div>
+          <select class="form-select" id="bs-filter-type" onchange="renderBrandSnipes()" style="max-width:150px">
+            <option value="">Any type</option>
+            <option value="brand">🏢 Brand direct</option>
+            <option value="contact">👤 Contact person</option>
+            <option value="agency">🤝 Agency</option>
+          </select>
+          <select class="form-select" id="bs-filter-status" onchange="renderBrandSnipes()" style="max-width:150px">
+            <option value="">Any status</option>
+            <option value="waiting">Waiting</option>
+            <option value="talking">Talking</option>
+            <option value="interested">Interested</option>
+            <option value="replied">Replied</option>
+            <option value="deal">Deal won</option>
+            <option value="rejected">Rejected</option>
+            <option value="no_reply">No reply</option>
+          </select>
+          <input class="form-input" id="bs-search" placeholder="Search brand / contact…" oninput="renderBrandSnipes()" style="max-width:180px">
+          <button class="btn btn-ghost btn-sm" onclick="clearBrandSnipeFilters()">Clear</button>
+          <span style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="bs-count-label">0 snipes</span>
+        </div>
+      </div>
+
+      <!-- Quick add -->
+      <div class="card" style="margin-bottom:12px;padding:12px 14px;background:var(--blue-light);border:1px solid #bfdbfe">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:600;color:var(--blue)">⚡ Quick add</div>
+          <div style="display:inline-flex;background:#fff;border-radius:8px;padding:2px;gap:2px">
+            <button class="btn btn-sm" id="bs-type-brand" onclick="setBsAddType('brand')" style="border-radius:6px;font-size:12px">🏢 Brand</button>
+            <button class="btn btn-ghost btn-sm" id="bs-type-contact" onclick="setBsAddType('contact')" style="border-radius:6px;font-size:12px">👤 Contact</button>
+            <button class="btn btn-ghost btn-sm" id="bs-type-agency" onclick="setBsAddType('agency')" style="border-radius:6px;font-size:12px">🤝 Agency</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input class="form-input" id="bs-brand" placeholder="Brand name *" style="flex:1;min-width:130px" onkeydown="if(event.key==='Enter')quickAddBrandSnipe()">
+          <input class="form-input" id="bs-contact" placeholder="Contact name" style="flex:1;min-width:120px;display:none" onkeydown="if(event.key==='Enter')quickAddBrandSnipe()">
+          <input class="form-input" id="bs-agency" placeholder="Agency name" style="flex:1;min-width:120px;display:none" onkeydown="if(event.key==='Enter')quickAddBrandSnipe()">
+          <input class="form-input" id="bs-role" placeholder="Role/title" style="width:130px;display:none" onkeydown="if(event.key==='Enter')quickAddBrandSnipe()">
+          <input class="form-input" id="bs-industry" placeholder="Industry" style="width:110px" onkeydown="if(event.key==='Enter')quickAddBrandSnipe()">
+          <input class="form-input" id="bs-email" placeholder="Email" style="flex:1;min-width:130px" onkeydown="if(event.key==='Enter')quickAddBrandSnipe()">
+          <input class="form-input" id="bs-link" placeholder="Website / LinkedIn" style="flex:1;min-width:130px" onkeydown="if(event.key==='Enter')quickAddBrandSnipe()">
+          <button class="btn btn-ghost btn-sm" onclick="quickAddBrandSnipe()" style="white-space:nowrap">+ Add</button>
+          <button class="btn btn-primary btn-sm" onclick="quickAddBrandSnipeAndEmail()" style="white-space:nowrap" title="Add then open a pre-filled outreach email">+ Snipe & Email ✉️</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding:0" id="bs-table-card">
+        <div class="table-wrap">
+          <table id="brandSnipesTable">
+            <thead><tr>
+              <th>Type</th><th>Brand / Contact</th><th>Industry</th><th>Email / Link</th><th>Sent?</th><th>Reply / Status</th><th>Follow up</th><th>Thread</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="brandSnipesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ BRAND TEMPLATES ══ -->
+    <div class="page" id="page-brandtemplates">
+      <div class="page-header">
+        <div>
+          <h1>📄 Brand Outreach Templates</h1>
+          <p>Three sets of templates — one per snipe type. Each set can hold several variants. Used by "Snipe &amp; Email".</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openBrandTemplateEditor(null)">+ New Template</button>
+      </div>
+      <div class="tabs" id="btTabs">
+        <button class="tab active" onclick="setBtTab('brand',this)">🏢 Brand Direct</button>
+        <button class="tab" onclick="setBtTab('contact',this)">👤 Contact Person</button>
+        <button class="tab" onclick="setBtTab('agency',this)">🤝 Agency</button>
+      </div>
+      <div style="background:var(--gray-50);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--gray-500);margin-bottom:14px">
+        💡 Placeholders you can use: <code>{brand}</code>, <code>{contact_name}</code>, <code>{agency}</code>, <code>{your_name}</code>, <code>{role}</code>
+      </div>
+      <div id="brandTemplatesList"></div>
     </div>
 
     <!-- ══ PITCH DECKS ══ -->
@@ -3383,6 +3495,29 @@ html, body { overflow-x: hidden; }
 </div>
 
 <!-- ══ RATE FACTORS MODAL ══ -->
+<!-- ══ BRAND TEMPLATE EDITOR ══ -->
+<div class="modal-overlay" id="brandTemplateModal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title" id="bt-edit-title">New Template</div>
+      <button class="modal-close" onclick="closeModal('brandTemplateModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Template name</label><input class="form-input" id="bt-name" placeholder="e.g. Direct intro"></div>
+        <div class="form-group"><label class="form-label">Set (target type)</label><select class="form-select" id="bt-type"><option value="brand">🏢 Brand Direct</option><option value="contact">👤 Contact Person</option><option value="agency">🤝 Agency</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Subject</label><input class="form-input" id="bt-subject" placeholder="Email subject"></div>
+      <div class="form-group"><label class="form-label">Body</label><textarea class="form-textarea" id="bt-body" style="min-height:220px;font-family:inherit" placeholder="Email body… use {brand} {contact_name} {agency} {role} {your_name}"></textarea></div>
+      <div style="font-size:11px;color:var(--gray-400)">Placeholders: {brand}, {contact_name}, {agency}, {role}, {your_name}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('brandTemplateModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBrandTemplate()">💾 Save Template</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ CALENDAR EVENT MODAL ══ -->
 <!-- ══ PITCH DOC BUILDER ══ -->
 <div class="modal-overlay" id="pitchBuilderModal">
@@ -4488,6 +4623,7 @@ const pageTitles = {
   dashboard:'Dashboard', crm:'Creator CRM', creatorprofile:'Creator Profile',
   onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit', snipes:'Snipes',
   campaigns:'Campaigns', campaigndetail:'Campaign', pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline',
+  brandsnipes:'Brand Snipes', brandtemplates:'Brand Templates',
   inbox:'Team Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
   managers:'Team', emailsetup:'Email Setup', profit:'Agency Profit', spending:'Spending', staffpayouts:'Staff Payouts', invoices:'Invoices',
   creatorgrid:'Select Creators', earnings:'Earnings Tracker', calendar:'Team Calendar'
@@ -4549,6 +4685,8 @@ function showPage(id, btn) {
   if (id === 'pipeline')   { renderPipeline(); }
   if (id === 'campaigns')  { renderCampaigns(currentCampaignFilter); }
   if (id === 'campaigndetail' && _cdCampaign) { _renderCampaignDetail(); }
+  if (id === 'brandsnipes') { loadBrandSnipes(); }
+  if (id === 'brandtemplates') { renderBrandTemplates(); }
   if (id === 'earnings')   { populateEarningSelects(); renderEarnings(); }
   if (id === 'profit')     { loadAgencyProfit(); }
   if (id === 'spending')   { loadSpending(); }
@@ -15662,7 +15800,411 @@ function exportSnipesCSV() {
   showToast('CSV exported');
 }
 
-// Creator profile earnings summary card
+// ═══════════════════════════════════════════════════════════════════════
+// BRAND SNIPES — scouting tracker for brand deals
+// ═══════════════════════════════════════════════════════════════════════
+let brandSnipes = Storage.get('brand_snipes', []);
+let _bsScope = 'mine';
+let _bsAddType = 'brand';
+
+const BS_TARGET_TYPES = {
+  brand:   { label: 'Brand direct', icon: '🏢', color: '#2198ED' },
+  contact: { label: 'Contact',      icon: '👤', color: '#8b5cf6' },
+  agency:  { label: 'Agency',       icon: '🤝', color: '#f59e0b' },
+};
+const BS_STATUS = {
+  waiting:    { label: 'Waiting',    badge: 'badge-amber', row: 'snipe-row-no_reply' },
+  talking:    { label: 'Talking',    badge: 'badge-blue',  row: 'snipe-row-talking' },
+  interested: { label: 'Interested', badge: 'badge-blue',  row: 'snipe-row-interested' },
+  replied:    { label: 'Replied',    badge: 'badge-blue',  row: 'snipe-row-replied' },
+  deal:       { label: 'Deal won',   badge: 'badge-green', row: 'snipe-row-signed' },
+  rejected:   { label: 'Rejected',   badge: 'badge-red',   row: 'snipe-row-rejected' },
+  no_reply:   { label: 'No reply',   badge: 'badge-gray',  row: 'snipe-row-no_reply' },
+};
+
+async function loadBrandSnipes() {
+  const rows = await DB.select('brand_snipes', '?order=created_at.desc');
+  if (rows && rows.length !== undefined) {
+    brandSnipes = rows;
+    Storage.set('brand_snipes', brandSnipes);
+  }
+  renderBrandSnipes();
+}
+
+function setBrandSnipeScope(scope) {
+  _bsScope = scope;
+  document.getElementById('bs-scope-mine').className = scope === 'mine' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('bs-scope-all').className = scope === 'all' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('bs-stat-scope').textContent = scope === 'mine' ? 'Your snipes' : 'All staff';
+  renderBrandSnipes();
+}
+
+function setBsAddType(type) {
+  _bsAddType = type;
+  ['brand','contact','agency'].forEach(t => {
+    document.getElementById('bs-type-' + t).className = t === type ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  });
+  // Show/hide fields based on type
+  document.getElementById('bs-contact').style.display = (type === 'contact' || type === 'agency') ? '' : 'none';
+  document.getElementById('bs-agency').style.display = (type === 'agency') ? '' : 'none';
+  document.getElementById('bs-role').style.display = (type === 'contact' || type === 'agency') ? '' : 'none';
+}
+
+function clearBrandSnipeFilters() {
+  ['bs-filter-type','bs-filter-status','bs-search'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  renderBrandSnipes();
+}
+
+function _bsFiltered() {
+  let list = brandSnipes.slice();
+  if (_bsScope === 'mine') list = list.filter(s => s.owner_email === currentUser?.email);
+  const type = document.getElementById('bs-filter-type')?.value || '';
+  const status = document.getElementById('bs-filter-status')?.value || '';
+  const search = (document.getElementById('bs-search')?.value || '').toLowerCase();
+  if (type) list = list.filter(s => (s.target_type || 'brand') === type);
+  if (status) list = list.filter(s => (s.reply_status || 'waiting') === status);
+  if (search) list = list.filter(s =>
+    (s.brand_name || '').toLowerCase().includes(search) ||
+    (s.contact_name || '').toLowerCase().includes(search) ||
+    (s.agency_name || '').toLowerCase().includes(search) ||
+    (s.industry || '').toLowerCase().includes(search)
+  );
+  return list;
+}
+
+function renderBrandSnipes() {
+  const body = document.getElementById('brandSnipesBody');
+  if (!body) return;
+  const list = _bsFiltered();
+
+  // Stats (respecting scope)
+  const scoped = _bsScope === 'mine' ? brandSnipes.filter(s => s.owner_email === currentUser?.email) : brandSnipes;
+  document.getElementById('bs-stat-total').textContent = scoped.length;
+  document.getElementById('bs-stat-waiting').textContent = scoped.filter(s => (s.reply_status||'waiting') === 'waiting' && (s.sent||'no') === 'yes').length;
+  document.getElementById('bs-stat-talking').textContent = scoped.filter(s => ['talking','interested','replied'].includes(s.reply_status)).length;
+  document.getElementById('bs-stat-deal').textContent = scoped.filter(s => s.reply_status === 'deal').length;
+  document.getElementById('bs-count-label').textContent = list.length + ' snipe' + (list.length !== 1 ? 's' : '');
+  const badge = document.getElementById('brandSnipesBadge');
+  if (badge) { const pending = scoped.filter(s => (s.sent||'no')==='no').length; badge.textContent = pending; badge.style.display = pending ? '' : 'none'; }
+
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:36px;color:var(--gray-400)">No brand snipes yet. Use Quick Add above to scout your first brand, contact, or agency.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = list.map(s => {
+    const type = BS_TARGET_TYPES[s.target_type || 'brand'];
+    const st = s.reply_status || 'waiting';
+    const stInfo = BS_STATUS[st] || BS_STATUS.waiting;
+    const sentYes = (s.sent || 'no').toLowerCase() === 'yes';
+    // Primary name display
+    let primary = s.brand_name || '—';
+    let secondary = '';
+    if (s.target_type === 'contact') secondary = [s.contact_name, s.role_title].filter(Boolean).join(' · ');
+    else if (s.target_type === 'agency') secondary = [s.agency_name, s.contact_name].filter(Boolean).join(' · ');
+    const linkCell = [
+      s.email ? `<a href="#" onclick="openBrandSnipeCompose(${s.id});return false" style="color:var(--blue);font-size:12px">✉ ${s.email}</a>` : '',
+      s.link ? `<a href="${escapeHtml(s.link)}" target="_blank" rel="noopener" style="color:var(--gray-400);font-size:11px">🔗 link</a>` : '',
+    ].filter(Boolean).join('<br>') || '<span style="color:var(--gray-300)">—</span>';
+    const threadCell = s.last_thread_uid
+      ? `<button class="btn btn-ghost btn-sm" onclick="openBrandSnipeThread(${s.id})" style="font-size:11px">💬 View</button>`
+      : '<span style="color:var(--gray-300);font-size:11px">—</span>';
+    return `<tr class="${stInfo.row}">
+      <td><span title="${type.label}" style="font-size:16px">${type.icon}</span></td>
+      <td style="font-weight:500">${escapeHtml(primary)}${secondary ? `<div style="font-size:11px;color:var(--gray-400)">${escapeHtml(secondary)}</div>` : ''}</td>
+      <td style="font-size:12px">${escapeHtml(s.industry || '—')}</td>
+      <td>${linkCell}</td>
+      <td><button class="btn btn-sm ${sentYes?'':'btn-ghost'}" onclick="toggleBrandSnipeSent(${s.id})" style="font-size:11px;padding:2px 8px">${sentYes?'✓ Yes':'No'}</button></td>
+      <td><select onchange="updateBrandSnipeStatus(${s.id},this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:6px;background:transparent;color:var(--gray-900)">${Object.entries(BS_STATUS).map(([k,v])=>`<option value="${k}" ${st===k?'selected':''} style="background:var(--white);color:var(--gray-900)">${v.label}</option>`).join('')}</select></td>
+      <td><input value="${escapeHtml(s.follow_up||'')}" onchange="updateBrandSnipeField(${s.id},'follow_up',this.value)" placeholder="—" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:6px;width:100px;background:transparent;color:var(--gray-900)"></td>
+      <td>${threadCell}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" onclick="openBrandSnipeCompose(${s.id})" title="Email" style="padding:2px 6px">✉</button>
+        <button class="btn btn-ghost btn-sm" onclick="editBrandSnipe(${s.id})" title="Edit" style="padding:2px 6px">✏</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteBrandSnipe(${s.id})" title="Delete" style="padding:2px 6px">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function quickAddBrandSnipe(silent) {
+  const brand = document.getElementById('bs-brand').value.trim();
+  if (!brand) { document.getElementById('bs-brand').focus(); return null; }
+  const row = {
+    owner_email: currentUser?.email || '',
+    owner_name:  currentUser?.name || currentUser?.email || '',
+    target_type: _bsAddType,
+    brand_name:  brand,
+    contact_name: document.getElementById('bs-contact').value.trim() || null,
+    agency_name:  document.getElementById('bs-agency').value.trim() || null,
+    role_title:   document.getElementById('bs-role').value.trim() || null,
+    industry:    document.getElementById('bs-industry').value.trim() || null,
+    email:       document.getElementById('bs-email').value.trim() || null,
+    link:        document.getElementById('bs-link').value.trim() || null,
+    contact_method: 'email',
+    sent: 'no', reply_status: 'waiting',
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  };
+  const result = await DB._req('POST', 'brand_snipes', [row], '');
+  if (result === null) { showToast('Save failed — run brand-snipes.sql?'); return null; }
+  ['bs-brand','bs-contact','bs-agency','bs-role','bs-industry','bs-email','bs-link'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  await loadBrandSnipes();
+  if (!silent) showToast('✅ Brand snipe added');
+  return Array.isArray(result) ? result[0] : row;
+}
+
+async function quickAddBrandSnipeAndEmail() {
+  const email = document.getElementById('bs-email').value.trim();
+  const brand = document.getElementById('bs-brand').value.trim();
+  const contactName = document.getElementById('bs-contact').value.trim();
+  const agency = document.getElementById('bs-agency').value.trim();
+  const role = document.getElementById('bs-role').value.trim();
+  if (!brand) { document.getElementById('bs-brand').focus(); return; }
+  if (!email) { showToast('Add an email to use Snipe & Email'); document.getElementById('bs-email').focus(); return; }
+  const type = _bsAddType;
+  const saved = await quickAddBrandSnipe(true);
+  if (!saved) return;
+  await openBrandSnipeCompose(null, { target_type: type, brand_name: brand, contact_name: contactName, agency_name: agency, role_title: role, email });
+}
+
+async function updateBrandSnipeStatus(id, status) {
+  const s = brandSnipes.find(x => x.id === id); if (!s) return;
+  s.reply_status = status;
+  await DB._req('PATCH', 'brand_snipes', { reply_status: status, updated_at: new Date().toISOString() }, '?id=eq.' + id);
+  renderBrandSnipes();
+}
+async function updateBrandSnipeField(id, field, value) {
+  const s = brandSnipes.find(x => x.id === id); if (!s) return;
+  s[field] = value;
+  await DB._req('PATCH', 'brand_snipes', { [field]: value, updated_at: new Date().toISOString() }, '?id=eq.' + id);
+}
+async function toggleBrandSnipeSent(id) {
+  const s = brandSnipes.find(x => x.id === id); if (!s) return;
+  s.sent = (s.sent || 'no').toLowerCase() === 'yes' ? 'no' : 'yes';
+  await DB._req('PATCH', 'brand_snipes', { sent: s.sent, updated_at: new Date().toISOString() }, '?id=eq.' + id);
+  renderBrandSnipes();
+}
+async function deleteBrandSnipe(id) {
+  const s = brandSnipes.find(x => x.id === id); if (!s) return;
+  if (!confirm(`Delete brand snipe "${s.brand_name}"?`)) return;
+  await DB._req('DELETE', 'brand_snipes', null, '?id=eq.' + id);
+  brandSnipes = brandSnipes.filter(x => x.id !== id);
+  renderBrandSnipes();
+  showToast('Deleted');
+}
+
+function editBrandSnipe(id) {
+  const s = brandSnipes.find(x => x.id === id); if (!s) return;
+  // Prefill quick-add with this snipe's values for a quick edit, then delete original on re-add
+  setBsAddType(s.target_type || 'brand');
+  document.getElementById('bs-brand').value = s.brand_name || '';
+  document.getElementById('bs-contact').value = s.contact_name || '';
+  document.getElementById('bs-agency').value = s.agency_name || '';
+  document.getElementById('bs-role').value = s.role_title || '';
+  document.getElementById('bs-industry').value = s.industry || '';
+  document.getElementById('bs-email').value = s.email || '';
+  document.getElementById('bs-link').value = s.link || '';
+  document.getElementById('bs-brand').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showToast('Loaded into Quick Add — edit and re-add, then delete the old row');
+}
+
+function openBrandSnipeThread(id) {
+  const s = brandSnipes.find(x => x.id === id); if (!s || !s.last_thread_uid) return;
+  showPage('inbox');
+  setTimeout(() => { if (typeof openEmailThread === 'function') openEmailThread(s.last_thread_uid, false, null); }, 400);
+}
+
+function exportBrandSnipesCSV() {
+  const list = _bsFiltered();
+  if (!list.length) { showToast('No brand snipes to export'); return; }
+  const headers = ['Type','Brand','Contact','Agency','Role','Industry','Email','Link','Sent','Status','Follow up','Owner','Notes'];
+  const rows = list.map(s => [
+    BS_TARGET_TYPES[s.target_type||'brand'].label, s.brand_name||'', s.contact_name||'', s.agency_name||'',
+    s.role_title||'', s.industry||'', s.email||'', s.link||'',
+    (s.sent||'no').toLowerCase()==='yes'?'Yes':'No', (BS_STATUS[s.reply_status||'waiting']||{}).label||'',
+    s.follow_up||'', s.owner_name||s.owner_email||'', s.notes||'',
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'blustu-brand-snipes-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showToast('CSV exported');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BRAND TEMPLATES
+// ═══════════════════════════════════════════════════════════════════════
+let brandTemplates = Storage.get('brand_templates', []);
+let _btTab = 'brand';
+
+// Default seed templates (used if none saved yet)
+const BRAND_TEMPLATE_SEEDS = {
+  brand: [
+    { name: 'Direct intro — talent offer', subject: 'Vetted creators for {brand} campaigns', body: `Hi {brand} team,\n\nI'm {your_name} from BluStu, a creator talent agency. I've been following {brand} and think our roster could be a strong fit for your upcoming campaigns.\n\nWe represent vetted, engaged creators across multiple niches, all with live performance data so you know exactly what you're getting. We handle everything end to end — briefing, delivery, usage rights.\n\nWould you be open to a quick look at a few creators who'd suit {brand}?\n\nBest,\n{your_name}` },
+    { name: 'Short & punchy', subject: 'Creators for {brand}', body: `Hi,\n\n{your_name} here from BluStu (creator talent agency). We've got a roster of vetted creators I think would be perfect for {brand}.\n\nCan I send over a few that fit your vibe?\n\nThanks,\n{your_name}` },
+  ],
+  contact: [
+    { name: 'LinkedIn contact intro', subject: 'Creator talent for {brand}', body: `Hi {contact_name},\n\nCame across your work as {role} at {brand} — {your_name} from BluStu here, a creator talent agency.\n\nWe represent vetted creators with live stats and full campaign management. I'd love to show you a few who'd fit {brand}'s audience.\n\nOpen to a quick chat?\n\nBest,\n{your_name}` },
+    { name: 'Warm & personal', subject: 'Loved what {brand} is doing', body: `Hi {contact_name},\n\nReally impressed with {brand}'s recent work. I'm {your_name} from BluStu — we manage a roster of creators and I think there's a great fit here.\n\nWould you be up for me sending a couple of creator profiles over?\n\nCheers,\n{your_name}` },
+  ],
+  agency: [
+    { name: 'Agency partnership', subject: 'Talent partner for your brand clients', body: `Hi {agency} team,\n\n{your_name} from BluStu here. We're a creator talent agency and I imagine you're often sourcing creators for your brand clients.\n\nWe'd love to be a go-to talent partner — vetted creators, live data, fast turnarounds, full management. Happy to be your bench when you need creators.\n\nWould a quick intro call make sense?\n\nBest,\n{your_name}` },
+    { name: 'Roster on tap', subject: 'Creators on tap for {agency} clients', body: `Hi,\n\n{your_name} from BluStu. We supply vetted creators to agencies like {agency} — think of us as your creator roster on tap for whenever a brief needs talent.\n\nCan I send over how we work + a sample roster?\n\nThanks,\n{your_name}` },
+  ],
+};
+
+async function loadBrandTemplates() {
+  const rows = await DB.select('brand_templates', '?order=sort_order.asc');
+  if (rows && rows.length !== undefined) {
+    brandTemplates = rows;
+    Storage.set('brand_templates', brandTemplates);
+  }
+  return brandTemplates;
+}
+
+function setBtTab(tab, btn) {
+  _btTab = tab;
+  document.querySelectorAll('#btTabs .tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderBrandTemplates();
+}
+
+async function renderBrandTemplates() {
+  await loadBrandTemplates();
+  const wrap = document.getElementById('brandTemplatesList');
+  if (!wrap) return;
+  let list = brandTemplates.filter(t => (t.target_type || 'brand') === _btTab);
+  // Seed defaults into view if none exist yet (not saved until edited)
+  let usingSeeds = false;
+  if (!list.length) { list = BRAND_TEMPLATE_SEEDS[_btTab].map((t, i) => ({ ...t, target_type: _btTab, _seed: true, sort_order: i })); usingSeeds = true; }
+  wrap.innerHTML = (usingSeeds ? `<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Default templates shown — edit one to save your own version.</div>` : '') +
+    list.map(t => `<div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+        <div style="font-weight:600">${escapeHtml(t.name)}${t._seed?' <span style="font-size:10px;color:var(--gray-400)">(default)</span>':''}</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick='openBrandTemplateEditor(${t._seed ? JSON.stringify(t).replace(/'/g,"&#39;") : t.id})'>✏ Edit</button>
+          ${t._seed?'':`<button class="btn btn-danger btn-sm" onclick="deleteBrandTemplate(${t.id})">✕</button>`}
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--gray-500);margin-bottom:6px"><strong>Subject:</strong> ${escapeHtml(t.subject||'—')}</div>
+      <div style="font-size:12px;color:var(--gray-600);white-space:pre-wrap;background:var(--gray-50);border-radius:8px;padding:12px;max-height:160px;overflow:auto">${escapeHtml(t.body||'')}</div>
+    </div>`).join('');
+}
+
+function openBrandTemplateEditor(idOrSeed) {
+  let t;
+  if (idOrSeed == null) { t = { target_type: _btTab, name: '', subject: '', body: '' }; }
+  else if (typeof idOrSeed === 'object') { t = { ...idOrSeed, id: null }; delete t._seed; }
+  else { t = brandTemplates.find(x => x.id === idOrSeed) || { target_type: _btTab, name: '', subject: '', body: '' }; }
+  _btEditing = t;
+  document.getElementById('bt-edit-title').textContent = t.id ? 'Edit Template' : 'New Template';
+  document.getElementById('bt-name').value = t.name || '';
+  document.getElementById('bt-type').value = t.target_type || _btTab;
+  document.getElementById('bt-subject').value = t.subject || '';
+  document.getElementById('bt-body').value = t.body || '';
+  openModal('brandTemplateModal');
+}
+let _btEditing = null;
+
+async function saveBrandTemplate() {
+  const name = document.getElementById('bt-name').value.trim();
+  if (!name) { showToast('Give the template a name'); return; }
+  const row = {
+    target_type: document.getElementById('bt-type').value,
+    name,
+    subject: document.getElementById('bt-subject').value.trim(),
+    body: document.getElementById('bt-body').value,
+    sort_order: _btEditing?.sort_order || brandTemplates.length,
+  };
+  let r;
+  if (_btEditing && _btEditing.id) {
+    r = await DB._req('PATCH', 'brand_templates', row, '?id=eq.' + _btEditing.id);
+  } else {
+    r = await DB._req('POST', 'brand_templates', [row], '');
+  }
+  if (r === null) { showToast('Save failed — run brand-snipes.sql?'); return; }
+  closeModal('brandTemplateModal');
+  await loadBrandTemplates();
+  renderBrandTemplates();
+  showToast('✅ Template saved');
+}
+
+async function deleteBrandTemplate(id) {
+  if (!confirm('Delete this template?')) return;
+  await DB._req('DELETE', 'brand_templates', null, '?id=eq.' + id);
+  brandTemplates = brandTemplates.filter(t => t.id !== id);
+  renderBrandTemplates();
+}
+
+function _fillBrandTemplate(text, data) {
+  return (text || '')
+    .replace(/\{brand\}/g, data.brand_name || 'your brand')
+    .replace(/\{contact_name\}/g, data.contact_name || 'there')
+    .replace(/\{agency\}/g, data.agency_name || 'your agency')
+    .replace(/\{role\}/g, data.role_title || '')
+    .replace(/\{your_name\}/g, currentUser?.name || 'BluStu');
+}
+
+// Open compose pre-filled for a brand snipe (uses matching template set)
+async function openBrandSnipeCompose(id, dataOverride) {
+  const s = dataOverride || brandSnipes.find(x => x.id === id);
+  if (!s) return;
+  if (!s.email) { showToast('No email on this snipe'); return; }
+  await loadBrandTemplates();
+  const type = s.target_type || 'brand';
+  let templates = brandTemplates.filter(t => (t.target_type || 'brand') === type);
+  if (!templates.length) templates = BRAND_TEMPLATE_SEEDS[type].map(t => ({ ...t, target_type: type }));
+  const tmpl = templates[0];
+  const subject = _fillBrandTemplate(tmpl.subject, s);
+  const body = _fillBrandTemplate(tmpl.body, s) + '\n\n' + (_mySignature() || '');
+
+  // Reuse the existing compose modal
+  await loadEmailAccounts();
+  const accounts = _emailAccounts || [];
+  const sel = document.getElementById('compose-from');
+  if (!sel) { showToast('Email system not ready'); return; }
+  sel.innerHTML = accounts.map(a => `<option value="${a.local}">${friendlyFromName(a.local)} &lt;${a.email}&gt;</option>`).join('');
+  const myMailbox = (STAFF.find(x => x.email === currentUser?.email) || {}).snipe_from_mailbox;
+  if (myMailbox && accounts.find(a => a.local === myMailbox)) sel.value = myMailbox;
+  else if (accounts.length) sel.value = accounts[0].local;
+  ['compose-in-reply-to','compose-references','compose-cc'].forEach(cid => { const el = document.getElementById(cid); if (el) el.value = ''; });
+  document.getElementById('compose-to').value = s.email;
+  document.getElementById('compose-subject').value = subject;
+  document.getElementById('compose-body').value = body;
+  // Template switcher — offer the variants for this type
+  _brandComposeSnipe = s;
+  _brandComposeTemplates = templates;
+  _renderBrandComposeTemplatePicker();
+  openModal('composeModal');
+}
+let _brandComposeSnipe = null;
+let _brandComposeTemplates = [];
+
+function _renderBrandComposeTemplatePicker() {
+  // Inject a template picker into the compose modal if not present
+  let picker = document.getElementById('brand-compose-templates');
+  const bodyEl = document.getElementById('compose-body');
+  if (!bodyEl) return;
+  if (!picker) {
+    picker = document.createElement('div');
+    picker.id = 'brand-compose-templates';
+    picker.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
+    bodyEl.parentNode.insertBefore(picker, bodyEl);
+  }
+  if (!_brandComposeTemplates.length) { picker.innerHTML = ''; return; }
+  picker.innerHTML = '<span style="font-size:11px;color:var(--gray-400);align-self:center">Template:</span>' +
+    _brandComposeTemplates.map((t, i) => `<button class="btn btn-ghost btn-sm" onclick="_applyBrandTemplate(${i})" style="font-size:11px">${escapeHtml(t.name)}</button>`).join('');
+}
+function _applyBrandTemplate(i) {
+  const t = _brandComposeTemplates[i];
+  if (!t || !_brandComposeSnipe) return;
+  document.getElementById('compose-subject').value = _fillBrandTemplate(t.subject, _brandComposeSnipe);
+  document.getElementById('compose-body').value = _fillBrandTemplate(t.body, _brandComposeSnipe) + '\n\n' + (_mySignature() || '');
+}
+
+
 function renderEarningsProfileCard() {
   const el = document.getElementById('profile-earnings-card');
   if (!el || !currentCreatorId) return;
