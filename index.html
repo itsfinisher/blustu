@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-j (inbox: message body cache + retry, fixes 'Failed to fetch' on thread switch) -->
+<!-- blustu panel build 2026-07-14-k (added 60-day usage rate tier) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3404,6 +3404,7 @@ html, body { overflow-x: hidden; }
         <select class="form-select" id="pitch-rate-tier">
           <option value="organic">Organic post only (base)</option>
           <option value="paid30">+ Paid usage 30 days</option>
+          <option value="paid60">+ Paid usage 60 days</option>
           <option value="paid90">+ Paid usage 90 days</option>
           <option value="whitelist">+ Whitelisting / Spark Ads</option>
           <option value="perpetual">+ Perpetual / full buyout</option>
@@ -9451,6 +9452,7 @@ const RATE_FACTORS = {
     options: [
       { v: 'organic',   label: 'Organic post only', mult: 1.0 },
       { v: 'paid30',    label: '+ Paid usage 30 days', mult: 1.25 },
+      { v: 'paid60',    label: '+ Paid usage 60 days', mult: 1.32 },
       { v: 'paid90',    label: '+ Paid usage 90 days', mult: 1.4 },
       { v: 'whitelist', label: '+ Whitelisting / Spark Ads', mult: 1.7 },
       { v: 'perpetual', label: '+ Perpetual / full buyout', mult: 2.0 },
