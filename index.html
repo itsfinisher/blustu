@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-n (brand templates: em dashes removed) -->
+<!-- blustu panel build 2026-07-14-o (per-staff templates: influencer + brand scoped to owner) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -15230,9 +15230,17 @@ let emailTemplates = Storage.get('email_templates', []);
 const SNIPE_SUBJECT_SUFFIX = ' | BluStu Creator Representation Opportunity';
 
 async function loadEmailTemplates() {
-  const rows = await DB.select('email_templates', '?order=sort_order.asc');
+  // Per-staff: load this user's own templates, plus any shared (owner_email is
+  // null) as a fallback so nobody starts with a blank slate.
+  const me = currentUser?.email || '';
+  const q = me
+    ? `?or=(owner_email.eq.${encodeURIComponent(me)},owner_email.is.null)&order=sort_order.asc`
+    : '?order=sort_order.asc';
+  let rows = await DB.select('email_templates', q);
+  // If the user has their own, hide the shared ones (they've customised)
   if (rows && rows.length !== undefined) {
-    emailTemplates = rows;
+    const mine = rows.filter(t => t.owner_email === me);
+    emailTemplates = mine.length ? mine : rows;
     Storage.set('email_templates', emailTemplates);
   }
   return emailTemplates;
@@ -15354,6 +15362,7 @@ async function renderEmailTemplatesPage() {
     niche: t.niche || 'general',
     body: t.body || '',
     sort_order: t.sort_order ?? 0,
+    owner_email: t.owner_email || null,
     _isNew: false,
   }));
   _renderTemplateList();
@@ -15463,10 +15472,15 @@ async function saveAllTemplates() {
       await DB._req('DELETE', 'email_templates', null, '?id=eq.' + t.id);
     }
     // 2) Updates (existing) + inserts (new)
+    const me = currentUser?.email || null;
     for (let i = 0; i < live.length; i++) {
       const t = live[i];
-      const payload = { label: t.label.trim(), niche: t.niche, body: t.body, sort_order: i };
-      if (t.id && !t._isNew) {
+      const payload = { label: t.label.trim(), niche: t.niche, body: t.body, sort_order: i, owner_email: me };
+      // Only PATCH a row the user actually OWNS. If it's a shared/global row
+      // (owner_email null or someone else's), insert a personal copy instead of
+      // overwriting the shared one.
+      const ownsIt = t.id && !t._isNew && t.owner_email === me;
+      if (ownsIt) {
         await DB._req('PATCH', 'email_templates', payload, '?id=eq.' + t.id);
       } else {
         await DB._req('POST', 'email_templates', [payload], '');
@@ -15478,7 +15492,7 @@ async function saveAllTemplates() {
     // Refresh the page's draft from the saved data
     _templateDraft = (emailTemplates || []).map(t => ({
       id: t.id, label: t.label || '', niche: t.niche || 'general',
-      body: t.body || '', sort_order: t.sort_order ?? 0, _isNew: false,
+      body: t.body || '', sort_order: t.sort_order ?? 0, owner_email: t.owner_email || null, _isNew: false,
     }));
     _renderTemplateList();
     showToast('✅ Templates saved');
@@ -16056,9 +16070,15 @@ const BRAND_TEMPLATE_SEEDS = {
 };
 
 async function loadBrandTemplates() {
-  const rows = await DB.select('brand_templates', '?order=sort_order.asc');
+  const me = currentUser?.email || '';
+  const q = me
+    ? `?or=(owner_email.eq.${encodeURIComponent(me)},owner_email.is.null)&order=sort_order.asc`
+    : '?order=sort_order.asc';
+  let rows = await DB.select('brand_templates', q);
   if (rows && rows.length !== undefined) {
-    brandTemplates = rows;
+    const mine = rows.filter(t => t.owner_email === me);
+    // Keep this user's own; if they have none, show shared (null-owner) ones
+    brandTemplates = mine.length ? mine : rows.filter(t => !t.owner_email);
     Storage.set('brand_templates', brandTemplates);
   }
   return brandTemplates;
@@ -16111,20 +16131,25 @@ let _btEditing = null;
 async function saveBrandTemplate() {
   const name = document.getElementById('bt-name').value.trim();
   if (!name) { showToast('Give the template a name'); return; }
+  const me = currentUser?.email || null;
   const row = {
     target_type: document.getElementById('bt-type').value,
     name,
     subject: document.getElementById('bt-subject').value.trim(),
     body: document.getElementById('bt-body').value,
     sort_order: _btEditing?.sort_order || brandTemplates.length,
+    owner_email: me,
   };
   let r;
-  if (_btEditing && _btEditing.id) {
+  // Only PATCH a template the user OWNS. Editing a shared/default one creates a
+  // personal copy instead of overwriting the shared row.
+  const ownsIt = _btEditing && _btEditing.id && _btEditing.owner_email === me;
+  if (ownsIt) {
     r = await DB._req('PATCH', 'brand_templates', row, '?id=eq.' + _btEditing.id);
   } else {
     r = await DB._req('POST', 'brand_templates', [row], '');
   }
-  if (r === null) { showToast('Save failed — run brand-snipes.sql?'); return; }
+  if (r === null) { showToast('Save failed — run brand-snipes.sql + template-owners.sql?'); return; }
   closeModal('brandTemplateModal');
   await loadBrandTemplates();
   renderBrandTemplates();
