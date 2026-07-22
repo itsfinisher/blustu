@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-o (per-staff templates: influencer + brand scoped to owner) -->
+<!-- blustu panel build 2026-07-14-q (pitch doc: print output now matches preview exactly) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -354,6 +354,7 @@ tr:hover td{background:var(--gray-50);}
 .thread-msg-preview{font-size:12px;color:var(--gray-400);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
 .thread-msg-date{font-size:11px;color:var(--gray-400);flex-shrink:0;}
 .thread-msg-body{padding:0 16px 16px;}
+.contact-details-panel{line-height:1.6;}
 
 /* ── ONBOARDING ── */
 .onboarding-step{display:flex;gap:16px;padding:16px;border:1px solid var(--gray-100);border-radius:var(--radius);margin-bottom:12px;align-items:flex-start;background:var(--white);}
@@ -10128,12 +10129,28 @@ function generatePitchDoc() {
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap');
     * { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { font-family:'DM Sans',sans-serif; color:#1a1a1a; font-size:14px; line-height:1.5; background:#eef1f6; }
-    .page { background:#fff; width:210mm; min-height:297mm; margin:0 auto 20px; padding:22mm 20mm; position:relative; }
-    @media print { body { background:#fff; } .page { margin:0; box-shadow:none; page-break-after:always; width:auto; min-height:auto; } }
+    .page { background:#fff; width:210mm; min-height:297mm; margin:0 auto 20px; padding:22mm 20mm; position:relative; overflow:hidden; }
     @media screen { .page { box-shadow:0 4px 24px rgba(0,0,0,.1); } }
 
+    /* Print: keep the EXACT same A4 geometry as the preview. The browser's own
+       page margin is set to zero so our 22mm/20mm padding is the only margin,
+       and .page keeps its full 210x297mm box instead of collapsing to auto. */
+    @page { size: A4 portrait; margin: 0; }
+    @media print {
+      html, body { background:#fff; width:210mm; }
+      .page {
+        width:210mm; height:297mm; min-height:297mm;
+        margin:0; padding:22mm 20mm;
+        box-shadow:none;
+        page-break-after:always; break-after:page;
+        page-break-inside:avoid; break-inside:avoid;
+        overflow:hidden;
+      }
+      .page:last-child { page-break-after:auto; break-after:auto; }
+    }
+
     /* Cover */
-    .cover { display:flex; flex-direction:column; }
+    .cover { display:flex; flex-direction:column; min-height:253mm; }
     .cover-logo { font-family:'DM Serif Display',serif; font-size:44px; color:#2198ED; font-weight:700; }
     .cover-title { font-size:40px; font-weight:800; margin-top:120px; line-height:1.1; letter-spacing:-.5px; }
     .cover-sub { font-size:18px; color:#555; margin-top:16px; }
@@ -10183,7 +10200,31 @@ function generatePitchDoc() {
   </style></head><body>
     ${cover}
     ${pages}
-    <script>window.onload=()=>{setTimeout(()=>window.print(),700);}<\/script>
+    <script>
+      // Only print once fonts AND images are actually ready — otherwise the PDF
+      // renders in a fallback font (or with missing photos) and the spacing
+      // no longer matches what you saw on screen.
+      (function () {
+        function waitForImages() {
+          var imgs = Array.prototype.slice.call(document.images || []);
+          // Background-image avatars aren't in document.images, so preload those too
+          document.querySelectorAll('.avatar').forEach(function (el) {
+            var bg = getComputedStyle(el).backgroundImage || '';
+            var m = bg.match(/url\\(["']?(.*?)["']?\\)/);
+            if (m && m[1] && m[1] !== 'none') { var i = new Image(); i.src = m[1]; imgs.push(i); }
+          });
+          return Promise.all(imgs.map(function (img) {
+            if (img.complete) return Promise.resolve();
+            return new Promise(function (res) { img.onload = img.onerror = res; });
+          }));
+        }
+        var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+        Promise.all([fontsReady, waitForImages()])
+          .then(function () { return new Promise(function (r) { setTimeout(r, 250); }); })
+          .then(function () { window.print(); })
+          .catch(function () { setTimeout(function () { window.print(); }, 1200); });
+      })();
+    <\/script>
   </body></html>`;
 
   const win = window.open('', '_blank', 'width=900,height=1100');
@@ -18372,13 +18413,17 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
     const previewText = ((m.bodyText || stripHtmlForQuote(m.bodyHtml || '')) || '').slice(0, 140).replace(/</g,'&lt;');
 
     return `<div class="thread-msg${isExpanded ? ' expanded' : ''}" data-uid="${m.uid}"${isSent ? ' style="background:#f0f9ff;border-left:3px solid var(--blue)"' : ''}>
-      <div class="thread-msg-head" onclick="toggleThreadMsg(${m.uid})">
-        <div class="thread-msg-avatar" style="background:${color}">${initial}</div>
-        <div class="thread-msg-meta">
-          <div class="thread-msg-from">${isSent ? '<span style="color:var(--blue);font-size:10px;font-weight:700;margin-right:6px">↩ YOU SENT</span>' : ''}${fromName || fromAddr}</div>
+      <div class="thread-msg-head">
+        <div class="thread-msg-avatar" style="background:${color};cursor:pointer" onclick="event.stopPropagation();toggleContactDetails(${m.uid})" title="View contact details">${initial}</div>
+        <div class="thread-msg-meta" onclick="toggleThreadMsg(${m.uid})" style="cursor:pointer">
+          <div class="thread-msg-from">${isSent ? '<span style="color:var(--blue);font-size:10px;font-weight:700;margin-right:6px">↩ YOU SENT</span>' : ''}<span onclick="event.stopPropagation();toggleContactDetails(${m.uid})" style="cursor:pointer;border-bottom:1px dashed var(--gray-300)" title="View contact details">${fromName || fromAddr}</span></div>
           <div class="thread-msg-preview">${isExpanded ? fromAddr + (m.to ? ' → ' + m.to : '') : previewText}</div>
         </div>
-        <div class="thread-msg-date">${dateStr}</div>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();toggleContactDetails(${m.uid})" title="Contact details" style="padding:2px 8px;font-size:12px;flex-shrink:0">ⓘ</button>
+        <div class="thread-msg-date" onclick="toggleThreadMsg(${m.uid})" style="cursor:pointer">${dateStr}</div>
+      </div>
+      <div class="contact-details-panel" id="contact-details-${m.uid}" style="display:none;padding:12px 16px;background:var(--gray-50);border-top:1px solid var(--gray-100);font-size:12px">
+        ${_renderContactDetails(m, fromName, fromAddr, dateStr)}
       </div>
       <div class="thread-msg-body" id="thread-body-${m.uid}" style="display:${isExpanded ? 'block' : 'none'}">
         <div class="inbox-email-body" style="border-top:1px solid var(--gray-100);padding-top:12px;margin-top:8px">${bodyHtml}</div>
@@ -18409,6 +18454,73 @@ function toggleThreadMsg(uid) {
   const willOpen = el.style.display === 'none';
   el.style.display = willOpen ? 'block' : 'none';
   parent.classList.toggle('expanded', willOpen);
+}
+
+/** Show/hide the contact details panel for a message. */
+function toggleContactDetails(uid) {
+  const el = document.getElementById('contact-details-' + uid);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+/** Build the contact-details panel: full addresses, date, and quick actions.
+ *  Also surfaces whether the sender matches a creator or a snipe in the panel. */
+function _renderContactDetails(m, fromName, fromAddr, dateStr) {
+  const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const row = (label, value) => value ? `<div style="display:flex;gap:8px;margin-bottom:5px">
+      <span style="color:var(--gray-400);min-width:58px;flex-shrink:0">${label}</span>
+      <span style="color:var(--gray-900);word-break:break-all">${esc(value)}</span>
+    </div>` : '';
+
+  // Try to match this address to a creator or a snipe so you get context
+  const addrLower = (fromAddr || '').toLowerCase();
+  let matchHtml = '';
+  if (addrLower) {
+    const creator = (typeof creators !== 'undefined' ? creators : []).find(c => (c.email || '').toLowerCase() === addrLower);
+    if (creator) {
+      matchHtml = `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-200)">
+        <span style="font-size:11px;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:6px;font-weight:600">✓ Creator on roster</span>
+        <button class="btn btn-ghost btn-sm" onclick="openCreatorProfile(${creator.id})" style="font-size:11px;margin-left:6px">View profile →</button>
+      </div>`;
+    } else {
+      const snipe = (typeof snipes !== 'undefined' ? snipes : []).find(s => (s.email || '').toLowerCase() === addrLower);
+      const bSnipe = (typeof brandSnipes !== 'undefined' ? brandSnipes : []).find(s => (s.email || '').toLowerCase() === addrLower);
+      if (snipe) {
+        matchHtml = `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-200)">
+          <span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:6px;font-weight:600">🎯 Influencer snipe</span>
+          <span style="font-size:11px;color:var(--gray-500);margin-left:6px">${esc(snipe.name || '')}</span>
+        </div>`;
+      } else if (bSnipe) {
+        matchHtml = `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-200)">
+          <span style="font-size:11px;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:6px;font-weight:600">🏢 Brand snipe</span>
+          <span style="font-size:11px;color:var(--gray-500);margin-left:6px">${esc(bSnipe.brand_name || '')}</span>
+        </div>`;
+      }
+    }
+  }
+
+  const actions = fromAddr ? `<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="_copyPlaceholder('${esc(fromAddr).replace(/'/g,"\\'")}')" style="font-size:11px">📋 Copy email</button>
+      <button class="btn btn-ghost btn-sm" onclick="composeToAddress('${esc(fromAddr).replace(/'/g,"\\'")}')" style="font-size:11px">✉ New email</button>
+    </div>` : '';
+
+  return `
+    ${row('From', fromName && fromName !== fromAddr ? `${fromName} <${fromAddr}>` : fromAddr)}
+    ${row('To', m.to)}
+    ${row('Cc', m.cc)}
+    ${row('Date', dateStr)}
+    ${row('Subject', m.subject)}
+    ${matchHtml}
+    ${actions}
+  `;
+}
+
+/** Open the compose modal pre-addressed to someone. */
+async function composeToAddress(addr) {
+  if (typeof openCompose === 'function') { await openCompose(); }
+  else { openModal('composeModal'); }
+  const toEl = document.getElementById('compose-to');
+  if (toEl) toEl.value = addr;
 }
 
 /** Render a downloadable attachments block for a message. Returns '' when the
