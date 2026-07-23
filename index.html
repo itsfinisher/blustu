@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-v (brand snipe import via AI-converted paste + not-sent badge and Send button) -->
+<!-- blustu panel build 2026-07-14-x (brand snipes: multi-select, bulk delete/mark, delete all) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1855,6 +1855,8 @@ html, body { overflow-x: hidden; }
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="openBrandSnipeImport()">📥 Import list</button>
+          <button class="btn btn-ghost btn-sm" onclick="repairBrandSnipeEmails()" title="Clean up any malformed email addresses from a previous import">🔧 Fix addresses</button>
+          <button class="btn btn-ghost btn-sm" onclick="deleteAllBrandSnipes()" title="Wipe all brand snipes" style="color:var(--red)">🗑 Delete all</button>
           <button class="btn btn-ghost btn-sm" onclick="exportBrandSnipesCSV()">⬇ Export CSV</button>
         </div>
       </div>
@@ -1918,10 +1920,19 @@ html, body { overflow-x: hidden; }
         </div>
       </div>
 
+      <div id="bs-bulk-bar" style="display:none;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600;color:var(--blue)"><span id="bs-selected-count">0</span> selected</span>
+        <button class="btn btn-ghost btn-sm" onclick="_bsBulkMarkSent('yes')">✓ Mark sent</button>
+        <button class="btn btn-ghost btn-sm" onclick="_bsBulkMarkSent('no')">↺ Mark not sent</button>
+        <button class="btn btn-danger btn-sm" onclick="_bsDeleteSelected()">🗑 Delete selected</button>
+        <button class="btn btn-ghost btn-sm" onclick="_bsToggleSelectAll(false)" style="margin-left:auto">Clear selection</button>
+      </div>
+
       <div class="card" style="padding:0" id="bs-table-card">
         <div class="table-wrap">
           <table id="brandSnipesTable">
             <thead><tr>
+              <th style="width:34px"><input type="checkbox" id="bs-select-all" onchange="_bsToggleSelectAll(this.checked)" title="Select all shown" style="width:15px;height:15px;cursor:pointer"></th>
               <th>Type</th><th>Brand / Contact</th><th>Industry</th><th>Email / Link</th><th>Sent?</th><th>Reply / Status</th><th>Follow up</th><th>Thread</th><th>Actions</th>
             </tr></thead>
             <tbody id="brandSnipesBody"></tbody>
@@ -16203,6 +16214,7 @@ function exportSnipesCSV() {
 let brandSnipes = Storage.get('brand_snipes', []);
 let _bsScope = 'mine';
 let _bsAddType = 'brand';
+let _bsSelected = new Set();   // ids ticked for bulk actions
 
 const BS_TARGET_TYPES = {
   brand:   { label: 'Brand direct', icon: '🏢', color: '#2198ED' },
@@ -16285,7 +16297,7 @@ function renderBrandSnipes() {
   if (badge) { const pending = scoped.filter(s => (s.sent||'no')==='no').length; badge.textContent = pending; badge.style.display = pending ? '' : 'none'; }
 
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:36px;color:var(--gray-400)">No brand snipes yet. Use Quick Add above to scout your first brand, contact, or agency.</td></tr>';
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:36px;color:var(--gray-400)">No brand snipes yet. Use Quick Add above to scout your first brand, contact, or agency.</td></tr>';
     return;
   }
 
@@ -16300,7 +16312,7 @@ function renderBrandSnipes() {
     if (s.target_type === 'contact') secondary = [s.contact_name, s.role_title].filter(Boolean).join(' · ');
     else if (s.target_type === 'agency') secondary = [s.agency_name, s.contact_name].filter(Boolean).join(' · ');
     const linkCell = [
-      s.email ? `<a href="#" onclick="openBrandSnipeCompose(${s.id});return false" style="color:var(--blue);font-size:12px">✉ ${s.email}</a>` : '',
+      s.email ? `<a href="#" onclick="openBrandSnipeCompose(${s.id});return false" style="color:var(--blue);font-size:12px">✉ ${escapeHtml(_cleanImportedEmail(s.email) || s.email)}</a>` : '',
       s.link ? `<a href="${escapeHtml(s.link)}" target="_blank" rel="noopener" style="color:var(--gray-400);font-size:11px">🔗 link</a>` : '',
     ].filter(Boolean).join('<br>') || '<span style="color:var(--gray-300)">—</span>';
     const threadCell = s.last_thread_uid
@@ -16314,6 +16326,7 @@ function renderBrandSnipes() {
       ? `<button class="btn btn-primary btn-sm" onclick="openBrandSnipeCompose(${s.id})" title="Open a pre-filled outreach email" style="padding:2px 8px;font-size:11px;white-space:nowrap">✉ Send</button>`
       : `<button class="btn btn-ghost btn-sm" onclick="openBrandSnipeCompose(${s.id})" title="Email" style="padding:2px 6px">✉</button>`;
     return `<tr class="${stInfo.row}">
+      <td><input type="checkbox" class="bs-row-check" data-id="${s.id}" ${_bsSelected.has(s.id)?'checked':''} onchange="_bsToggleRow(${s.id},this.checked)" style="width:15px;height:15px;cursor:pointer"></td>
       <td><span title="${type.label}" style="font-size:16px">${type.icon}</span></td>
       <td style="font-weight:500">${escapeHtml(primary)}${secondary ? `<div style="font-size:11px;color:var(--gray-400)">${escapeHtml(secondary)}</div>` : ''}</td>
       <td style="font-size:12px">${escapeHtml(s.industry || '—')}</td>
@@ -16329,6 +16342,7 @@ function renderBrandSnipes() {
       </td>
     </tr>`;
   }).join('');
+  _bsUpdateBulkBar();
 }
 
 async function quickAddBrandSnipe(silent) {
@@ -16404,8 +16418,92 @@ async function deleteBrandSnipe(id) {
   if (!confirm(`Delete brand snipe "${s.brand_name}"?`)) return;
   await DB._req('DELETE', 'brand_snipes', null, '?id=eq.' + id);
   brandSnipes = brandSnipes.filter(x => x.id !== id);
+  _bsSelected.delete(id);
   renderBrandSnipes();
   showToast('Deleted');
+}
+
+// ── BULK SELECTION ────────────────────────────────────────────────
+function _bsToggleRow(id, on) {
+  if (on) _bsSelected.add(id); else _bsSelected.delete(id);
+  _bsUpdateBulkBar();
+}
+
+function _bsToggleSelectAll(on) {
+  const shown = _bsFiltered();
+  if (on) shown.forEach(s => _bsSelected.add(s.id));
+  else _bsSelected.clear();
+  // Sync the visible checkboxes without a full re-render
+  document.querySelectorAll('.bs-row-check').forEach(cb => {
+    const id = Number(cb.dataset.id);
+    cb.checked = _bsSelected.has(id);
+  });
+  const master = document.getElementById('bs-select-all');
+  if (master) master.checked = on;
+  _bsUpdateBulkBar();
+}
+
+function _bsUpdateBulkBar() {
+  const bar = document.getElementById('bs-bulk-bar');
+  const count = document.getElementById('bs-selected-count');
+  if (!bar) return;
+  if (count) count.textContent = _bsSelected.size;
+  bar.style.display = _bsSelected.size ? 'flex' : 'none';
+  // Keep the master checkbox in sync with what's shown
+  const master = document.getElementById('bs-select-all');
+  if (master) {
+    const shown = _bsFiltered();
+    master.checked = shown.length > 0 && shown.every(s => _bsSelected.has(s.id));
+  }
+}
+
+async function _bsDeleteSelected() {
+  const ids = [..._bsSelected];
+  if (!ids.length) return;
+  if (!confirm(`Delete ${ids.length} selected brand snipe${ids.length!==1?'s':''}? This can't be undone.`)) return;
+  // Delete in one request using an IN filter
+  const r = await DB._req('DELETE', 'brand_snipes', null, `?id=in.(${ids.join(',')})`);
+  if (r === null) { showToast('Delete failed'); return; }
+  brandSnipes = brandSnipes.filter(x => !_bsSelected.has(x.id));
+  _bsSelected.clear();
+  renderBrandSnipes();
+  showToast(`🗑 Deleted ${ids.length} snipe${ids.length!==1?'s':''}`);
+}
+
+async function _bsBulkMarkSent(value) {
+  const ids = [..._bsSelected];
+  if (!ids.length) return;
+  const r = await DB._req('PATCH', 'brand_snipes', { sent: value, updated_at: new Date().toISOString() }, `?id=in.(${ids.join(',')})`);
+  if (r === null) { showToast('Update failed'); return; }
+  brandSnipes.forEach(s => { if (_bsSelected.has(s.id)) s.sent = value; });
+  renderBrandSnipes();
+  showToast(`Marked ${ids.length} as ${value === 'yes' ? 'sent' : 'not sent'}`);
+}
+
+/** Wipe brand snipes — respects the Mine/All Staff scope so you don't nuke
+ *  a colleague's list by accident. */
+async function deleteAllBrandSnipes() {
+  const scoped = _bsScope === 'mine'
+    ? brandSnipes.filter(s => s.owner_email === currentUser?.email)
+    : brandSnipes;
+  if (!scoped.length) { showToast('Nothing to delete'); return; }
+  const scopeLabel = _bsScope === 'mine' ? 'YOUR' : 'ALL STAFF';
+  if (!confirm(`Delete ${scoped.length} brand snipe${scoped.length!==1?'s':''} (${scopeLabel})?\n\nThis cannot be undone.`)) return;
+  // Second confirmation for a destructive wipe
+  if (!confirm('Are you certain? Everything in this list will be permanently removed.')) return;
+  const query = _bsScope === 'mine'
+    ? `?owner_email=eq.${encodeURIComponent(currentUser?.email || '')}`
+    : '?id=gt.0';
+  const r = await DB._req('DELETE', 'brand_snipes', null, query);
+  if (r === null) { showToast('Delete failed'); return; }
+  const deleted = scoped.length;
+  brandSnipes = _bsScope === 'mine'
+    ? brandSnipes.filter(s => s.owner_email !== currentUser?.email)
+    : [];
+  _bsSelected.clear();
+  Storage.set('brand_snipes', brandSnipes);
+  renderBrandSnipes();
+  showToast(`🗑 Deleted ${deleted} brand snipe${deleted!==1?'s':''}`);
 }
 
 function editBrandSnipe(id) {
@@ -16470,6 +16568,7 @@ Rules:
 
 Important:
 - Keep every field in position even when blank — just leave nothing between the pipes
+- Write emails and URLs as PLAIN TEXT ONLY. Do NOT wrap them in markdown links, do NOT add "mailto:", do NOT use angle brackets. Write "hello@brand.com" — never "[hello@brand.com](mailto:hello@brand.com)"
 - Do NOT include a header row
 - Do NOT add bullet points, numbering, quotes, or any commentary
 - Output ONLY the lines, nothing else
@@ -16497,6 +16596,30 @@ function _copyImportPrompt() {
 }
 
 /** Parse the pasted pipe-separated text into snipe rows. */
+/** Strip markdown link syntax, mailto:, and angle brackets that AI models often
+ *  add — e.g. "[a@b.com](mailto:a@b.com)" or "<a@b.com>" → "a@b.com". */
+function _cleanImportedEmail(raw) {
+  if (!raw) return null;
+  let v = String(raw).trim();
+  // Markdown link: [text](target) — prefer the target, fall back to the text
+  const md = v.match(/^\[([^\]]*)\]\(([^)]*)\)$/);
+  if (md) v = (md[2] || md[1] || '').trim();
+  v = v.replace(/^mailto:/i, '').replace(/^<|>$/g, '').trim();
+  // If anything is still wrapped or duplicated, pull the first email-looking token
+  const m = v.match(/[^\s<>()[\]",;:]+@[^\s<>()[\]",;:]+\.[A-Za-z]{2,}/);
+  return m ? m[0] : (v || null);
+}
+
+/** Same idea for URLs — unwrap markdown and strip stray brackets. */
+function _cleanImportedLink(raw) {
+  if (!raw) return null;
+  let v = String(raw).trim();
+  const md = v.match(/^\[([^\]]*)\]\(([^)]*)\)$/);
+  if (md) v = (md[2] || md[1] || '').trim();
+  v = v.replace(/^<|>$/g, '').trim();
+  return v || null;
+}
+
 function _parseBrandImport(text) {
   const rows = [];
   const errors = [];
@@ -16510,6 +16633,13 @@ function _parseBrandImport(text) {
     if (!brand) { errors.push(`Line ${i+1}: no brand name`); return; }
     let t = (type || '').toLowerCase();
     if (!['brand','contact','agency'].includes(t)) t = agency ? 'agency' : (contact ? 'contact' : 'brand');
+    // Emails/links often come back wrapped in markdown or mailto: — unwrap them,
+    // otherwise the stored address is unusable when composing.
+    const cleanEmail = _cleanImportedEmail(email);
+    // If the email column was empty but a later column holds one, scan the rest
+    const fallbackEmail = cleanEmail || _cleanImportedEmail(
+      parts.slice(6).find(p => /@/.test(p)) || ''
+    );
     rows.push({
       target_type: t,
       brand_name: brand,
@@ -16517,8 +16647,8 @@ function _parseBrandImport(text) {
       agency_name: agency || null,
       role_title: role || null,
       industry: industry || null,
-      email: email || null,
-      link: link || null,
+      email: fallbackEmail,
+      link: _cleanImportedLink(link),
     });
   });
   return { rows, errors };
@@ -16551,6 +16681,31 @@ function _previewBrandImport() {
       </table>
       ${rows.length > 30 ? `<div style="padding:6px 8px;font-size:11px;color:var(--gray-400)">…and ${rows.length-30} more</div>` : ''}
     </div>`;
+}
+
+/** One-off repair: clean any already-imported rows whose email/link got stored
+ *  wrapped in markdown or mailto:. Safe to run repeatedly. */
+async function repairBrandSnipeEmails() {
+  const broken = brandSnipes.filter(s =>
+    (s.email && /\[|\]|\(|mailto:|</i.test(s.email)) ||
+    (s.link && /^\[.*\]\(.*\)$/.test(s.link))
+  );
+  if (!broken.length) { showToast('Nothing to fix — all addresses look clean'); return; }
+  if (!confirm(`Fix ${broken.length} row${broken.length!==1?'s':''} with malformed email/link formatting?`)) return;
+  let fixed = 0;
+  for (const s of broken) {
+    const email = _cleanImportedEmail(s.email);
+    const link = _cleanImportedLink(s.link);
+    const patch = {};
+    if (email !== s.email) patch.email = email;
+    if (link !== s.link) patch.link = link;
+    if (!Object.keys(patch).length) continue;
+    patch.updated_at = new Date().toISOString();
+    const r = await DB._req('PATCH', 'brand_snipes', patch, '?id=eq.' + s.id);
+    if (r !== null) { Object.assign(s, patch); fixed++; }
+  }
+  renderBrandSnipes();
+  showToast(`✅ Fixed ${fixed} address${fixed!==1?'es':''}`);
 }
 
 async function _runBrandImport() {
@@ -16725,7 +16880,7 @@ async function openBrandSnipeCompose(id, dataOverride) {
   if (myMailbox && accounts.find(a => a.local === myMailbox)) sel.value = myMailbox;
   else if (accounts.length) sel.value = accounts[0].local;
   ['compose-in-reply-to','compose-references','compose-cc'].forEach(cid => { const el = document.getElementById(cid); if (el) el.value = ''; });
-  document.getElementById('compose-to').value = s.email;
+  document.getElementById('compose-to').value = _cleanImportedEmail(s.email) || s.email;
   document.getElementById('compose-subject').value = subject;
   document.getElementById('compose-body').value = body;
   // Template switcher — offer the variants for this type
