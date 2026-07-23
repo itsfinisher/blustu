@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-u (inbox quick-access chips show creator profile photos) -->
+<!-- blustu panel build 2026-07-14-v (brand snipe import via AI-converted paste + not-sent badge and Send button) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1854,6 +1854,7 @@ html, body { overflow-x: hidden; }
           <p>Proactively hunt brand deals. Target a brand directly, a person you found (LinkedIn etc.), or a marketing agency that needs talent.</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="openBrandSnipeImport()">📥 Import list</button>
           <button class="btn btn-ghost btn-sm" onclick="exportBrandSnipesCSV()">⬇ Export CSV</button>
         </div>
       </div>
@@ -3498,6 +3499,41 @@ html, body { overflow-x: hidden; }
 </div>
 
 <!-- ══ RATE FACTORS MODAL ══ -->
+<!-- ══ BRAND SNIPE IMPORT ══ -->
+<div class="modal-overlay" id="brandImportModal">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header">
+      <div class="modal-title">📥 Import brand snipes</div>
+      <button class="modal-close" onclick="closeModal('brandImportModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--blue-light);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:600;color:var(--blue);margin-bottom:6px">Step 1 — Convert your spreadsheet</div>
+        <div style="font-size:12px;color:var(--gray-600);line-height:1.6;margin-bottom:10px">
+          Spreadsheets all look different, so let an AI reformat yours first. Copy the prompt below, paste it into ChatGPT / Claude along with your spreadsheet (or its contents), then paste the result into Step 2.
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="_copyImportPrompt()">📋 Copy the AI prompt</button>
+      </div>
+
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px">Step 2 — Paste the converted list</div>
+      <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">
+        One row per line, pipe-separated:
+        <code style="font-size:10px">type | brand | contact | agency | role | industry | email | link</code>
+      </div>
+      <textarea class="form-textarea" id="bi-text" placeholder="brand | Gymshark | | | | Fitness | hello@gymshark.com | gymshark.com
+contact | Nike | Sarah Lee | | Influencer Manager | Sportswear | s.lee@nike.com | linkedin.com/in/sarahlee
+agency | Adidas | Tom Reed | Wavemaker | Account Director | Sportswear | tom@wavemaker.com |"
+        style="min-height:180px;font-family:ui-monospace,Menlo,monospace;font-size:12px" oninput="_previewBrandImport()"></textarea>
+
+      <div id="bi-preview" style="margin-top:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('brandImportModal')">Cancel</button>
+      <button class="btn btn-primary" id="bi-import-btn" onclick="_runBrandImport()" disabled>Import</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ LINK EMAIL THREAD TO CAMPAIGN ══ -->
 <div class="modal-overlay" id="linkThreadModal">
   <div class="modal" style="max-width:560px">
@@ -16270,17 +16306,24 @@ function renderBrandSnipes() {
     const threadCell = s.last_thread_uid
       ? `<button class="btn btn-ghost btn-sm" onclick="openBrandSnipeThread(${s.id})" style="font-size:11px">💬 View</button>`
       : '<span style="color:var(--gray-300);font-size:11px">—</span>';
+    // Sent state: unsent rows get a clear "Not sent" badge and a Send button
+    const sentCell = sentYes
+      ? `<button class="btn btn-sm" onclick="toggleBrandSnipeSent(${s.id})" title="Mark as not sent" style="font-size:11px;padding:2px 8px">✓ Sent</button>`
+      : `<span onclick="toggleBrandSnipeSent(${s.id})" title="Mark as sent" style="cursor:pointer;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;padding:3px 8px;border-radius:6px;white-space:nowrap">● NOT SENT</span>`;
+    const sendBtn = (!sentYes && s.email)
+      ? `<button class="btn btn-primary btn-sm" onclick="openBrandSnipeCompose(${s.id})" title="Open a pre-filled outreach email" style="padding:2px 8px;font-size:11px;white-space:nowrap">✉ Send</button>`
+      : `<button class="btn btn-ghost btn-sm" onclick="openBrandSnipeCompose(${s.id})" title="Email" style="padding:2px 6px">✉</button>`;
     return `<tr class="${stInfo.row}">
       <td><span title="${type.label}" style="font-size:16px">${type.icon}</span></td>
       <td style="font-weight:500">${escapeHtml(primary)}${secondary ? `<div style="font-size:11px;color:var(--gray-400)">${escapeHtml(secondary)}</div>` : ''}</td>
       <td style="font-size:12px">${escapeHtml(s.industry || '—')}</td>
       <td>${linkCell}</td>
-      <td><button class="btn btn-sm ${sentYes?'':'btn-ghost'}" onclick="toggleBrandSnipeSent(${s.id})" style="font-size:11px;padding:2px 8px">${sentYes?'✓ Yes':'No'}</button></td>
+      <td>${sentCell}</td>
       <td><select onchange="updateBrandSnipeStatus(${s.id},this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:6px;background:transparent;color:var(--gray-900)">${Object.entries(BS_STATUS).map(([k,v])=>`<option value="${k}" ${st===k?'selected':''} style="background:var(--white);color:var(--gray-900)">${v.label}</option>`).join('')}</select></td>
       <td><input value="${escapeHtml(s.follow_up||'')}" onchange="updateBrandSnipeField(${s.id},'follow_up',this.value)" placeholder="—" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:6px;width:100px;background:transparent;color:var(--gray-900)"></td>
       <td>${threadCell}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-ghost btn-sm" onclick="openBrandSnipeCompose(${s.id})" title="Email" style="padding:2px 6px">✉</button>
+        ${sendBtn}
         <button class="btn btn-ghost btn-sm" onclick="editBrandSnipe(${s.id})" title="Edit" style="padding:2px 6px">✏</button>
         <button class="btn btn-danger btn-sm" onclick="deleteBrandSnipe(${s.id})" title="Delete" style="padding:2px 6px">✕</button>
       </td>
@@ -16345,6 +16388,17 @@ async function toggleBrandSnipeSent(id) {
   await DB._req('PATCH', 'brand_snipes', { sent: s.sent, updated_at: new Date().toISOString() }, '?id=eq.' + id);
   renderBrandSnipes();
 }
+
+/** After sending an email, mark any matching brand snipe as sent. */
+async function _markBrandSnipeSentByEmail(toAddress) {
+  if (!toAddress) return;
+  const addr = String(toAddress).toLowerCase().trim();
+  const s = brandSnipes.find(x => (x.email || '').toLowerCase().trim() === addr);
+  if (!s || (s.sent || 'no').toLowerCase() === 'yes') return;
+  s.sent = 'yes';
+  await DB._req('PATCH', 'brand_snipes', { sent: 'yes', updated_at: new Date().toISOString() }, '?id=eq.' + s.id);
+  try { renderBrandSnipes(); } catch(e) {}
+}
 async function deleteBrandSnipe(id) {
   const s = brandSnipes.find(x => x.id === id); if (!s) return;
   if (!confirm(`Delete brand snipe "${s.brand_name}"?`)) return;
@@ -16392,6 +16446,135 @@ function exportBrandSnipesCSV() {
   a.download = 'blustu-brand-snipes-' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
   showToast('CSV exported');
+}
+
+// ── IMPORT: paste a converted list from a spreadsheet ─────────────
+const BRAND_IMPORT_PROMPT = `I have a spreadsheet of business contacts that I need reformatted for my agency's CRM.
+
+Convert it into plain text with ONE LINE PER CONTACT, using pipe characters (|) to separate fields, in exactly this order:
+
+type | brand | contact | agency | role | industry | email | link
+
+Rules:
+- "type" must be exactly one of: brand, contact, or agency
+  - use "brand" when it's a company with a general email (info@, hello@) and no named person
+  - use "contact" when there's a named person who works AT the brand
+  - use "agency" when the person/company is a marketing or talent agency working on behalf of brands
+- "brand" = the brand or company name (required — never leave blank)
+- "contact" = the person's full name (leave blank if none)
+- "agency" = the agency name (only for type "agency", otherwise blank)
+- "role" = their job title (leave blank if unknown)
+- "industry" = their sector, e.g. Beauty, Fitness, Tech, Fashion (leave blank if unclear)
+- "email" = their email address (leave blank if none)
+- "link" = website or LinkedIn URL (leave blank if none)
+
+Important:
+- Keep every field in position even when blank — just leave nothing between the pipes
+- Do NOT include a header row
+- Do NOT add bullet points, numbering, quotes, or any commentary
+- Output ONLY the lines, nothing else
+
+Here is my spreadsheet data:
+[PASTE YOUR SPREADSHEET HERE]`;
+
+function openBrandSnipeImport() {
+  document.getElementById('bi-text').value = '';
+  document.getElementById('bi-preview').innerHTML = '';
+  document.getElementById('bi-import-btn').disabled = true;
+  openModal('brandImportModal');
+}
+
+function _copyImportPrompt() {
+  if (typeof _copyPlaceholder === 'function') { _copyPlaceholder(BRAND_IMPORT_PROMPT); }
+  else {
+    const ta = document.createElement('textarea');
+    ta.value = BRAND_IMPORT_PROMPT;
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+  }
+  showToast('📋 Prompt copied — paste it into ChatGPT or Claude with your spreadsheet');
+}
+
+/** Parse the pasted pipe-separated text into snipe rows. */
+function _parseBrandImport(text) {
+  const rows = [];
+  const errors = [];
+  (text || '').split('\n').forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line) return;
+    // Skip an accidental header row
+    if (/^type\s*\|/i.test(line)) return;
+    const parts = line.split('|').map(p => p.trim());
+    const [type, brand, contact, agency, role, industry, email, link] = parts;
+    if (!brand) { errors.push(`Line ${i+1}: no brand name`); return; }
+    let t = (type || '').toLowerCase();
+    if (!['brand','contact','agency'].includes(t)) t = agency ? 'agency' : (contact ? 'contact' : 'brand');
+    rows.push({
+      target_type: t,
+      brand_name: brand,
+      contact_name: contact || null,
+      agency_name: agency || null,
+      role_title: role || null,
+      industry: industry || null,
+      email: email || null,
+      link: link || null,
+    });
+  });
+  return { rows, errors };
+}
+
+function _previewBrandImport() {
+  const text = document.getElementById('bi-text').value;
+  const { rows, errors } = _parseBrandImport(text);
+  const wrap = document.getElementById('bi-preview');
+  const btn = document.getElementById('bi-import-btn');
+  if (!text.trim()) { wrap.innerHTML = ''; btn.disabled = true; return; }
+  btn.disabled = rows.length === 0;
+  btn.textContent = rows.length ? `Import ${rows.length} contact${rows.length!==1?'s':''}` : 'Import';
+  const counts = { brand: 0, contact: 0, agency: 0 };
+  rows.forEach(r => counts[r.target_type]++);
+  wrap.innerHTML = `
+    <div style="font-size:12px;font-weight:600;margin-bottom:6px">Preview — ${rows.length} row${rows.length!==1?'s':''} ready
+      <span style="font-weight:400;color:var(--gray-400)">(🏢 ${counts.brand} · 👤 ${counts.contact} · 🤝 ${counts.agency})</span>
+    </div>
+    ${errors.length ? `<div style="font-size:11px;color:var(--red);margin-bottom:6px">${errors.slice(0,5).map(escapeHtml).join('<br>')}${errors.length>5?`<br>…and ${errors.length-5} more`:''}</div>` : ''}
+    <div style="max-height:180px;overflow:auto;border:1px solid var(--gray-100);border-radius:8px">
+      <table style="width:100%;font-size:11px">
+        <thead><tr><th style="padding:5px 8px">Type</th><th style="padding:5px 8px">Brand</th><th style="padding:5px 8px">Contact</th><th style="padding:5px 8px">Email</th></tr></thead>
+        <tbody>${rows.slice(0,30).map(r => `<tr>
+          <td style="padding:4px 8px">${BS_TARGET_TYPES[r.target_type].icon}</td>
+          <td style="padding:4px 8px">${escapeHtml(r.brand_name)}</td>
+          <td style="padding:4px 8px;color:var(--gray-500)">${escapeHtml(r.contact_name || r.agency_name || '—')}</td>
+          <td style="padding:4px 8px;color:var(--gray-500)">${escapeHtml(r.email || '—')}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+      ${rows.length > 30 ? `<div style="padding:6px 8px;font-size:11px;color:var(--gray-400)">…and ${rows.length-30} more</div>` : ''}
+    </div>`;
+}
+
+async function _runBrandImport() {
+  const { rows } = _parseBrandImport(document.getElementById('bi-text').value);
+  if (!rows.length) return;
+  const btn = document.getElementById('bi-import-btn');
+  btn.disabled = true; btn.textContent = 'Importing…';
+  const now = new Date().toISOString();
+  const payload = rows.map(r => ({
+    ...r,
+    owner_email: currentUser?.email || '',
+    owner_name: currentUser?.name || currentUser?.email || '',
+    contact_method: 'email',
+    sent: 'no',                 // imported rows are always unsent
+    reply_status: 'waiting',
+    notes: 'Imported',
+    created_at: now, updated_at: now,
+  }));
+  const result = await DB._req('POST', 'brand_snipes', payload, '');
+  btn.disabled = false; btn.textContent = 'Import';
+  if (result === null) { showToast('Import failed — run brand-snipes.sql?'); return; }
+  closeModal('brandImportModal');
+  await loadBrandSnipes();
+  showToast(`✅ Imported ${rows.length} brand snipe${rows.length!==1?'s':''} — all marked as not sent`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -16549,7 +16732,7 @@ async function openBrandSnipeCompose(id, dataOverride) {
   _brandComposeSnipe = s;
   _brandComposeTemplates = templates;
   _renderBrandComposeTemplatePicker();
-  openModal('composeModal');
+  openModal('composeEmailModal');
 }
 let _brandComposeSnipe = null;
 let _brandComposeTemplates = [];
@@ -18883,7 +19066,7 @@ function _renderContactDetails(m, fromName, fromAddr, dateStr) {
 /** Open the compose modal pre-addressed to someone. */
 async function composeToAddress(addr) {
   if (typeof openCompose === 'function') { await openCompose(); }
-  else { openModal('composeModal'); }
+  else { openModal('composeEmailModal'); }
   const toEl = document.getElementById('compose-to');
   if (toEl) toEl.value = addr;
 }
@@ -19451,6 +19634,7 @@ async function sendComposedEmail() {
     addActivity('Email sent from <strong>' + fromName + '</strong> to ' + to);
     // If this email matches a snipe (by recipient email), mark that snipe as Sent
     _markSnipeSentByEmail(to);
+    _markBrandSnipeSentByEmail(to);
     // Refresh whichever inbox is open
     if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
       renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder);
