@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-r (campaign email links + inbox quick-access + personalised My Creators dashboard) -->
+<!-- blustu panel build 2026-07-14-s (My Creators moved into grid + mark-all-read baseline for inboxes) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1307,13 +1307,6 @@ html, body { overflow-x: hidden; }
           Feb 2026
         </button>
       </div>
-      <div class="card" id="myCreatorsCard" style="margin-bottom:16px;display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
-          <div class="card-title" style="margin:0">👤 My Creators <span id="myCreatorsUnread" style="font-size:11px;color:var(--gray-400);font-weight:400"></span></div>
-          <button class="btn btn-ghost btn-sm" id="myCreatorsRefresh" onclick="_refreshMyCreatorsPanel(true)" title="Check for new emails">↻ Check email</button>
-        </div>
-        <div id="myCreatorsList"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading your creators…</div></div>
-      </div>
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">Total Creators</div><div class="stat-value" id="stat-creators">25</div><div class="stat-change up" id="stat-creators-sub">Full roster</div></div>
         <div class="stat-card"><div class="stat-label">Active Campaigns</div><div class="stat-value" id="stat-campaigns">0</div><div class="stat-change neutral" id="stat-campaigns-sub">No campaigns yet</div></div>
@@ -1321,12 +1314,12 @@ html, body { overflow-x: hidden; }
         <div class="stat-card"><div class="stat-label">Avg. Engagement</div><div class="stat-value" id="stat-avg-eng">—</div><div class="stat-change neutral" id="stat-avg-eng-sub">From admin data</div></div>
       </div>
       <div class="grid-2">
-        <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-            <div class="card-title">Recent Pipeline Deals</div>
-            <button class="btn btn-ghost btn-sm" onclick="showPage('pipeline',document.querySelector('[onclick*=pipeline]'))">View all</button>
+        <div class="card" id="myCreatorsCard" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+            <div class="card-title" style="margin:0">👤 My Creators <span id="myCreatorsUnread" style="font-size:11px;color:var(--gray-400);font-weight:400"></span></div>
+            <button class="btn btn-ghost btn-sm" id="myCreatorsRefresh" onclick="_refreshMyCreatorsPanel(true)" title="Check for new emails">↻ Check email</button>
           </div>
-          <div id="dashRecentDeals"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">No deals added yet.</div></div>
+          <div id="myCreatorsList"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading your creators…</div></div>
         </div>
         <div class="card">
           <div class="card-title" style="margin-bottom:12px">Activity Feed</div>
@@ -2086,6 +2079,7 @@ html, body { overflow-x: hidden; }
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             Refresh
           </button>
+          <button class="btn btn-ghost btn-sm" id="inboxMarkAllRead" onclick="_markInboxAllRead()" title="Mark everything here as read — only newer emails count as new after this" style="display:none">✓ Mark all read</button>
           <button class="btn btn-primary btn-sm" onclick="openCompose()">✉ Compose</button>
         </div>
       </div>
@@ -7260,12 +7254,14 @@ function renderPipeline(){
       </div>`;
   }).join('');
 
-  // Update recent deals on dashboard
+  // Update recent deals on dashboard (element may be absent — replaced by My Creators)
   const dashDeals=document.getElementById('dashRecentDeals');
-  const recent=deals.slice(-5).reverse();
-  dashDeals.innerHTML=recent.length?`<div class="table-wrap"><table><thead><tr><th>Creator</th><th>Brand</th><th>Value</th><th>Stage</th></tr></thead><tbody>
-    ${recent.map(d=>`<tr><td><span style="font-weight:600">${d.creator}</span></td><td>${d.brand}</td><td style="font-weight:600;color:var(--blue)">${fmtMoney(d.value)}</td><td>${statusBadge(d.stage)}</td></tr>`).join('')}
-  </tbody></table></div>`:'<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No deals added yet.</div>';
+  if (dashDeals) {
+    const recent=deals.slice(-5).reverse();
+    dashDeals.innerHTML=recent.length?`<div class="table-wrap"><table><thead><tr><th>Creator</th><th>Brand</th><th>Value</th><th>Stage</th></tr></thead><tbody>
+      ${recent.map(d=>`<tr><td><span style="font-weight:600">${d.creator}</span></td><td>${d.brand}</td><td style="font-weight:600;color:var(--blue)">${fmtMoney(d.value)}</td><td>${statusBadge(d.stage)}</td></tr>`).join('')}
+    </tbody></table></div>`:'<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No deals added yet.</div>';
+  }
 }
 
 async function saveDeal(){
@@ -7773,7 +7769,10 @@ async function _refreshMyCreatorsPanel(fetchEmail) {
       try {
         const data = await emailApi('/inbox', { mailbox: local, folder: 'INBOX', limit: 30 });
         const msgs = (data && data.messages) || [];
-        _myCreatorsUnread[c.id] = msgs.filter(m => m.unread).length;
+        // Respect the per-mailbox "clear" baseline: only count messages that are
+        // IMAP-unread AND arrived after the last time this inbox was cleared.
+        const baseline = _readBaseline(local);
+        _myCreatorsUnread[c.id] = msgs.filter(m => m.unread && (!baseline || new Date(m.date).getTime() > baseline)).length;
       } catch(e) { /* leave previous count */ }
     }));
     _myCreatorsLoading = false;
@@ -7786,6 +7785,7 @@ async function _refreshMyCreatorsPanel(fetchEmail) {
 
   listEl.innerHTML = mine.map(c => {
     const unread = _myCreatorsUnread[c.id];
+    const local = (c.email || '').split('@')[0];
     const pic = profilePics[c.id] || c.profile_image_url;
     const avatar = pic
       ? `<div style="width:36px;height:36px;border-radius:50%;background:#fff url('${pic}') center/cover;flex-shrink:0"></div>`
@@ -7796,6 +7796,9 @@ async function _refreshMyCreatorsPanel(fetchEmail) {
     const unreadBadge = unread > 0
       ? `<span style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px">${unread} new</span>`
       : (unread === 0 ? '<span style="font-size:11px;color:var(--gray-300)">✓</span>' : '');
+    const clearBtn = unread > 0
+      ? `<button class="btn btn-ghost btn-sm" onclick="_clearCreatorInbox(${c.id},'${local}')" title="Mark all as read — only newer emails will show as new from now" style="padding:2px 8px">✓</button>`
+      : '';
     return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray-50)">
       ${avatar}
       <div style="flex:1;min-width:0;cursor:pointer" onclick="openCreatorProfile(${c.id})">
@@ -7803,10 +7806,47 @@ async function _refreshMyCreatorsPanel(fetchEmail) {
         <div style="font-size:11px;color:var(--gray-400)">${stats}</div>
       </div>
       ${unreadBadge}
+      ${clearBtn}
       <button class="btn btn-ghost btn-sm" onclick="_quickOpenCreatorInbox(${c.id})" title="Open their inbox" style="padding:2px 8px">✉</button>
       <button class="btn btn-ghost btn-sm" onclick="openCreatorProfile(${c.id})" title="Profile" style="padding:2px 8px">→</button>
     </div>`;
   }).join('');
+}
+
+// ── Read-baseline: "clear" an inbox so only newer emails count as new ──
+// Stored client-side (per browser) keyed by mailbox local part.
+function _readBaseline(mailbox) {
+  try { return Number(JSON.parse(localStorage.getItem('inboxReadBaseline') || '{}')[mailbox]) || 0; }
+  catch(e) { return 0; }
+}
+function _setReadBaseline(mailbox, ts) {
+  let map = {};
+  try { map = JSON.parse(localStorage.getItem('inboxReadBaseline') || '{}'); } catch(e) {}
+  map[mailbox] = ts;
+  try { localStorage.setItem('inboxReadBaseline', JSON.stringify(map)); } catch(e) {}
+}
+
+/** Mark all as read for a creator's inbox — sets the baseline to now, so only
+ *  emails arriving after this moment show as new. Doesn't delete anything. */
+function _clearCreatorInbox(creatorId, mailbox) {
+  if (!mailbox) return;
+  _setReadBaseline(mailbox, Date.now());
+  _myCreatorsUnread[creatorId] = 0;
+  _refreshMyCreatorsPanel(false);
+  showToast('✓ Marked as read — only newer emails will show as new');
+}
+
+/** Mark the currently-open team inbox mailbox as all-read (baseline = now). */
+function _markInboxAllRead() {
+  const mailbox = _currentInbox && _currentInbox.mailbox;
+  if (!mailbox) { showToast('Open a mailbox first'); return; }
+  if (!confirm('Mark everything in this mailbox as read? Only emails newer than now will show as new after this.')) return;
+  _setReadBaseline(mailbox, Date.now());
+  // Also drop the local unread flags in the current view so it reflects instantly
+  (_currentInbox.messages || []).forEach(m => { m.unread = false; });
+  if (_currentInbox.isCreatorTab && _currentInbox.creatorId) renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder);
+  else loadTeamInbox(mailbox, _currentInbox.folder);
+  showToast('✓ Inbox marked as read');
 }
 
 function _quickOpenCreatorInbox(creatorId) {
@@ -18134,6 +18174,9 @@ async function loadTeamInbox(mailbox, folder) {
   const listEl = document.getElementById('inboxList');
   if (!listEl) return;
 
+  const markBtn = document.getElementById('inboxMarkAllRead');
+  if (markBtn) markBtn.style.display = '';
+
   const currentFolder = folder || _emailLastFolder[mailbox] || 'INBOX';
   _emailLastFolder[mailbox] = currentFolder;
 
@@ -18161,6 +18204,8 @@ async function loadTeamInbox(mailbox, folder) {
   try {
     const data = await _fetchFolderWithSentMerge(mailbox, currentFolder, 0, 50);
     _currentInbox.messages = [...data.primary, ...data.sent];
+    const baseline = _readBaseline(mailbox);
+    if (baseline) _currentInbox.messages.forEach(m => { if (new Date(m.date).getTime() <= baseline) m.unread = false; });
     _currentInbox.primaryTotal  = data.total;
     _currentInbox.primaryLoaded = data.primary.length;
     _currentInbox.primaryOffset = data.primary.length;
