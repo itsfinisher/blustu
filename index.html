@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-z (fix: brand snipe compose now uses the signature checkbox, not raw HTML in the body) -->
+<!-- blustu panel build 2026-07-15-a (dashboard: creator activity feed of latest posts, replaces static activity feed) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1322,12 +1322,11 @@ html, body { overflow-x: hidden; }
           <div id="myCreatorsList"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading your creators…</div></div>
         </div>
         <div class="card">
-          <div class="card-title" style="margin-bottom:12px">Activity Feed</div>
-          <div id="activityFeed">
-            <div class="activity-item"><div class="activity-dot"></div><div><div class="activity-text">Dashboard loaded. Welcome back!</div><div class="activity-time">Just now</div></div></div>
-            <div class="activity-item"><div class="activity-dot" style="background:var(--green)"></div><div><div class="activity-text">25 creators seeded from full roster</div><div class="activity-time">Today</div></div></div>
-            <div class="activity-item"><div class="activity-dot" style="background:var(--blue)"></div><div><div class="activity-text">System updated with new features</div><div class="activity-time">Today</div></div></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+            <div class="card-title" style="margin:0">🎬 Creator Activity <span style="font-size:11px;color:var(--gray-400);font-weight:400">— latest posts</span></div>
+            <button class="btn btn-ghost btn-sm" onclick="_refreshCreatorActivity(true)" id="creatorActivityRefresh" title="Pull the latest posts from TikTok">↻ Refresh</button>
           </div>
+          <div id="creatorActivityFeed"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading recent posts…</div></div>
         </div>
       </div>
       <div class="card">
@@ -4353,6 +4352,7 @@ async function refetch(table) {
   loadReadBaselines().then(() => {
     // Re-render once baselines are known so counts are accurate
     try { _refreshMyCreatorsPanel(false); } catch(e) {}
+    try { _refreshCreatorActivity(false); } catch(e) {}
   });
   // On first load the dashboard is already the active page, so kick off the
   // creator email check once accounts are ready.
@@ -4769,7 +4769,7 @@ function showPage(id, btn) {
   if (id === 'users')      { renderUsersPage(); }
   if (id === 'pipeline')   { renderPipeline(); }
   if (id === 'campaigns')  { renderCampaigns(currentCampaignFilter); }
-  if (id === 'dashboard')  { _refreshMyCreatorsPanel(true); }
+  if (id === 'dashboard')  { _refreshMyCreatorsPanel(true); _refreshCreatorActivity(false); }
   if (id === 'campaigndetail' && _cdCampaign) { _renderCampaignDetail(); }
   if (id === 'brandsnipes') { loadBrandSnipes(); }
   if (id === 'brandtemplates') { renderBrandTemplates(); }
@@ -7797,6 +7797,7 @@ function updateDashStats(){
 
   // Personalised: refresh the "My Creators" panel (cached counts, no refetch)
   _refreshMyCreatorsPanel(false);
+  try { _refreshCreatorActivity(false); } catch(e) {}
 }
 
 // ══ PERSONALISED DASHBOARD: MY CREATORS ══
@@ -7934,6 +7935,126 @@ async function _markInboxAllRead() {
   if (_currentInbox.isCreatorTab && _currentInbox.creatorId) renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder);
   else loadTeamInbox(mailbox, _currentInbox.folder);
   showToast('✓ Inbox marked as read');
+}
+
+// ══ CREATOR ACTIVITY FEED — what my creators are posting ══
+let _creatorActivityLoading = false;
+
+/** Build a feed of the most recent posts across the staff member's creators,
+ *  newest first. Pinned posts are already excluded by the worker. */
+async function _refreshCreatorActivity(fetchLive) {
+  const wrap = document.getElementById('creatorActivityFeed');
+  if (!wrap) return;
+
+  const mine = (typeof activeCreators === 'function' ? activeCreators() : creators)
+    .filter(c => creatorPrimaryStaffEmail(c) === currentUser?.email);
+
+  if (!mine.length) {
+    wrap.innerHTML = '<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No creators assigned to you yet.</div>';
+    return;
+  }
+
+  // Optionally pull fresh posts from TikTok for creators with a handle
+  if (fetchLive && !_creatorActivityLoading) {
+    _creatorActivityLoading = true;
+    const btn = document.getElementById('creatorActivityRefresh');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Fetching…'; }
+    const targets = mine.filter(c => (c.tiktok_handle || '').trim());
+    const token = _emailAuthToken();
+    if (!token) {
+      _creatorActivityLoading = false;
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+      showToast('Not logged in');
+      return;
+    }
+    await Promise.all(targets.map(async c => {
+      try {
+        const res = await fetch(EMAIL_API + '/tiktok/stats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Staff-Token': token },
+          body: JSON.stringify({ handle: c.tiktok_handle }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) return;
+        if (Array.isArray(data.recent_posts)) {
+          c.tiktok_recent_posts = data.recent_posts;
+          c.tiktok_last_post_at = data.recent_posts[0]?.created
+            ? new Date(data.recent_posts[0].created * 1000).toISOString() : null;
+          await DB._req('PATCH', 'creators', {
+            tiktok_recent_posts: c.tiktok_recent_posts,
+            tiktok_last_post_at: c.tiktok_last_post_at,
+          }, '?id=eq.' + c.id);
+        }
+      } catch(e) { /* skip this creator */ }
+    }));
+    _creatorActivityLoading = false;
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+  }
+
+  // Flatten every creator's posts into one feed, newest first
+  const feed = [];
+  mine.forEach(c => {
+    (Array.isArray(c.tiktok_recent_posts) ? c.tiktok_recent_posts : []).forEach(p => {
+      feed.push({ ...p, _creator: c });
+    });
+  });
+  feed.sort((a, b) => (b.created || 0) - (a.created || 0));
+
+  if (!feed.length) {
+    const anyHandles = mine.some(c => (c.tiktok_handle || '').trim());
+    wrap.innerHTML = anyHandles
+      ? '<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No posts loaded yet. Hit ↻ Refresh to pull the latest.</div>'
+      : '<div style="font-size:13px;color:var(--gray-400);padding:8px 0">Add TikTok handles to your creators to see their activity.</div>';
+    return;
+  }
+
+  wrap.innerHTML = feed.slice(0, 12).map(p => {
+    const c = p._creator;
+    const pic = profilePics[c.id] || c.profile_image_url;
+    const avatar = pic
+      ? `<div style="width:30px;height:30px;border-radius:50%;background:#fff url('${pic}') center/cover;flex-shrink:0"></div>`
+      : `<div style="width:30px;height:30px;border-radius:50%;background:var(--blue-light);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0">${(c.name||'?')[0].toUpperCase()}</div>`;
+    const when = p.created ? _timeAgo(p.created * 1000) : '';
+    const caption = (p.caption || '').trim() || '(no caption)';
+    const thumb = p.cover
+      ? `<div style="width:38px;height:50px;border-radius:6px;background:#eee url('${p.cover}') center/cover;flex-shrink:0"></div>`
+      : '';
+    const openAttr = p.url ? `onclick="window.open('${p.url}','_blank')" style="cursor:pointer"` : '';
+    return `<div ${openAttr} style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-50);align-items:flex-start">
+      ${avatar}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--gray-900)">${escapeHtml(c.name)} <span style="font-weight:400;color:var(--gray-400)">· ${when}</span></div>
+        <div style="font-size:12px;color:var(--gray-600);line-height:1.4;margin:2px 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(caption)}</div>
+        <div style="font-size:11px;color:var(--gray-400)">▶ ${_fmtCompact(p.views||0)} · ♥ ${_fmtCompact(p.likes||0)} · 💬 ${_fmtCompact(p.comments||0)}</div>
+      </div>
+      ${thumb}
+    </div>`;
+  }).join('');
+
+  // Flag creators who haven't posted in a while — useful at a glance
+  const stale = mine.filter(c => {
+    if (!(c.tiktok_handle || '').trim()) return false;
+    const last = c.tiktok_last_post_at ? new Date(c.tiktok_last_post_at).getTime() : 0;
+    return last && (Date.now() - last) > 14 * 86400000;
+  });
+  if (stale.length) {
+    wrap.innerHTML += `<div style="margin-top:10px;padding:8px 10px;background:#fef3c7;border-radius:8px;font-size:11px;color:#92400e">
+      ⚠️ No posts in 14+ days: ${stale.map(c => escapeHtml(c.name)).join(', ')}
+    </div>`;
+  }
+}
+
+/** "3h ago" / "2d ago" style relative time. */
+function _timeAgo(ms) {
+  const diff = Date.now() - ms;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return mins <= 1 ? 'just now' : mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  const months = Math.floor(days / 30);
+  return months + 'mo ago';
 }
 
 function _quickOpenCreatorInbox(creatorId) {
@@ -10763,6 +10884,8 @@ async function refreshAllTikTokStats() {
         tiktok_views_follower: data.views_to_follower ?? null,
         tiktok_posts_week:     data.posts_per_week ?? null,
         tiktok_best_views:     data.best_video ? data.best_video.views : null,
+        tiktok_recent_posts:   Array.isArray(data.recent_posts) ? data.recent_posts : [],
+        tiktok_last_post_at:   (data.recent_posts && data.recent_posts[0] && data.recent_posts[0].created) ? new Date(data.recent_posts[0].created * 1000).toISOString() : null,
       };
       await DB._req('PATCH', 'creators', patch, '?id=eq.' + c.id);
       Object.assign(c, patch);
@@ -10817,6 +10940,8 @@ async function refreshTikTokStats(creatorId) {
       tiktok_views_follower: data.views_to_follower ?? null,
       tiktok_posts_week:     data.posts_per_week ?? null,
       tiktok_best_views:     data.best_video ? data.best_video.views : null,
+      tiktok_recent_posts:   Array.isArray(data.recent_posts) ? data.recent_posts : [],
+      tiktok_last_post_at:   (data.recent_posts && data.recent_posts[0] && data.recent_posts[0].created) ? new Date(data.recent_posts[0].created * 1000).toISOString() : null,
     };
     const r = await DB._req('PATCH', 'creators', patch, '?id=eq.' + creatorId);
     if (r === null) { showToast('⚠ Fetched but failed to save — run tiktok-metrics.sql?'); }
