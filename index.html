@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-y (brand snipes: per-staff view in All Staff mode, owner column + breakdown cards) -->
+<!-- blustu panel build 2026-07-14-z (fix: brand snipe compose now uses the signature checkbox, not raw HTML in the body) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -16948,7 +16948,7 @@ async function openBrandSnipeCompose(id, dataOverride) {
   if (!templates.length) templates = BRAND_TEMPLATE_SEEDS[type].map(t => ({ ...t, target_type: type }));
   const tmpl = templates[0];
   const subject = _fillBrandTemplate(tmpl.subject, s);
-  const body = _fillBrandTemplate(tmpl.body, s) + '\n\n' + (_mySignature() || '');
+  const body = _fillBrandTemplate(tmpl.body, s);
 
   // Reuse the existing compose modal
   await loadEmailAccounts();
@@ -16962,7 +16962,17 @@ async function openBrandSnipeCompose(id, dataOverride) {
   ['compose-in-reply-to','compose-references','compose-cc'].forEach(cid => { const el = document.getElementById(cid); if (el) el.value = ''; });
   document.getElementById('compose-to').value = _cleanImportedEmail(s.email) || s.email;
   document.getElementById('compose-subject').value = subject;
-  document.getElementById('compose-body').value = body;
+  const bodyEl = document.getElementById('compose-body');
+  bodyEl.value = body;
+  // This is a fresh outreach email, not a reply — clear any quoted-reply state
+  // left over from a previous compose.
+  delete bodyEl.dataset.replyQuoteHtml;
+  delete bodyEl.dataset.replyQuoteText;
+  delete bodyEl.dataset.replyQuoteFrom;
+  delete bodyEl.dataset.replyQuoteDate;
+  // Signature is applied as HTML at send time — just switch it on here.
+  const sigBox = document.getElementById('compose-use-signature');
+  if (sigBox) sigBox.checked = !!_mySignature();
   // Template switcher — offer the variants for this type
   _brandComposeSnipe = s;
   _brandComposeTemplates = templates;
@@ -16991,7 +17001,8 @@ function _applyBrandTemplate(i) {
   const t = _brandComposeTemplates[i];
   if (!t || !_brandComposeSnipe) return;
   document.getElementById('compose-subject').value = _fillBrandTemplate(t.subject, _brandComposeSnipe);
-  document.getElementById('compose-body').value = _fillBrandTemplate(t.body, _brandComposeSnipe) + '\n\n' + (_mySignature() || '');
+  // Body stays plain text — the signature is appended as HTML at send time.
+  document.getElementById('compose-body').value = _fillBrandTemplate(t.body, _brandComposeSnipe);
 }
 
 
