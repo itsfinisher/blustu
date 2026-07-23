@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-s (My Creators moved into grid + mark-all-read baseline for inboxes) -->
+<!-- blustu panel build 2026-07-14-t (read-baselines synced to Supabase per staff, cross-device) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -4296,6 +4296,11 @@ async function refetch(table) {
       break;
   }
   updateDashStats(); populateSelects();
+  // Load this user's inbox read-baselines (syncs "mark all read" across devices)
+  loadReadBaselines().then(() => {
+    // Re-render once baselines are known so counts are accurate
+    try { _refreshMyCreatorsPanel(false); } catch(e) {}
+  });
   // On first load the dashboard is already the active page, so kick off the
   // creator email check once accounts are ready.
   setTimeout(() => { try { _refreshMyCreatorsPanel(true); } catch(e) {} }, 1500);
@@ -7814,34 +7819,63 @@ async function _refreshMyCreatorsPanel(fetchEmail) {
 }
 
 // ── Read-baseline: "clear" an inbox so only newer emails count as new ──
-// Stored client-side (per browser) keyed by mailbox local part.
-function _readBaseline(mailbox) {
-  try { return Number(JSON.parse(localStorage.getItem('inboxReadBaseline') || '{}')[mailbox]) || 0; }
-  catch(e) { return 0; }
+// Stored per staff member in Supabase (inbox_read_baselines) so it follows you
+// across devices, with localStorage as a fast local cache to avoid a fetch on
+// every render.
+let _readBaselines = {};      // mailbox -> epoch ms, for the current user
+
+/** Load this user's baselines from Supabase into memory + local cache. */
+async function loadReadBaselines() {
+  const me = currentUser?.email;
+  if (!me) return;
+  // Seed from the local cache first so the UI is correct immediately
+  try { _readBaselines = JSON.parse(localStorage.getItem('inboxReadBaseline_' + me) || '{}'); } catch(e) { _readBaselines = {}; }
+  try {
+    const rows = await DB.select('inbox_read_baselines', `?staff_email=eq.${encodeURIComponent(me)}`);
+    if (Array.isArray(rows)) {
+      const map = {};
+      rows.forEach(r => { map[r.mailbox] = new Date(r.cleared_at).getTime(); });
+      _readBaselines = map;
+      try { localStorage.setItem('inboxReadBaseline_' + me, JSON.stringify(map)); } catch(e) {}
+    }
+  } catch(e) { /* offline or table missing — keep the cached values */ }
 }
-function _setReadBaseline(mailbox, ts) {
-  let map = {};
-  try { map = JSON.parse(localStorage.getItem('inboxReadBaseline') || '{}'); } catch(e) {}
-  map[mailbox] = ts;
-  try { localStorage.setItem('inboxReadBaseline', JSON.stringify(map)); } catch(e) {}
+
+function _readBaseline(mailbox) {
+  return Number(_readBaselines[mailbox]) || 0;
+}
+
+/** Set a baseline and persist it for this staff member (all their devices). */
+async function _setReadBaseline(mailbox, ts) {
+  const me = currentUser?.email;
+  _readBaselines[mailbox] = ts;
+  if (me) {
+    try { localStorage.setItem('inboxReadBaseline_' + me, JSON.stringify(_readBaselines)); } catch(e) {}
+    // Replace any existing row for this staff+mailbox, then insert the new one
+    await DB._req('DELETE', 'inbox_read_baselines', null,
+      `?staff_email=eq.${encodeURIComponent(me)}&mailbox=eq.${encodeURIComponent(mailbox)}`);
+    const row = { staff_email: me, mailbox, cleared_at: new Date(ts).toISOString(), updated_at: new Date().toISOString() };
+    const r = await DB._req('POST', 'inbox_read_baselines', [row], '');
+    if (r === null) showToast('⚠ Saved locally only — run inbox-read-baselines.sql to sync across devices');
+  }
 }
 
 /** Mark all as read for a creator's inbox — sets the baseline to now, so only
  *  emails arriving after this moment show as new. Doesn't delete anything. */
-function _clearCreatorInbox(creatorId, mailbox) {
+async function _clearCreatorInbox(creatorId, mailbox) {
   if (!mailbox) return;
-  _setReadBaseline(mailbox, Date.now());
   _myCreatorsUnread[creatorId] = 0;
   _refreshMyCreatorsPanel(false);
   showToast('✓ Marked as read — only newer emails will show as new');
+  await _setReadBaseline(mailbox, Date.now());
 }
 
 /** Mark the currently-open team inbox mailbox as all-read (baseline = now). */
-function _markInboxAllRead() {
+async function _markInboxAllRead() {
   const mailbox = _currentInbox && _currentInbox.mailbox;
   if (!mailbox) { showToast('Open a mailbox first'); return; }
   if (!confirm('Mark everything in this mailbox as read? Only emails newer than now will show as new after this.')) return;
-  _setReadBaseline(mailbox, Date.now());
+  await _setReadBaseline(mailbox, Date.now());
   // Also drop the local unread flags in the current view so it reflects instantly
   (_currentInbox.messages || []).forEach(m => { m.unread = false; });
   if (_currentInbox.isCreatorTab && _currentInbox.creatorId) renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder);
