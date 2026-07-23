@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-q (pitch doc: print output now matches preview exactly) -->
+<!-- blustu panel build 2026-07-14-r (campaign email links + inbox quick-access + personalised My Creators dashboard) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1307,6 +1307,13 @@ html, body { overflow-x: hidden; }
           Feb 2026
         </button>
       </div>
+      <div class="card" id="myCreatorsCard" style="margin-bottom:16px;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+          <div class="card-title" style="margin:0">👤 My Creators <span id="myCreatorsUnread" style="font-size:11px;color:var(--gray-400);font-weight:400"></span></div>
+          <button class="btn btn-ghost btn-sm" id="myCreatorsRefresh" onclick="_refreshMyCreatorsPanel(true)" title="Check for new emails">↻ Check email</button>
+        </div>
+        <div id="myCreatorsList"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading your creators…</div></div>
+      </div>
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">Total Creators</div><div class="stat-value" id="stat-creators">25</div><div class="stat-change up" id="stat-creators-sub">Full roster</div></div>
         <div class="stat-card"><div class="stat-label">Active Campaigns</div><div class="stat-value" id="stat-campaigns">0</div><div class="stat-change neutral" id="stat-campaigns-sub">No campaigns yet</div></div>
@@ -2082,6 +2089,7 @@ html, body { overflow-x: hidden; }
           <button class="btn btn-primary btn-sm" onclick="openCompose()">✉ Compose</button>
         </div>
       </div>
+      <div id="inboxQuickAccess" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
       <div id="teamInboxFolderTabs" class="email-folder-tabs" style="margin-bottom:12px"></div>
       <!-- Search bar -->
       <div id="inboxSearchBar" style="display:none;margin-bottom:10px">
@@ -3496,6 +3504,27 @@ html, body { overflow-x: hidden; }
 </div>
 
 <!-- ══ RATE FACTORS MODAL ══ -->
+<!-- ══ LINK EMAIL THREAD TO CAMPAIGN ══ -->
+<div class="modal-overlay" id="linkThreadModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title">Link an email thread</div>
+      <button class="modal-close" onclick="closeModal('linkThreadModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px">
+        <div class="form-group" style="margin:0;flex:1"><label class="form-label">Mailbox</label><select class="form-select" id="lt-mailbox"></select></div>
+        <button class="btn btn-primary" onclick="_cdLoadThreadsForLink()">Load</button>
+      </div>
+      <input class="form-input" id="lt-search" placeholder="Search conversations…" oninput="_cdRenderLinkResults(document.getElementById('lt-mailbox').value)" style="margin-bottom:10px">
+      <div id="lt-results" style="max-height:340px;overflow-y:auto;border:1px solid var(--gray-100);border-radius:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('linkThreadModal')">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ BRAND TEMPLATE EDITOR ══ -->
 <div class="modal-overlay" id="brandTemplateModal">
   <div class="modal" style="max-width:600px">
@@ -4273,6 +4302,9 @@ async function refetch(table) {
       break;
   }
   updateDashStats(); populateSelects();
+  // On first load the dashboard is already the active page, so kick off the
+  // creator email check once accounts are ready.
+  setTimeout(() => { try { _refreshMyCreatorsPanel(true); } catch(e) {} }, 1500);
   return true;
 }
 
@@ -4685,6 +4717,7 @@ function showPage(id, btn) {
   if (id === 'users')      { renderUsersPage(); }
   if (id === 'pipeline')   { renderPipeline(); }
   if (id === 'campaigns')  { renderCampaigns(currentCampaignFilter); }
+  if (id === 'dashboard')  { _refreshMyCreatorsPanel(true); }
   if (id === 'campaigndetail' && _cdCampaign) { _renderCampaignDetail(); }
   if (id === 'brandsnipes') { loadBrandSnipes(); }
   if (id === 'brandtemplates') { renderBrandTemplates(); }
@@ -6391,12 +6424,22 @@ function _renderCampaignDetail() {
           <div class="form-group" style="margin:0 0 8px"><label class="form-label">Status</label><select class="form-select" id="cd-contract-status" onchange="_cdField('contract_status',this.value)">${CD_CONTRACT_STATUS.map(s=>`<option value="${s}"${c.contract_status===s?' selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}</select></div>
           <div class="form-group" style="margin:0"><label class="form-label">Contract link</label><input class="form-input" id="cd-contract-url" value="${(c.contract_url||'').replace(/"/g,'&quot;')}" placeholder="Google Drive / DocuSign URL" oninput="_cdField('contract_url',this.value)">${c.contract_url?`<a href="${c.contract_url}" target="_blank" style="font-size:12px;color:var(--blue);display:inline-block;margin-top:6px">Open contract →</a>`:''}</div>
         </div>
+
+        <!-- Linked emails -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px">
+            <div class="card-title" style="margin:0">✉️ Linked Emails</div>
+            <button class="btn btn-ghost btn-sm" onclick="_cdOpenLinkThread()"${_cdIsNew?' disabled title="Save the campaign first"':''}>+ Link thread</button>
+          </div>
+          <div id="cd-linked-emails"></div>
+        </div>
       </div>
     </div>`;
 
   _renderCdCreators();
   _renderCdSupport();
   _renderCampaignTimeline();
+  _renderCdLinkedEmails();
 }
 
 function _cdField(key, val) {
@@ -6576,6 +6619,120 @@ async function _cdAddNote() {
   if (r === null) { showToast('⚠ Note not saved — run campaign-upgrade.sql?'); }
 }
 
+// ── LINKED EMAIL THREADS ──────────────────────────────────────────
+function _cdLinkedThreads() {
+  return Array.isArray(_cdCampaign.linked_threads) ? _cdCampaign.linked_threads : [];
+}
+
+function _renderCdLinkedEmails() {
+  const wrap = document.getElementById('cd-linked-emails');
+  if (!wrap) return;
+  const links = _cdLinkedThreads();
+  if (!links.length) {
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--gray-400)">No emails linked yet.' + (_cdIsNew ? ' Save the campaign first.' : ' Click "+ Link thread" to attach a conversation.') + '</div>';
+    return;
+  }
+  wrap.innerHTML = links.map((t, i) => `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-50)">
+    <div style="flex:1;min-width:0;cursor:pointer" onclick="_cdOpenLinkedThread(${i})" title="Open in inbox">
+      <div style="font-size:13px;font-weight:500;color:var(--gray-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.subject || '(no subject)')}</div>
+      <div style="font-size:11px;color:var(--gray-400)">${escapeHtml(t.participant || '')}${t.date ? ' · ' + new Date(t.date).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) : ''} · 📥 ${escapeHtml(t.mailbox || '')}</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="_cdOpenLinkedThread(${i})" title="Open" style="padding:2px 6px">↗</button>
+    <button class="btn btn-danger btn-sm" onclick="_cdUnlinkThread(${i})" title="Unlink" style="padding:2px 6px">✕</button>
+  </div>`).join('');
+}
+
+function _cdOpenLinkedThread(i) {
+  const t = _cdLinkedThreads()[i];
+  if (!t) return;
+  // Go to the inbox, load the right mailbox, then open the thread
+  showPage('inbox');
+  setTimeout(async () => {
+    try {
+      if (typeof loadTeamInbox === 'function') await loadTeamInbox(t.mailbox, 'INBOX');
+      setTimeout(() => { if (typeof openEmailThread === 'function') openEmailThread(t.thread_key, false, null); }, 600);
+    } catch(e) { showToast('Could not open thread'); }
+  }, 300);
+}
+
+async function _cdUnlinkThread(i) {
+  const links = _cdLinkedThreads().slice();
+  links.splice(i, 1);
+  _cdCampaign.linked_threads = links;
+  _renderCdLinkedEmails();
+  if (!_cdIsNew) await DB._req('PATCH', 'campaigns', { linked_threads: links }, '?id=eq.' + _cdCampaign.id);
+}
+
+// Open the link-thread picker modal
+let _cdLinkPickerThreads = [];
+async function _cdOpenLinkThread() {
+  if (_cdIsNew) { showToast('Save the campaign first, then link threads'); return; }
+  openModal('linkThreadModal');
+  // Populate mailbox selector
+  const accounts = await loadEmailAccounts();
+  const sel = document.getElementById('lt-mailbox');
+  if (sel) {
+    sel.innerHTML = (accounts || []).map(a => `<option value="${a.local}">${friendlyFromName(a.local)}</option>`).join('');
+    // Default to the current user's mailbox if they have one
+    const mine = (STAFF.find(x => x.email === currentUser?.email) || {}).snipe_from_mailbox;
+    if (mine && accounts.find(a => a.local === mine)) sel.value = mine;
+  }
+  document.getElementById('lt-results').innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">Pick a mailbox and click Load.</div>';
+}
+
+async function _cdLoadThreadsForLink() {
+  const mailbox = document.getElementById('lt-mailbox').value;
+  const results = document.getElementById('lt-results');
+  results.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">Loading…</div>';
+  try {
+    const data = await emailApi('/inbox', { mailbox, folder: 'INBOX', limit: 50 });
+    const msgs = (data && data.messages) ? data.messages.map(m => ({ ...m, _folder: 'INBOX' })) : [];
+    // Temporarily set _currentInbox context so threading self-address works
+    const prev = _currentInbox;
+    _currentInbox = { mailbox, folder: 'INBOX', messages: msgs, isCreatorTab: false };
+    _cdLinkPickerThreads = _groupIntoThreads(msgs);
+    _currentInbox = prev;
+    _cdRenderLinkResults(mailbox);
+  } catch(e) {
+    results.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red);font-size:13px">Failed to load: ' + e.message + '</div>';
+  }
+}
+
+function _cdRenderLinkResults(mailbox) {
+  const results = document.getElementById('lt-results');
+  const search = (document.getElementById('lt-search')?.value || '').toLowerCase();
+  let threads = _cdLinkPickerThreads;
+  if (search) threads = threads.filter(t =>
+    (t.subject || '').toLowerCase().includes(search) ||
+    (t.participants || []).join(' ').toLowerCase().includes(search)
+  );
+  const alreadyLinked = new Set(_cdLinkedThreads().map(l => l.mailbox + '|' + l.thread_key));
+  if (!threads.length) { results.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">No conversations found.</div>'; return; }
+  results.innerHTML = threads.slice(0, 40).map(t => {
+    const isLinked = alreadyLinked.has(mailbox + '|' + t.threadKey);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid var(--gray-50)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.subject || '(no subject)')}</div>
+        <div style="font-size:11px;color:var(--gray-400)">${escapeHtml((t.participants || []).join(', '))} · ${new Date(t.latestDate).toLocaleDateString('en-GB', {day:'numeric',month:'short'})}${t.anyUnread ? ' · <span style="color:var(--blue)">unread</span>' : ''}</div>
+      </div>
+      ${isLinked
+        ? '<span style="font-size:11px;color:var(--green);font-weight:600">✓ Linked</span>'
+        : `<button class="btn btn-primary btn-sm" onclick='_cdLinkThread(${JSON.stringify({mailbox, thread_key:t.threadKey, subject:t.subject, participant:(t.participants||[])[0]||"", date:t.latestDate}).replace(/'/g,"&#39;")})' style="font-size:11px">Link</button>`}
+    </div>`;
+  }).join('');
+}
+
+async function _cdLinkThread(entry) {
+  const links = _cdLinkedThreads().slice();
+  if (links.find(l => l.mailbox === entry.mailbox && l.thread_key === entry.thread_key)) { showToast('Already linked'); return; }
+  links.push(entry);
+  _cdCampaign.linked_threads = links;
+  _renderCdLinkedEmails();
+  _cdRenderLinkResults(entry.mailbox);
+  await DB._req('PATCH', 'campaigns', { linked_threads: links }, '?id=eq.' + _cdCampaign.id);
+  showToast('✅ Thread linked');
+}
+
 async function saveCampaignDetail() {
   if (!(_cdCampaign.brand || '').trim()) { showToast('Enter a brand name'); return; }
   _cdCampaign.campaign_creators = _cdCreators;
@@ -6607,7 +6764,7 @@ async function saveCampaignDetail() {
     const coreKeys = ['id','brand','creator','creatorId','creatorIds','value','deadline','status','deliverables','progress','notes','campaignId',
                       'brand_logo','brand_website','campaign_creators','lead_staff','support_staff','contact_staff',
                       'brand_contact_name','brand_contact_email','brand_contact_phone','emergency_contact',
-                      'contract_status','contract_url','start_date','priority','currency','value_original','updated_at'];
+                      'contract_status','contract_url','start_date','priority','currency','value_original','linked_threads','updated_at'];
     const core = {};
     coreKeys.forEach(k => { if (payload[k] !== undefined) core[k] = payload[k]; });
     ['start_date','deadline'].forEach(k => { if (!core[k]) core[k] = null; });
@@ -7583,6 +7740,81 @@ function updateDashStats(){
       if (avgSubEl) avgSubEl.textContent = 'No data yet';
     }
   }
+
+  // Personalised: refresh the "My Creators" panel (cached counts, no refetch)
+  _refreshMyCreatorsPanel(false);
+}
+
+// ══ PERSONALISED DASHBOARD: MY CREATORS ══
+let _myCreatorsUnread = {};   // creatorId -> unread count (cached across renders)
+let _myCreatorsLoading = false;
+
+/** Render the logged-in staff member's ACTIVE managed creators, with unread
+ *  email counts. fetchEmail=true actually queries each mailbox for unread. */
+async function _refreshMyCreatorsPanel(fetchEmail) {
+  const card = document.getElementById('myCreatorsCard');
+  const listEl = document.getElementById('myCreatorsList');
+  if (!card || !listEl) return;
+
+  const mine = (typeof activeCreators === 'function' ? activeCreators() : creators)
+    .filter(c => creatorPrimaryStaffEmail(c) === currentUser?.email);
+
+  if (!mine.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  // Optionally fetch unread counts (on demand — button or first dashboard open)
+  if (fetchEmail && !_myCreatorsLoading) {
+    _myCreatorsLoading = true;
+    const btn = document.getElementById('myCreatorsRefresh');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Checking…'; }
+    await Promise.all(mine.map(async c => {
+      const local = (c.email || '').split('@')[0];
+      if (!local) return;
+      try {
+        const data = await emailApi('/inbox', { mailbox: local, folder: 'INBOX', limit: 30 });
+        const msgs = (data && data.messages) || [];
+        _myCreatorsUnread[c.id] = msgs.filter(m => m.unread).length;
+      } catch(e) { /* leave previous count */ }
+    }));
+    _myCreatorsLoading = false;
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Check email'; }
+  }
+
+  const totalUnread = mine.reduce((s, c) => s + (_myCreatorsUnread[c.id] || 0), 0);
+  const unreadLabel = document.getElementById('myCreatorsUnread');
+  if (unreadLabel) unreadLabel.textContent = totalUnread ? `· ${totalUnread} unread` : (fetchEmail ? '· all caught up' : '');
+
+  listEl.innerHTML = mine.map(c => {
+    const unread = _myCreatorsUnread[c.id];
+    const pic = profilePics[c.id] || c.profile_image_url;
+    const avatar = pic
+      ? `<div style="width:36px;height:36px;border-radius:50%;background:#fff url('${pic}') center/cover;flex-shrink:0"></div>`
+      : `<div style="width:36px;height:36px;border-radius:50%;background:var(--blue-light);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${(c.name||'?')[0].toUpperCase()}</div>`;
+    const stats = c.tiktok_followers != null
+      ? `${_fmtCompact(c.tiktok_followers)} followers · ${c.tiktok_engagement != null ? c.tiktok_engagement + '% eng' : 'no eng'}`
+      : 'No live stats yet';
+    const unreadBadge = unread > 0
+      ? `<span style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px">${unread} new</span>`
+      : (unread === 0 ? '<span style="font-size:11px;color:var(--gray-300)">✓</span>' : '');
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray-50)">
+      ${avatar}
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="openCreatorProfile(${c.id})">
+        <div style="font-size:14px;font-weight:600;color:var(--gray-900)">${escapeHtml(c.name)}</div>
+        <div style="font-size:11px;color:var(--gray-400)">${stats}</div>
+      </div>
+      ${unreadBadge}
+      <button class="btn btn-ghost btn-sm" onclick="_quickOpenCreatorInbox(${c.id})" title="Open their inbox" style="padding:2px 8px">✉</button>
+      <button class="btn btn-ghost btn-sm" onclick="openCreatorProfile(${c.id})" title="Profile" style="padding:2px 8px">→</button>
+    </div>`;
+  }).join('');
+}
+
+function _quickOpenCreatorInbox(creatorId) {
+  const c = creators.find(x => x.id === creatorId);
+  if (!c) return;
+  const local = (c.email || '').split('@')[0];
+  showPage('inbox');
+  setTimeout(() => { if (local && typeof _quickOpenMailbox === 'function') _quickOpenMailbox(local); }, 300);
 }
 
 // ══ POPULATE SELECTS ══
@@ -17850,6 +18082,51 @@ async function initTeamInbox() {
     sel.value = myMailbox;
     loadTeamInbox(myMailbox);
   }
+
+  _renderInboxQuickAccess(accounts);
+}
+
+/** Quick-access buttons: your own mailbox, partnerships@, and each ACTIVE
+ *  creator you manage — one click to jump straight to that inbox. */
+function _renderInboxQuickAccess(accounts) {
+  const wrap = document.getElementById('inboxQuickAccess');
+  if (!wrap) return;
+  accounts = accounts || _emailAccounts || [];
+  const have = new Set(accounts.map(a => a.local));
+  const btns = [];
+  const seen = new Set();
+
+  const chip = (label, mailbox, icon, highlight) => {
+    if (!mailbox || seen.has(mailbox) || !have.has(mailbox)) return '';
+    seen.add(mailbox);
+    return `<button class="btn ${highlight ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="_quickOpenMailbox('${mailbox}')" style="font-size:12px;white-space:nowrap">${icon} ${escapeHtml(label)}</button>`;
+  };
+
+  // 1) Your own mailbox
+  const myMailbox = (STAFF.find(x => x.email === currentUser?.email) || {}).snipe_from_mailbox || currentUser?.snipe_from_mailbox || '';
+  if (myMailbox) btns.push(chip('My inbox', myMailbox, '⭐', true));
+
+  // 2) partnerships@ (always useful, shared)
+  btns.push(chip('Partnerships', 'partnerships', '🤝', false));
+
+  // 3) My ACTIVE managed creators
+  const mine = (typeof activeCreators === 'function' ? activeCreators() : creators)
+    .filter(c => creatorPrimaryStaffEmail(c) === currentUser?.email);
+  mine.forEach(c => {
+    const local = (c.email || '').split('@')[0];
+    if (local) btns.push(chip(c.name, local, '👤', false));
+  });
+
+  const rendered = btns.filter(Boolean);
+  if (!rendered.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  wrap.innerHTML = '<span style="font-size:11px;color:var(--gray-400);align-self:center;margin-right:2px">Quick access:</span>' + rendered.join('');
+}
+
+function _quickOpenMailbox(mailbox) {
+  const sel = document.getElementById('teamInboxMailbox');
+  if (sel) sel.value = mailbox;
+  loadTeamInbox(mailbox);
 }
 
 async function loadTeamInbox(mailbox, folder) {
