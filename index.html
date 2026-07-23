@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-x (brand snipes: multi-select, bulk delete/mark, delete all) -->
+<!-- blustu panel build 2026-07-14-y (brand snipes: per-staff view in All Staff mode, owner column + breakdown cards) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1875,6 +1875,9 @@ html, body { overflow-x: hidden; }
             <button class="btn btn-sm" id="bs-scope-mine" onclick="setBrandSnipeScope('mine')" style="border-radius:6px">Mine</button>
             <button class="btn btn-ghost btn-sm" id="bs-scope-all" onclick="setBrandSnipeScope('all')" style="border-radius:6px">All Staff</button>
           </div>
+          <select class="form-select" id="bs-filter-owner" onchange="renderBrandSnipes()" style="max-width:160px;display:none">
+            <option value="">All staff</option>
+          </select>
           <select class="form-select" id="bs-filter-type" onchange="renderBrandSnipes()" style="max-width:150px">
             <option value="">Any type</option>
             <option value="brand">🏢 Brand direct</option>
@@ -1920,6 +1923,8 @@ html, body { overflow-x: hidden; }
         </div>
       </div>
 
+      <div id="bs-staff-breakdown" style="display:none;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:12px"></div>
+
       <div id="bs-bulk-bar" style="display:none;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap">
         <span style="font-size:13px;font-weight:600;color:var(--blue)"><span id="bs-selected-count">0</span> selected</span>
         <button class="btn btn-ghost btn-sm" onclick="_bsBulkMarkSent('yes')">✓ Mark sent</button>
@@ -1933,6 +1938,7 @@ html, body { overflow-x: hidden; }
           <table id="brandSnipesTable">
             <thead><tr>
               <th style="width:34px"><input type="checkbox" id="bs-select-all" onchange="_bsToggleSelectAll(this.checked)" title="Select all shown" style="width:15px;height:15px;cursor:pointer"></th>
+              <th id="bs-owner-col" style="display:none">Staff</th>
               <th>Type</th><th>Brand / Contact</th><th>Industry</th><th>Email / Link</th><th>Sent?</th><th>Reply / Status</th><th>Follow up</th><th>Thread</th><th>Actions</th>
             </tr></thead>
             <tbody id="brandSnipesBody"></tbody>
@@ -16237,6 +16243,8 @@ async function loadBrandSnipes() {
     brandSnipes = rows;
     Storage.set('brand_snipes', brandSnipes);
   }
+  _populateBrandSnipeOwnerFilter();
+  _renderBrandSnipeStaffBreakdown();
   renderBrandSnipes();
 }
 
@@ -16245,6 +16253,75 @@ function setBrandSnipeScope(scope) {
   document.getElementById('bs-scope-mine').className = scope === 'mine' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
   document.getElementById('bs-scope-all').className = scope === 'all' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
   document.getElementById('bs-stat-scope').textContent = scope === 'mine' ? 'Your snipes' : 'All staff';
+  // Show the Staff column + owner filter only when viewing everyone's
+  const showOwner = scope === 'all';
+  const ownerCol = document.getElementById('bs-owner-col');
+  const ownerFilter = document.getElementById('bs-filter-owner');
+  if (ownerCol) ownerCol.style.display = showOwner ? '' : 'none';
+  if (ownerFilter) {
+    ownerFilter.style.display = showOwner ? '' : 'none';
+    if (!showOwner) ownerFilter.value = '';
+  }
+  _populateBrandSnipeOwnerFilter();
+  _renderBrandSnipeStaffBreakdown();
+  renderBrandSnipes();
+}
+
+/** Fill the owner dropdown with everyone who actually has brand snipes. */
+function _populateBrandSnipeOwnerFilter() {
+  const sel = document.getElementById('bs-filter-owner');
+  if (!sel) return;
+  const owners = {};
+  brandSnipes.forEach(s => { if (s.owner_email) owners[s.owner_email] = s.owner_name || s.owner_email; });
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">All staff</option>' +
+    Object.entries(owners).map(([email, name]) =>
+      `<option value="${escapeHtml(email)}">${escapeHtml(name)}</option>`).join('');
+  if (prev && owners[prev]) sel.value = prev;
+}
+
+/** Per-staff summary cards shown in All Staff mode — click one to filter. */
+function _renderBrandSnipeStaffBreakdown() {
+  const wrap = document.getElementById('bs-staff-breakdown');
+  if (!wrap) return;
+  if (_bsScope !== 'all') { wrap.style.display = 'none'; return; }
+  const byStaff = {};
+  brandSnipes.forEach(s => {
+    const email = s.owner_email || '';
+    if (!byStaff[email]) byStaff[email] = { email, name: s.owner_name || s.owner_email || 'Unassigned', total: 0, sent: 0, talking: 0, deal: 0 };
+    const b = byStaff[email];
+    b.total++;
+    if ((s.sent || 'no').toLowerCase() === 'yes') b.sent++;
+    if (['talking','interested','replied'].includes(s.reply_status)) b.talking++;
+    if (s.reply_status === 'deal') b.deal++;
+  });
+  const list = Object.values(byStaff).sort((a, b) => b.total - a.total);
+  if (!list.length) { wrap.style.display = 'none'; return; }
+  const active = document.getElementById('bs-filter-owner')?.value || '';
+  wrap.style.display = 'grid';
+  wrap.innerHTML = list.map(b => {
+    const color = _snipeOwnerColor(b.email);
+    const isActive = active === b.email;
+    return `<div onclick="_bsFilterByOwner('${escapeHtml(b.email)}')" style="cursor:pointer;background:var(--white);border:1px solid ${isActive ? 'var(--blue)' : 'var(--gray-100)'};border-radius:10px;padding:12px;${isActive ? 'box-shadow:0 0 0 2px var(--blue-light)' : ''}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="width:26px;height:26px;border-radius:50%;background:${color};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${(b.name[0]||'?').toUpperCase()}</div>
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(b.name)}</div>
+      </div>
+      <div style="display:flex;gap:10px;font-size:11px;color:var(--gray-500)">
+        <span><strong style="color:var(--gray-900)">${b.total}</strong> total</span>
+        <span><strong style="color:var(--blue)">${b.talking}</strong> talking</span>
+        <span><strong style="color:var(--green)">${b.deal}</strong> deals</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _bsFilterByOwner(email) {
+  const sel = document.getElementById('bs-filter-owner');
+  if (!sel) return;
+  // Clicking the active card clears the filter
+  sel.value = (sel.value === email) ? '' : email;
+  _renderBrandSnipeStaffBreakdown();
   renderBrandSnipes();
 }
 
@@ -16267,6 +16344,8 @@ function clearBrandSnipeFilters() {
 function _bsFiltered() {
   let list = brandSnipes.slice();
   if (_bsScope === 'mine') list = list.filter(s => s.owner_email === currentUser?.email);
+  const ownerQ = document.getElementById('bs-filter-owner')?.value || '';
+  if (_bsScope === 'all' && ownerQ) list = list.filter(s => s.owner_email === ownerQ);
   const type = document.getElementById('bs-filter-type')?.value || '';
   const status = document.getElementById('bs-filter-status')?.value || '';
   const search = (document.getElementById('bs-search')?.value || '').toLowerCase();
@@ -16297,7 +16376,7 @@ function renderBrandSnipes() {
   if (badge) { const pending = scoped.filter(s => (s.sent||'no')==='no').length; badge.textContent = pending; badge.style.display = pending ? '' : 'none'; }
 
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:36px;color:var(--gray-400)">No brand snipes yet. Use Quick Add above to scout your first brand, contact, or agency.</td></tr>';
+    body.innerHTML = `<tr><td colspan="${_bsScope === 'all' ? 11 : 10}" style="text-align:center;padding:36px;color:var(--gray-400)">No brand snipes yet. Use Quick Add above to scout your first brand, contact, or agency.</td></tr>`;
     return;
   }
 
@@ -16327,6 +16406,7 @@ function renderBrandSnipes() {
       : `<button class="btn btn-ghost btn-sm" onclick="openBrandSnipeCompose(${s.id})" title="Email" style="padding:2px 6px">✉</button>`;
     return `<tr class="${stInfo.row}">
       <td><input type="checkbox" class="bs-row-check" data-id="${s.id}" ${_bsSelected.has(s.id)?'checked':''} onchange="_bsToggleRow(${s.id},this.checked)" style="width:15px;height:15px;cursor:pointer"></td>
+      ${_bsScope === 'all' ? `<td>${_snipeOwnerChip(s)}</td>` : ''}
       <td><span title="${type.label}" style="font-size:16px">${type.icon}</span></td>
       <td style="font-weight:500">${escapeHtml(primary)}${secondary ? `<div style="font-size:11px;color:var(--gray-400)">${escapeHtml(secondary)}</div>` : ''}</td>
       <td style="font-size:12px">${escapeHtml(s.industry || '—')}</td>
