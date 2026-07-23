@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-14-t (read-baselines synced to Supabase per staff, cross-device) -->
+<!-- blustu panel build 2026-07-14-u (inbox quick-access chips show creator profile photos) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -18173,7 +18173,19 @@ function _renderInboxQuickAccess(accounts) {
   const chip = (label, mailbox, icon, highlight) => {
     if (!mailbox || seen.has(mailbox) || !have.has(mailbox)) return '';
     seen.add(mailbox);
-    return `<button class="btn ${highlight ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="_quickOpenMailbox('${mailbox}')" style="font-size:12px;white-space:nowrap">${icon} ${escapeHtml(label)}</button>`;
+    return `<button class="btn ${highlight ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="_quickOpenMailbox('${mailbox}')" style="font-size:12px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px">${icon} ${escapeHtml(label)}</button>`;
+  };
+
+  /** Chip for a creator — uses their profile photo, falling back to an initial. */
+  const creatorChip = (c) => {
+    const mailbox = (c.email || '').split('@')[0];
+    if (!mailbox || seen.has(mailbox) || !have.has(mailbox)) return '';
+    seen.add(mailbox);
+    const pic = profilePics[c.id] || c.profile_image_url;
+    const avatar = pic
+      ? `<span style="width:20px;height:20px;border-radius:50%;background:#fff url('${pic}') center/cover;flex-shrink:0;display:inline-block"></span>`
+      : `<span style="width:20px;height:20px;border-radius:50%;background:var(--blue);color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${(c.name||'?')[0].toUpperCase()}</span>`;
+    return `<button class="btn btn-ghost btn-sm" onclick="_quickOpenMailbox('${mailbox}')" style="font-size:12px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;padding-left:6px">${avatar}${escapeHtml(c.name)}</button>`;
   };
 
   // 1) Your own mailbox
@@ -18183,13 +18195,10 @@ function _renderInboxQuickAccess(accounts) {
   // 2) partnerships@ (always useful, shared)
   btns.push(chip('Partnerships', 'partnerships', '🤝', false));
 
-  // 3) My ACTIVE managed creators
+  // 3) My ACTIVE managed creators — with their profile photos
   const mine = (typeof activeCreators === 'function' ? activeCreators() : creators)
     .filter(c => creatorPrimaryStaffEmail(c) === currentUser?.email);
-  mine.forEach(c => {
-    const local = (c.email || '').split('@')[0];
-    if (local) btns.push(chip(c.name, local, '👤', false));
-  });
+  mine.forEach(c => { btns.push(creatorChip(c)); });
 
   const rendered = btns.filter(Boolean);
   if (!rendered.length) { wrap.style.display = 'none'; return; }
