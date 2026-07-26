@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-c (influencer snipes: follow-up email button, due-date highlighting, per-staff follow-up template) -->
+<!-- blustu panel build 2026-07-15-d (follow-up templates: separate section from snipe templates + selectable default) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2196,6 +2196,25 @@ html, body { overflow-x: hidden; }
       </div>
 
       <button class="btn btn-ghost btn-sm" onclick="addTemplateRow()" style="margin-top:14px;align-self:flex-start">＋ Add new template</button>
+
+      <!-- Follow-up templates: kept separate from snipe outreach -->
+      <div style="margin-top:32px;padding-top:24px;border-top:2px solid var(--gray-100)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <h2 style="margin:0;font-size:18px">↪ Follow-up Templates</h2>
+        </div>
+        <p style="font-size:13px;color:var(--gray-500);margin:0 0 14px">Used only when you click <strong>↪ Follow up</strong> on a snipe. Kept separate from your outreach templates. Each staff member has their own.</p>
+
+        <div style="display:none;margin-bottom:14px">
+          <label style="font-size:12px;color:var(--gray-600);font-weight:600;display:block;margin-bottom:4px">Default follow-up (loads automatically)</label>
+          <select class="form-select" id="followup-default-select" onchange="_setFollowUpDefault(this.value)" style="max-width:280px;font-size:13px"></select>
+        </div>
+
+        <div id="followup-template-list" style="display:flex;flex-direction:column;gap:12px">
+          <div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">Loading…</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="addFollowUpTemplateRow()" style="margin-top:14px;align-self:flex-start">＋ Add follow-up template</button>
+        <div style="margin-top:14px"><button class="btn btn-primary" onclick="saveAllTemplates()">💾 Save all templates</button></div>
+      </div>
     </div>
 
     <!-- ══ USERS & ACCESS ══ -->
@@ -16022,10 +16041,18 @@ async function openSnipeFollowUp(snipeId) {
   document.getElementById('compose-to').value = s.email;
   document.getElementById('compose-subject').value = s.name + SNIPE_SUBJECT_SUFFIX;
 
-  _populateComposeTemplates(s.name);
+  _populateComposeTemplates(s.name, 'followup');
 
-  // Use the per-staff follow-up template; fall back to a sensible default.
-  let tpl = emailTemplates.find(t => t.niche === 'followup');
+  // Use this staff member's follow-up template. If they have several, honour
+  // their chosen default; otherwise the only one; otherwise a built-in fallback.
+  const followUps = emailTemplates.filter(t => t.niche === 'followup');
+  let tpl = null;
+  if (followUps.length > 1) {
+    const defId = _followUpDefaultId();
+    tpl = followUps.find(t => String(t.id) === String(defId)) || followUps[0];
+  } else if (followUps.length === 1) {
+    tpl = followUps[0];
+  }
   let body;
   if (tpl) {
     body = _fillTemplate(tpl.body, s.name);
@@ -16061,17 +16088,21 @@ async function _markFollowUpSent(toAddress) {
   try { renderSnipes(); } catch(e) {}
 }
 
-function _populateComposeTemplates(creatorName) {
+function _populateComposeTemplates(creatorName, mode) {
   const sel = document.getElementById('compose-template');
   if (!sel) return;
+  // mode 'followup' shows only follow-up templates; otherwise only outreach ones
+  const list = (mode === 'followup')
+    ? emailTemplates.filter(t => t.niche === 'followup')
+    : emailTemplates.filter(t => t.niche !== 'followup');
   sel.innerHTML = '<option value="">Insert template…</option>' +
-    emailTemplates.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
+    list.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
   if (creatorName) sel.dataset.creatorName = creatorName;
 }
 
 // ══ TEMPLATE MANAGER ══
 // Niches available for templates — must match the qs-niche dropdown options.
-const TEMPLATE_NICHES = ['general','followup','lifestyle','beauty','fashion','fitness','food','comedy','gaming','tech','travel'];
+const TEMPLATE_NICHES = ['general','lifestyle','beauty','fashion','fitness','food','comedy','gaming','tech','travel'];
 
 // Working copy while the modal is open. Committed to DB on Save.
 let _templateDraft = [];
@@ -16097,14 +16128,14 @@ async function renderEmailTemplatesPage() {
 function _renderTemplateList() {
   const listEl = document.getElementById('template-list');
   if (!listEl) return;
-  const visible = _templateDraft.map((t, i) => ({ t, i })).filter(x => !x.t._delete);
+  // Main list = snipe templates only. Follow-ups render in their own section.
+  const visible = _templateDraft.map((t, i) => ({ t, i })).filter(x => !x.t._delete && x.t.niche !== 'followup');
   if (!visible.length) {
     listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">No templates yet. Click "＋ Add new template" to create one.</div>';
-    return;
-  }
+  } else {
   listEl.innerHTML = visible.map(({ t, i }) => {
     const nicheOpts = TEMPLATE_NICHES.map(n =>
-      `<option value="${n}"${t.niche === n ? ' selected' : ''}>${n === 'followup' ? '↪ Follow-up' : n.charAt(0).toUpperCase() + n.slice(1)}</option>`
+      `<option value="${n}"${t.niche === n ? ' selected' : ''}>${n.charAt(0).toUpperCase() + n.slice(1)}</option>`
     ).join('');
     return `
     <div style="border:1px solid var(--gray-100);border-radius:10px;padding:14px;background:var(--gray-50)" data-idx="${i}">
@@ -16124,6 +16155,69 @@ function _renderTemplateList() {
       <div style="font-size:11px;color:var(--gray-400);margin-top:4px">Preview: ${_templatePreview(t.body)}</div>
     </div>`;
   }).join('');
+  }
+  _renderFollowUpTemplateList();
+}
+
+// ── FOLLOW-UP TEMPLATES (separate section) ──
+function _renderFollowUpTemplateList() {
+  const listEl = document.getElementById('followup-template-list');
+  if (!listEl) return;
+  const visible = _templateDraft.map((t, i) => ({ t, i })).filter(x => !x.t._delete && x.t.niche === 'followup');
+
+  // Default selector — which follow-up template auto-loads on the ↪ button
+  const selEl = document.getElementById('followup-default-select');
+  if (selEl) {
+    if (visible.length > 1) {
+      selEl.parentElement.style.display = 'block';
+      const cur = _followUpDefaultId();
+      selEl.innerHTML = visible.map(({ t, i }) =>
+        `<option value="${t.id || 'draft-' + i}"${String(cur) === String(t.id) ? ' selected' : ''}>${escapeHtml(t.label || 'Untitled follow-up')}</option>`
+      ).join('');
+    } else {
+      selEl.parentElement.style.display = 'none';
+    }
+  }
+
+  if (!visible.length) {
+    listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">No follow-up template yet. Click "＋ Add follow-up template" — this is what loads when you hit ↪ Follow up on a snipe.</div>';
+    return;
+  }
+  listEl.innerHTML = visible.map(({ t, i }) => `
+    <div style="border:1px solid #fde68a;border-radius:10px;padding:14px;background:#fffbeb" data-idx="${i}">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <label style="font-size:11px;color:var(--gray-500);font-weight:600;display:block;margin-bottom:3px">Follow-up name</label>
+          <input class="form-input" value="${(t.label||'').replace(/"/g,'&quot;')}" oninput="_updateTemplateField(${i},'label',this.value)" placeholder="e.g. Gentle nudge" style="font-size:13px">
+        </div>
+        <span style="font-size:11px;background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:6px;font-weight:700;align-self:flex-end">↪ Follow-up</span>
+        <button class="btn btn-danger btn-sm" onclick="removeTemplateRow(${i})" style="align-self:flex-end" title="Delete this follow-up template">🗑</button>
+      </div>
+      <label style="font-size:11px;color:var(--gray-500);font-weight:600;display:block;margin-bottom:3px">Email body</label>
+      <textarea class="form-textarea" oninput="_updateTemplateField(${i},'body',this.value)" rows="6" placeholder="Hi {creator_name},&#10;&#10;Just following up..." style="font-family:'DM Sans',sans-serif;font-size:13px;width:100%">${(t.body||'').replace(/</g,'&lt;')}</textarea>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:4px">Preview: ${_templatePreview(t.body)}</div>
+    </div>`).join('');
+}
+
+// The chosen default follow-up template id (per staff, stored locally).
+function _followUpDefaultId() {
+  try { return localStorage.getItem('followupDefault_' + (currentUser?.email || '')) || null; } catch(e) { return null; }
+}
+function _setFollowUpDefault(id) {
+  try { localStorage.setItem('followupDefault_' + (currentUser?.email || ''), id); } catch(e) {}
+  showToast('✓ Default follow-up set');
+}
+
+function addFollowUpTemplateRow() {
+  const maxSort = _templateDraft.reduce((m, t) => Math.max(m, t.sort_order || 0), 0);
+  _templateDraft.push({
+    id: null, label: '', niche: 'followup',
+    body: 'Hi {creator_name},\n\nJust following up on my message from a couple of weeks back — I know things get busy so no worries if it slipped through!\n\nWe\'d still love to work with you and I\'d be happy to share more details or answer any questions.\n\nWould you be open to a quick chat?\n\nBest,\n{your_name}',
+    sort_order: maxSort + 1, _isNew: true,
+  });
+  _renderTemplateList();
+  const listEl = document.getElementById('followup-template-list');
+  setTimeout(() => listEl.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
 }
 
 function _templatePreview(body) {
