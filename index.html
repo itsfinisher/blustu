@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-b (live TikTok stat history line charts from Supabase, per metric) -->
+<!-- blustu panel build 2026-07-15-c (influencer snipes: follow-up email button, due-date highlighting, per-staff follow-up template) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -72,6 +72,8 @@
 [data-theme="dark"] .snipe-row-signed     { background:rgba(52,211,153,.14); }
 [data-theme="dark"] .snipe-row-rejected   { background:rgba(248,113,113,.13); }
 [data-theme="dark"] .snipe-row-no_reply   { background:rgba(255,255,255,.03); }
+.snipe-row-followup-due { background:#fef3c7; box-shadow:inset 3px 0 0 var(--amber); }
+[data-theme="dark"] .snipe-row-followup-due { background:rgba(245,158,11,.16); box-shadow:inset 3px 0 0 var(--amber); }
 
 /* Searchable niche dropdown */
 .niche-dropdown {
@@ -15800,11 +15802,25 @@ function renderSnipes() {
   tbody.innerHTML = filtered.map(s => {
     const st = s.reply_status || 'waiting';
     const stInfo = SNIPE_STATUS[st] || SNIPE_STATUS.waiting;
-    const rowClass = `snipe-row-${st}`;
+    const due = _snipeFollowUpDue(s);
+    const followedUp = (s.followed_up || 'no').toLowerCase() === 'yes';
+    // Due-for-follow-up rows get a distinct class so they stand out
+    const rowClass = due ? 'snipe-row-followup-due' : `snipe-row-${st}`;
     const sentYes = (s.sent||'no').toLowerCase() === 'yes';
     const linkCell = s.link
       ? `<a href="${escapeHtml(s.link)}" target="_blank" rel="noopener" style="color:var(--blue);font-size:12px">${escapeHtml(_shortLink(s.link))}</a>`
       : '<span style="color:var(--gray-300)">—</span>';
+    // Follow-up cell: show the date, plus state (due / followed up)
+    let fuCell = `<input value="${escapeHtml(s.follow_up||'')}" onchange="updateSnipeField('${s.id}','follow_up',this.value)" placeholder="—" style="font-size:11px;padding:3px 6px;border:1px solid ${due?'var(--amber)':'var(--gray-200)'};border-radius:6px;width:96px;background:transparent;color:var(--gray-900)">`;
+    if (followedUp) fuCell += `<div style="font-size:9px;color:var(--green);font-weight:700;margin-top:2px">✓ FOLLOWED UP</div>`;
+    else if (due) fuCell += `<div style="font-size:9px;color:var(--amber);font-weight:700;margin-top:2px">● DUE NOW</div>`;
+    // Follow-up action button — only meaningful once the first email is sent
+    let fuBtn = '';
+    if (sentYes && !followedUp && s.email) {
+      fuBtn = `<button class="btn btn-sm" onclick="openSnipeFollowUp('${s.id}')" title="Send a follow-up email" style="padding:2px 8px;font-size:11px;${due?'background:var(--amber);color:#fff':''}">↪ Follow up</button>`;
+    } else if (followedUp && s.email) {
+      fuBtn = `<button class="btn btn-ghost btn-sm" onclick="openSnipeFollowUp('${s.id}')" title="Send another follow-up" style="padding:2px 6px;font-size:11px">↪</button>`;
+    }
     return `<tr class="${rowClass}">
       <td style="font-weight:500">${escapeHtml(s.name||'—')}${s.email ? `<div style="font-size:10px;color:var(--gray-400)">${escapeHtml(s.email)}</div>` : ''}</td>
       <td style="text-align:right;font-size:13px">${escapeHtml(s.followers||'—')}</td>
@@ -15819,10 +15835,11 @@ function renderSnipes() {
           ${Object.entries(SNIPE_STATUS).map(([k,v]) => `<option value="${k}" ${st===k?'selected':''} style="background:var(--white);color:var(--gray-900)">${v.label}</option>`).join('')}
         </select>
       </td>
-      <td><input value="${escapeHtml(s.follow_up||'')}" onchange="updateSnipeField('${s.id}','follow_up',this.value)" placeholder="—" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:6px;width:110px;background:transparent;color:var(--gray-900)"></td>
+      <td>${fuCell}</td>
       ${showOwner ? `<td>${_snipeOwnerChip(s)}</td>` : ''}
       <td style="text-align:right;white-space:nowrap">
-        <div style="display:inline-flex;gap:6px;justify-content:flex-end">
+        <div style="display:inline-flex;gap:6px;justify-content:flex-end;align-items:center">
+          ${fuBtn}
           <button class="btn btn-ghost btn-sm" onclick="openEditSnipe('${s.id}')">Edit</button>
           <button class="btn btn-danger btn-sm" onclick="deleteSnipe('${s.id}')">Del</button>
         </div>
@@ -15977,6 +15994,73 @@ async function openSnipeCompose({ creatorName, to, niche }) {
   setTimeout(() => document.getElementById('compose-body')?.focus(), 100);
 }
 
+// ── Follow-up outreach — new thread, per-staff follow-up template ──
+let _followUpSnipeId = null;
+
+async function openSnipeFollowUp(snipeId) {
+  const s = snipes.find(x => String(x.id) === String(snipeId));
+  if (!s) return;
+  if (!s.email) { showToast('No email on this snipe'); return; }
+
+  await loadEmailTemplates();
+  const accounts = await loadEmailAccounts();
+  const sel = document.getElementById('compose-from');
+  if (!sel) { showToast('Email system not ready'); return; }
+  sel.innerHTML = accounts.map(a => `<option value="${a.local}">${friendlyFromName(a.local)} &lt;${a.email}&gt;</option>`).join('');
+  const myMailbox = (STAFF.find(x => x.email === currentUser?.email) || {}).snipe_from_mailbox;
+  if (myMailbox && accounts.find(a => a.local === myMailbox)) sel.value = myMailbox;
+  else if (accounts.length) sel.value = accounts[0].local;
+
+  // FRESH THREAD — clear all reply/threading state so this starts a new one
+  const bodyEl = document.getElementById('compose-body');
+  ['compose-in-reply-to','compose-references','compose-cc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  delete bodyEl.dataset.replyQuoteHtml;
+  delete bodyEl.dataset.replyQuoteText;
+  delete bodyEl.dataset.replyQuoteFrom;
+  delete bodyEl.dataset.replyQuoteDate;
+
+  document.getElementById('compose-to').value = s.email;
+  document.getElementById('compose-subject').value = s.name + SNIPE_SUBJECT_SUFFIX;
+
+  _populateComposeTemplates(s.name);
+
+  // Use the per-staff follow-up template; fall back to a sensible default.
+  let tpl = emailTemplates.find(t => t.niche === 'followup');
+  let body;
+  if (tpl) {
+    body = _fillTemplate(tpl.body, s.name);
+  } else {
+    body = `Hi ${s.name},\n\nJust following up on my message from a couple of weeks back — I know things get busy so no worries if it slipped through!\n\nWe'd still love to work with you and I'd be happy to share more details or answer any questions.\n\nWould you be open to a quick chat?\n\nBest,\n{your_name}`.replace('{your_name}', currentUser?.name || '');
+  }
+  bodyEl.value = body;
+  bodyEl.dataset.creatorName = s.name;
+  document.getElementById('compose-use-signature').checked = !!_mySignature();
+
+  const tplSel = document.getElementById('compose-template');
+  if (tplSel && tpl) tplSel.value = tpl.id;
+
+  // Remember which snipe this follow-up is for, so send marks it followed-up
+  _followUpSnipeId = s.id;
+
+  document.getElementById('composeModalTitle').textContent = '↪ Follow-up Outreach';
+  document.getElementById('compose-error').style.display = 'none';
+  updateFromPreview();
+  openModal('composeEmailModal');
+  setTimeout(() => document.getElementById('compose-body')?.focus(), 100);
+}
+
+/** Called after a successful send — if it was a follow-up, mark the snipe. */
+async function _markFollowUpSent(toAddress) {
+  if (!_followUpSnipeId) return;
+  const s = snipes.find(x => String(x.id) === String(_followUpSnipeId));
+  _followUpSnipeId = null;
+  if (!s) return;
+  s.followed_up = 'yes';
+  s.followed_up_at = new Date().toISOString();
+  await DB._req('PATCH', 'snipes', { followed_up: 'yes', followed_up_at: s.followed_up_at }, '?id=eq.' + s.id).catch(()=>{});
+  try { renderSnipes(); } catch(e) {}
+}
+
 function _populateComposeTemplates(creatorName) {
   const sel = document.getElementById('compose-template');
   if (!sel) return;
@@ -15987,7 +16071,7 @@ function _populateComposeTemplates(creatorName) {
 
 // ══ TEMPLATE MANAGER ══
 // Niches available for templates — must match the qs-niche dropdown options.
-const TEMPLATE_NICHES = ['general','lifestyle','beauty','fashion','fitness','food','comedy','gaming','tech','travel'];
+const TEMPLATE_NICHES = ['general','followup','lifestyle','beauty','fashion','fitness','food','comedy','gaming','tech','travel'];
 
 // Working copy while the modal is open. Committed to DB on Save.
 let _templateDraft = [];
@@ -16020,7 +16104,7 @@ function _renderTemplateList() {
   }
   listEl.innerHTML = visible.map(({ t, i }) => {
     const nicheOpts = TEMPLATE_NICHES.map(n =>
-      `<option value="${n}"${t.niche === n ? ' selected' : ''}>${n.charAt(0).toUpperCase() + n.slice(1)}</option>`
+      `<option value="${n}"${t.niche === n ? ' selected' : ''}>${n === 'followup' ? '↪ Follow-up' : n.charAt(0).toUpperCase() + n.slice(1)}</option>`
     ).join('');
     return `
     <div style="border:1px solid var(--gray-100);border-radius:10px;padding:14px;background:var(--gray-50)" data-idx="${i}">
@@ -16192,6 +16276,29 @@ function _followUpDateFromNow(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toLocaleDateString('en-GB'); // DD/MM/YYYY
+}
+
+// Parse a DD/MM/YYYY (or YYYY-MM-DD) follow-up string to a Date, or null.
+function _parseFollowUpDate(str) {
+  if (!str) return null;
+  const s = String(str).trim();
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);      // DD/MM/YYYY
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);            // YYYY-MM-DD
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+// Is this snipe due (or overdue) for a follow-up?  Sent, not yet followed up,
+// and the follow-up date is today or in the past.
+function _snipeFollowUpDue(s) {
+  if ((s.sent || 'no').toLowerCase() !== 'yes') return false;
+  if ((s.followed_up || 'no').toLowerCase() === 'yes') return false;
+  const d = _parseFollowUpDate(s.follow_up);
+  if (!d) return false;
+  const today = new Date(); today.setHours(23, 59, 59, 999);
+  return d <= today;
 }
 
 // Returns DD/MM/YYYY that is `days` after the given base date (ISO string or Date).
@@ -20122,6 +20229,7 @@ async function sendComposedEmail() {
     addActivity('Email sent from <strong>' + fromName + '</strong> to ' + to);
     // If this email matches a snipe (by recipient email), mark that snipe as Sent
     _markSnipeSentByEmail(to);
+    _markFollowUpSent(to);
     _markBrandSnipeSentByEmail(to);
     // Refresh whichever inbox is open
     if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
