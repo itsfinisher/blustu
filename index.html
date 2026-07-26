@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-a (dashboard: creator activity feed of latest posts, replaces static activity feed) -->
+<!-- blustu panel build 2026-07-15-b (live TikTok stat history line charts from Supabase, per metric) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -10828,22 +10828,138 @@ function _renderTikTokStatsCard(c) {
       ${canRefresh ? `<button class="btn btn-ghost btn-sm" id="tt-refresh-${c.id}" onclick="refreshTikTokStats(${c.id})">↻ Refresh</button>` : ''}
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center">
+      <div onclick="_toggleStatChart(${c.id},'followers')" style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center;cursor:pointer" title="View history">
         <div style="font-size:20px;font-weight:700;font-family:'DM Serif Display',serif">${followers}</div>
         <div style="font-size:11px;color:var(--gray-400)">Followers</div>
+        <div style="font-size:10px;color:var(--blue);margin-top:3px">📈 View chart</div>
       </div>
-      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center">
+      <div onclick="_toggleStatChart(${c.id},'engagement')" style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center;cursor:pointer" title="View history">
         <div style="font-size:20px;font-weight:700;font-family:'DM Serif Display',serif;color:${engColor}">${eng}</div>
         <div style="font-size:11px;color:var(--gray-400)">Engagement</div>
+        <div style="font-size:10px;color:var(--blue);margin-top:3px">📈 View chart</div>
       </div>
-      <div style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center">
+      <div onclick="_toggleStatChart(${c.id},'avg_views')" style="background:var(--gray-50);border-radius:10px;padding:12px;text-align:center;cursor:pointer" title="View history">
         <div style="font-size:20px;font-weight:700;font-family:'DM Serif Display',serif">${views}</div>
         <div style="font-size:11px;color:var(--gray-400)">Avg views</div>
+        <div style="font-size:10px;color:var(--blue);margin-top:3px">📈 View chart</div>
       </div>
     </div>
+    <div id="tt-chart-${c.id}" style="display:none;margin-top:14px"></div>
     ${c._tt_sample ? `<div style="font-size:10px;color:var(--gray-400);margin-top:8px;text-align:center">Based on last ${c._tt_sample} video${c._tt_sample>1?'s':''}${c._tt_excluded_pinned ? ` · ${c._tt_excluded_pinned} pinned excluded` : ''}${c._tt_median != null ? ` · median ${_fmtCompact(c._tt_median)} views` : ''}</div>` : ''}
     <div style="font-size:10px;color:var(--gray-400);margin-top:8px;text-align:right">Updated: ${updated}${c.tiktok_engagement != null ? ' · engagement = (likes+comments+shares)/views' : ''}</div>
   </div>`;
+}
+
+// ══ STAT HISTORY CHARTS (from Supabase creator_stats_history) ══
+const _statChartCache = {};   // creatorId -> history rows
+let _statChartOpen = {};      // creatorId -> current metric shown (or null)
+
+const STAT_METRICS = {
+  followers:  { label: 'Followers',  field: 'followers',  color: '#2198ED', fmt: v => _fmtCompact(v) },
+  engagement: { label: 'Engagement', field: 'engagement', color: '#10b981', fmt: v => v + '%' },
+  avg_views:  { label: 'Avg views',  field: 'avg_views',  color: '#f59e0b', fmt: v => _fmtCompact(v) },
+};
+
+async function _toggleStatChart(creatorId, metric) {
+  const box = document.getElementById('tt-chart-' + creatorId);
+  if (!box) return;
+  // Clicking the same metric again closes it
+  if (_statChartOpen[creatorId] === metric && box.style.display !== 'none') {
+    box.style.display = 'none';
+    _statChartOpen[creatorId] = null;
+    return;
+  }
+  _statChartOpen[creatorId] = metric;
+  box.style.display = 'block';
+  box.innerHTML = '<div style="font-size:12px;color:var(--gray-400);padding:12px;text-align:center">Loading history…</div>';
+
+  // Fetch history once, then cache
+  let rows = _statChartCache[creatorId];
+  if (!rows) {
+    try {
+      rows = await DB.select('creator_stats_history',
+        `?creator_id=eq.${creatorId}&order=captured_at.asc&limit=200`);
+      _statChartCache[creatorId] = Array.isArray(rows) ? rows : [];
+      rows = _statChartCache[creatorId];
+    } catch(e) { rows = []; }
+  }
+  _renderStatChart(creatorId, metric, rows);
+}
+
+function _renderStatChart(creatorId, metric, rows) {
+  const box = document.getElementById('tt-chart-' + creatorId);
+  if (!box) return;
+  const m = STAT_METRICS[metric];
+  // Build clean series: valid numeric points with a date
+  const pts = (rows || [])
+    .map(r => ({ t: new Date(r.captured_at).getTime(), v: Number(r[m.field]) }))
+    .filter(p => p.t && !isNaN(p.v) && p.v != null)
+    .sort((a, b) => a.t - b.t);
+
+  // Metric switcher tabs (always shown so you can flip between the three)
+  const tabs = Object.entries(STAT_METRICS).map(([k, mm]) =>
+    `<button class="btn btn-sm ${k===metric?'':'btn-ghost'}" onclick="_toggleStatChart(${creatorId},'${k}')" style="font-size:11px;padding:3px 10px">${mm.label}</button>`
+  ).join('');
+
+  if (pts.length < 2) {
+    box.innerHTML = `<div style="display:flex;gap:6px;margin-bottom:10px">${tabs}</div>
+      <div style="font-size:12px;color:var(--gray-400);padding:20px;text-align:center;background:var(--gray-50);border-radius:10px">
+        Not enough history yet — need at least 2 stat refreshes to draw a trend.${pts.length===1?' Just 1 data point so far.':''}
+      </div>`;
+    return;
+  }
+
+  // Chart geometry
+  const W = 520, H = 180, padL = 48, padR = 14, padT = 14, padB = 26;
+  const minV = Math.min(...pts.map(p => p.v));
+  const maxV = Math.max(...pts.map(p => p.v));
+  const span = (maxV - minV) || (maxV || 1);
+  const yPad = span * 0.12;
+  const lo = Math.max(0, minV - yPad), hi = maxV + yPad;
+  const t0 = pts[0].t, t1 = pts[pts.length-1].t, tSpan = (t1 - t0) || 1;
+  const x = t => padL + ((t - t0) / tSpan) * (W - padL - padR);
+  const y = v => padT + (1 - (v - lo) / ((hi - lo) || 1)) * (H - padT - padB);
+
+  const line = pts.map((p, i) => `${i?'L':'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(t1).toFixed(1)},${(H-padB).toFixed(1)} L${x(t0).toFixed(1)},${(H-padB).toFixed(1)} Z`;
+
+  // Y gridlines (3)
+  let grid = '';
+  for (let i = 0; i <= 2; i++) {
+    const gv = lo + (hi - lo) * (i / 2);
+    const gy = y(gv);
+    grid += `<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${W-padR}" y2="${gy.toFixed(1)}" stroke="var(--gray-100)" stroke-width="1"/>`;
+    grid += `<text x="${padL-6}" y="${(gy+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--gray-400)">${m.fmt(Math.round(gv))}</text>`;
+  }
+  // X labels (first + last date)
+  const fmtD = t => new Date(t).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+  const dots = pts.map(p => `<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="2.5" fill="${m.color}"><title>${m.fmt(p.v)} · ${fmtD(p.t)}</title></circle>`).join('');
+
+  const first = pts[0].v, last = pts[pts.length-1].v;
+  const delta = last - first;
+  const pct = first ? ((delta / first) * 100) : 0;
+  const up = delta >= 0;
+  const trendColor = up ? 'var(--green)' : 'var(--red)';
+  const trendTxt = `${up?'▲':'▼'} ${m.fmt(Math.abs(Math.round(delta)))} (${up?'+':''}${pct.toFixed(1)}%) over ${pts.length} snapshots`;
+
+  box.innerHTML = `
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+      ${tabs}
+      <span style="font-size:11px;color:${trendColor};font-weight:600;margin-left:auto">${trendTxt}</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:var(--gray-50);border-radius:10px" preserveAspectRatio="xMidYMid meet">
+      <defs><linearGradient id="grad-${creatorId}-${metric}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${m.color}" stop-opacity="0.20"/>
+        <stop offset="100%" stop-color="${m.color}" stop-opacity="0"/>
+      </linearGradient></defs>
+      ${grid}
+      <path d="${area}" fill="url(#grad-${creatorId}-${metric})"/>
+      <path d="${line}" fill="none" stroke="${m.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
+      <text x="${padL}" y="${H-8}" font-size="9" fill="var(--gray-400)">${fmtD(t0)}</text>
+      <text x="${W-padR}" y="${H-8}" text-anchor="end" font-size="9" fill="var(--gray-400)">${fmtD(t1)}</text>
+    </svg>
+    <div style="font-size:10px;color:var(--gray-400);text-align:center;margin-top:6px">${m.label} over time · from saved stat history</div>`;
 }
 
 async function refreshAllTikTokStats() {
@@ -10957,6 +11073,7 @@ async function refreshTikTokStats(creatorId) {
       followers: data.follower_count, engagement: data.engagement_rate,
       avg_views: data.avg_views, captured_at: data.fetched_at,
     }], '').catch(()=>{});
+    delete _statChartCache[creatorId];   // fresh point — reload history next open
     renderProfileSocials(c);
     let msg;
     if (data.sample_count) {
