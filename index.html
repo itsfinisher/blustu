@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-k (media kit: curated featured posts with uploaded covers, brand, views, link — replaces auto TikHub thumbnails) -->
+<!-- blustu panel build 2026-07-15-l (media kit: feed section side-by-side stats+posts, compact so it fits one page) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -11814,8 +11814,9 @@ function generateMediaKitDoc(creatorId) {
   if (c.tiktok_avg_views != null) feedStats.push(['Avg Views', _fmtCompact(c.tiktok_avg_views)]);
   if (c.tiktok_avg_likes != null) feedStats.push(['Avg Likes', _fmtCompact(c.tiktok_avg_likes)]);
   if (c.tiktok_engagement != null) feedStats.push(['Avg Engagement', c.tiktok_engagement + '%']);
-  const feedStatsRow = feedStats.length
-    ? `<div class="mk-perf">${feedStats.map(([l, v]) => `<div class="mk-perf-stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>`
+  // Stats stacked vertically (compact, left column)
+  const feedStatsCol = feedStats.length
+    ? `<div class="mk-feed-statcol">${feedStats.map(([l, v]) => `<div class="mk-fs"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>`
     : '';
 
   // Featured posts — curated example work with uploaded covers (clickable)
@@ -11833,11 +11834,13 @@ function generateMediaKitDoc(creatorId) {
     }).join('')}
   </div>` : '';
 
-  const feedBlock = (feedStatsRow || featuredRow) ? `
+  const feedBlock = (feedStatsCol || featuredRow) ? `
     <div class="mk-section">
       <div class="mk-section-title">TikTok Feed Performance</div>
-      ${feedStatsRow}
-      ${featuredRow}
+      <div class="mk-feed-layout">
+        ${feedStatsCol}
+        ${featuredRow}
+      </div>
     </div>` : '';
 
   // Content Pillars — what this creator makes (editable per creator)
@@ -11925,7 +11928,7 @@ function generateMediaKitDoc(creatorId) {
     .mk-ov-text{font-size:17px;line-height:1.5;font-weight:500;}
     .mk-ov-text b{color:var(--mk-accent);font-weight:700;}
 
-    .mk-section{margin-top:18px;}
+    .mk-section{margin-top:16px;}
     .mk-section-title{font-size:17px;font-weight:800;font-family:'DM Serif Display',serif;margin-bottom:12px;}
     .mk-aud-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;}
     .mk-aud-title{font-size:11px;color:var(--mk-gray);font-weight:600;}
@@ -11948,15 +11951,17 @@ function generateMediaKitDoc(creatorId) {
     .mk-tag-main{background:var(--mk-accent);color:#fff;font-weight:700;}
 
     .mk-feed-wrap{display:flex;gap:24px;align-items:flex-start;}
-    .mk-perf{display:flex;gap:48px;margin-top:4px;}
-    .mk-perf-stat .v{font-size:28px;font-weight:800;font-family:'DM Serif Display',serif;color:var(--mk-dark);line-height:1.1;}
-    .mk-perf-stat .l{font-size:12px;color:var(--mk-gray);margin-top:2px;}
-    .mk-featured{display:flex;gap:14px;margin-top:16px;}
-    .mk-fp{flex:1;text-decoration:none;color:inherit;display:block;}
-    .mk-fp-img{width:100%;height:190px;border-radius:12px;background-size:cover;background-position:center;background-color:#eef1f6;border:1px solid var(--mk-line);}
-    .mk-fp-noimg{display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--mk-accent);}
-    .mk-fp-brand{font-size:13px;font-weight:700;margin-top:8px;}
-    .mk-fp-views{font-size:12px;color:var(--mk-gray);margin-top:1px;}
+    .mk-feed-layout{display:flex;gap:28px;align-items:flex-start;margin-top:4px;}
+    .mk-feed-statcol{width:120px;flex-shrink:0;}
+    .mk-fs{margin-bottom:14px;}
+    .mk-fs .v{font-size:24px;font-weight:800;font-family:'DM Serif Display',serif;color:var(--mk-dark);line-height:1.1;}
+    .mk-fs .l{font-size:11px;color:var(--mk-gray);margin-top:1px;}
+    .mk-featured{display:flex;gap:12px;flex:1;}
+    .mk-fp{flex:1;text-decoration:none;color:inherit;display:block;min-width:0;}
+    .mk-fp-img{width:100%;height:130px;border-radius:10px;background-size:cover;background-position:center;background-color:#eef1f6;border:1px solid var(--mk-line);}
+    .mk-fp-noimg{display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--mk-accent);}
+    .mk-fp-brand{font-size:12px;font-weight:700;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .mk-fp-views{font-size:11px;color:var(--mk-gray);margin-top:1px;}
 
     .mk-foot{position:absolute;bottom:10mm;left:16mm;right:16mm;text-align:center;font-size:10px;color:#aab;border-top:1px solid var(--mk-line);padding-top:10px;}
     .mk-logo{font-weight:800;color:var(--mk-accent);}
