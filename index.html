@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-l (media kit: feed section side-by-side stats+posts, compact so it fits one page) -->
+<!-- blustu panel build 2026-07-15-n (media kit: Featured Posts heading above the thumbnails) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -11822,7 +11822,9 @@ function generateMediaKitDoc(creatorId) {
   // Featured posts — curated example work with uploaded covers (clickable)
   const featured = (Array.isArray(d.featured_posts) ? d.featured_posts : [])
     .filter(p => p.cover || p.brand || p.views || p.link).slice(0, 3);
-  const featuredRow = featured.length ? `<div class="mk-featured">
+  const featuredRow = featured.length ? `<div class="mk-featured-wrap">
+    <div class="mk-featured-head">Featured Posts <span>Past brand deals &amp; featured videos</span></div>
+    <div class="mk-featured">
     ${featured.map(p => {
       const inner = `
         ${p.cover ? `<div class="mk-fp-img" style="background-image:url('${p.cover}')"></div>` : `<div class="mk-fp-img mk-fp-noimg">▶</div>`}
@@ -11832,6 +11834,7 @@ function generateMediaKitDoc(creatorId) {
         ? `<a href="${esc(p.link)}" class="mk-fp" target="_blank">${inner}</a>`
         : `<div class="mk-fp">${inner}</div>`;
     }).join('')}
+    </div>
   </div>` : '';
 
   const feedBlock = (feedStatsCol || featuredRow) ? `
@@ -11853,18 +11856,13 @@ function generateMediaKitDoc(creatorId) {
       </div>
     </div>` : '';
 
-  // Niche / sub-niche pills (no extra input needed — already on the creator)
+  // Sub-niches shown as small text in the header (primary niche is already
+  // on the location line). No separate Categories section.
   const subNiches = Array.isArray(c.sub_niches)
     ? c.sub_niches.map(k => NICHE_CATALOG[_resolveNicheKey(k)]?.label || k).filter(Boolean)
     : [];
-  const allTags = [niche, ...subNiches].filter((t, i, a) => t && a.indexOf(t) === i);
-  const nicheBlock = allTags.length ? `
-    <div class="mk-section">
-      <div class="mk-section-title">Categories</div>
-      <div class="mk-tags">
-        ${allTags.map((t, i) => `<span class="mk-tag${i===0?' mk-tag-main':''}">${esc(t)}</span>`).join('')}
-      </div>
-    </div>` : '';
+  const subNicheText = subNiches.filter(t => t && t !== niche).join(' · ');
+
 
   const avatar = pic
     ? `<div class="mk-avatar" style="background-image:url('${pic}')"></div>`
@@ -11946,9 +11944,7 @@ function generateMediaKitDoc(creatorId) {
     .mk-pillars{display:flex;flex-wrap:wrap;gap:10px;}
     .mk-pillar{display:flex;align-items:center;gap:7px;font-size:13px;background:#f5f9fe;border:1px solid #dceafb;border-radius:9px;padding:9px 14px;font-weight:500;}
     .mk-pillar-dot{width:7px;height:7px;border-radius:50%;background:var(--mk-accent);flex-shrink:0;}
-    .mk-tags{display:flex;flex-wrap:wrap;gap:8px;}
-    .mk-tag{font-size:12px;background:var(--mk-line);color:#475569;border-radius:20px;padding:5px 13px;font-weight:500;}
-    .mk-tag-main{background:var(--mk-accent);color:#fff;font-weight:700;}
+    .mk-subniche{font-size:10px;color:var(--mk-gray);margin-top:1px;text-transform:uppercase;letter-spacing:.4px;}
 
     .mk-feed-wrap{display:flex;gap:24px;align-items:flex-start;}
     .mk-feed-layout{display:flex;gap:28px;align-items:flex-start;margin-top:4px;}
@@ -11956,7 +11952,10 @@ function generateMediaKitDoc(creatorId) {
     .mk-fs{margin-bottom:14px;}
     .mk-fs .v{font-size:24px;font-weight:800;font-family:'DM Serif Display',serif;color:var(--mk-dark);line-height:1.1;}
     .mk-fs .l{font-size:11px;color:var(--mk-gray);margin-top:1px;}
-    .mk-featured{display:flex;gap:12px;flex:1;}
+    .mk-featured-wrap{flex:1;min-width:0;}
+    .mk-featured-head{font-size:14px;font-weight:700;margin-bottom:10px;}
+    .mk-featured-head span{display:block;font-size:10px;font-weight:400;color:var(--mk-gray);text-transform:uppercase;letter-spacing:.4px;margin-top:1px;}
+    .mk-featured{display:flex;gap:12px;}
     .mk-fp{flex:1;text-decoration:none;color:inherit;display:block;min-width:0;}
     .mk-fp-img{width:100%;height:130px;border-radius:10px;background-size:cover;background-position:center;background-color:#eef1f6;border:1px solid var(--mk-line);}
     .mk-fp-noimg{display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--mk-accent);}
@@ -11973,6 +11972,7 @@ function generateMediaKitDoc(creatorId) {
         <div>
           <div class="mk-name">${esc(c.name)}</div>
           <div class="mk-meta">${location ? 'Located in ' + esc(location) : ''}${location && niche ? ' · ' : ''}${niche ? esc(niche) : ''}</div>
+          ${subNicheText ? `<div class="mk-subniche">${esc(subNicheText)}</div>` : ''}
           ${handle ? `<div class="mk-meta">${esc(handle)}</div>` : ''}
           ${website ? `<div class="mk-web">${esc(website)}</div>` : ''}
           ${socialsHtml}
@@ -12004,7 +12004,6 @@ function generateMediaKitDoc(creatorId) {
     ${audienceBlock}
     ${feedBlock}
     ${pillarsBlock}
-    ${nicheBlock}
 
     <div class="mk-foot">
       Represented by <span class="mk-logo">BluStu</span> · partnerships@blustu.agency · Data from official TikTok · ${today}
