@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-h (media kit feed: stat-only post cards, no thumbnails — TikTok CDN blocks them) -->
+<!-- blustu panel build 2026-07-15-i (media kit feed: clean 3-average stat row, per-post cards removed) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -11709,30 +11709,16 @@ function generateMediaKitDoc(creatorId) {
       </div>
     </div>` : '';
 
-  // Feed performance — recent NON-PINNED posts from stored TikHub data.
-  // Thumbnails aren't used: TikTok's CDN blocks its cover images from loading
-  // outside tiktok.com, so we show a clean text card of per-post stats instead.
-  const posts = Array.isArray(c.tiktok_recent_posts) ? c.tiktok_recent_posts.slice(0, 3) : [];
-  const feedBlock = (posts.length || c.tiktok_avg_views != null) ? `
+  // Feed performance — just the three headline averages, laid out cleanly.
+  const feedStats = [];
+  if (c.tiktok_avg_views != null) feedStats.push(['Avg Views', _fmtCompact(c.tiktok_avg_views)]);
+  if (c.tiktok_avg_likes != null) feedStats.push(['Avg Likes', _fmtCompact(c.tiktok_avg_likes)]);
+  if (c.tiktok_engagement != null) feedStats.push(['Avg Engagement', c.tiktok_engagement + '%']);
+  const feedBlock = feedStats.length ? `
     <div class="mk-section">
       <div class="mk-section-title">TikTok Feed Performance</div>
-      <div class="mk-feed-wrap">
-        <div class="mk-feed-stats">
-          ${c.tiktok_avg_views != null ? `<div class="mk-feed-stat"><div class="l">Avg Views</div><div class="v">${_fmtCompact(c.tiktok_avg_views)}</div></div>` : ''}
-          ${c.tiktok_avg_likes != null ? `<div class="mk-feed-stat"><div class="l">Avg Likes</div><div class="v">${_fmtCompact(c.tiktok_avg_likes)}</div></div>` : ''}
-          ${c.tiktok_engagement != null ? `<div class="mk-feed-stat"><div class="l">Avg Engagement</div><div class="v">${c.tiktok_engagement}%</div></div>` : ''}
-        </div>
-        ${posts.length ? `<div class="mk-feed-posts">
-          <div class="mk-recent-label">Recent posts</div>
-          ${posts.map(p => `<div class="mk-post-card">
-            <div class="mk-post-metrics">
-              <span class="mk-pm"><b>${_fmtCompact(p.views||0)}</b> views</span>
-              <span class="mk-pm"><b>${_fmtCompact(p.likes||0)}</b> likes</span>
-              <span class="mk-pm"><b>${_fmtCompact(p.comments||0)}</b> comments</span>
-            </div>
-            ${p.caption ? `<div class="mk-post-cap">${esc(String(p.caption).slice(0,80))}${String(p.caption).length>80?'…':''}</div>` : ''}
-          </div>`).join('')}
-        </div>` : ''}
+      <div class="mk-perf">
+        ${feedStats.map(([l, v]) => `<div class="mk-perf-stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}
       </div>
     </div>` : '';
 
@@ -11810,17 +11796,9 @@ function generateMediaKitDoc(creatorId) {
     .mk-bar-pct{width:32px;text-align:right;color:var(--mk-gray);flex-shrink:0;}
 
     .mk-feed-wrap{display:flex;gap:24px;align-items:flex-start;}
-    .mk-feed-stats{width:150px;flex-shrink:0;}
-    .mk-feed-stat{margin-bottom:12px;}
-    .mk-feed-stat .l{font-size:11px;color:var(--mk-gray);}
-    .mk-feed-stat .v{font-size:22px;font-weight:800;font-family:'DM Serif Display',serif;}
-    .mk-feed-posts{flex:1;}
-    .mk-recent-label{font-size:11px;color:var(--mk-gray);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:8px;}
-    .mk-post-card{border:1px solid var(--mk-line);border-radius:10px;padding:11px 14px;margin-bottom:8px;}
-    .mk-post-metrics{display:flex;gap:16px;flex-wrap:wrap;}
-    .mk-pm{font-size:12px;color:var(--mk-gray);}
-    .mk-pm b{color:var(--mk-dark);font-weight:700;font-size:14px;}
-    .mk-post-cap{font-size:11px;color:var(--mk-gray);margin-top:5px;line-height:1.4;}
+    .mk-perf{display:flex;gap:48px;margin-top:4px;}
+    .mk-perf-stat .v{font-size:28px;font-weight:800;font-family:'DM Serif Display',serif;color:var(--mk-dark);line-height:1.1;}
+    .mk-perf-stat .l{font-size:12px;color:var(--mk-gray);margin-top:2px;}
 
     .mk-foot{position:absolute;bottom:10mm;left:16mm;right:16mm;text-align:center;font-size:10px;color:#aab;border-top:1px solid var(--mk-line);padding-top:10px;}
     .mk-logo{font-weight:800;color:var(--mk-accent);}
