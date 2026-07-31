@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-f (follow-up re-nudge 3wk + new Later-style media kit doc with editable audience demographics) -->
+<!-- blustu panel build 2026-07-15-g (media kit rebuilt: one-page TikTok kit, organic rate + usage terms, email contact, audience+collabs on CRM edit, uploadable BluStu logo, print-safe) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1597,12 +1597,18 @@ html, body { overflow-x: hidden; }
               <button class="btn btn-ghost" onclick="exportKitAsPng('media-kit-export-target','MediaKit')">⬇ PNG</button>
             </div>
             <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--gray-100)">
-              <div style="font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:8px">📄 Full Media Kit Document <span style="color:var(--gray-400);font-weight:400">— Later-style, print/PDF</span></div>
-              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <div style="font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:8px">📄 Full Media Kit Document <span style="color:var(--gray-400);font-weight:400">— TikTok, print/PDF</span></div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
                 <select class="form-select" id="mkdoc-creator" style="flex:1;min-width:160px"></select>
-                <button class="btn btn-ghost btn-sm" onclick="openMediaKitAudience()" title="Edit audience demographics">👥 Audience data</button>
                 <button class="btn btn-primary btn-sm" onclick="generateMediaKitDoc(document.getElementById('mkdoc-creator').value)">Generate</button>
               </div>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--gray-500)">
+                <span id="mk-logo-status">${blustuLogo ? '✅ BluStu logo set' : 'No logo uploaded'}</span>
+                <input type="file" id="blustuLogoFile" accept="image/png,image/jpeg,image/svg+xml" style="display:none" onchange="handleBlustuLogoUpload(event)">
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('blustuLogoFile').click()">⬆ Upload BluStu logo</button>
+                ${blustuLogo ? '<button class="btn btn-ghost btn-sm" onclick="removeBlustuLogo()">Remove</button>' : ''}
+              </div>
+              <div style="font-size:11px;color:var(--gray-400);margin-top:4px">Recommended: <strong>400 × 120 px</strong> transparent PNG (landscape). Appears top-right of the kit. Audience data &amp; past collabs are set on each creator's <strong>Edit Profile</strong>.</div>
             </div>
             <!-- Clean export target (no buttons) -->
             <div id="media-kit-export-target" style="display:none"></div>
@@ -3060,6 +3066,35 @@ html, body { overflow-x: hidden; }
         <label class="form-label">Bio <span style="color:var(--gray-400);font-weight:400">(appears on pitch documents)</span></label>
         <textarea class="form-textarea" id="ec-bio" placeholder="A short, brand-facing bio for this creator…" style="min-height:70px"></textarea>
       </div>
+
+      <!-- Media Kit details -->
+      <div class="card" style="padding:14px 16px;margin-top:12px;background:var(--gray-50);border:1px solid var(--gray-100)">
+        <label class="form-label" style="margin:0 0 4px;font-size:13px">📄 Media Kit Details</label>
+        <div class="form-hint" style="margin-bottom:10px">Extra info that appears on the creator's media kit document.</div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label class="form-label" style="font-size:11px">Past collaborations</label>
+          <input class="form-input" id="ec-collabs" placeholder="e.g. Gymshark, MyProtein, HelloFresh">
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:11px">Instagram handle <span style="color:var(--gray-400)">(without @)</span></label><input class="form-input" id="ec-instagram" placeholder="e.g. thatcreator"></div>
+          <div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:11px">Website <span style="color:var(--gray-400)">(optional)</span></label><input class="form-input" id="ec-website" placeholder="e.g. creator.com"></div>
+        </div>
+
+        <label class="form-label" style="font-size:12px;margin-top:8px">👥 Audience demographics</label>
+        <div class="form-hint" style="margin-bottom:8px">TikTok doesn't expose these — enter from TikTok Analytics. Leave empty to hide on the kit.</div>
+        <div style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:var(--gray-500)">🌍 Top countries</span><button type="button" class="btn btn-ghost btn-sm" onclick="_ecaAddRow('countries')" style="font-size:11px">＋</button></div>
+          <div id="eca-countries"></div>
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:var(--gray-500)">⚧ Gender split</span><button type="button" class="btn btn-ghost btn-sm" onclick="_ecaAddRow('gender')" style="font-size:11px">＋</button></div>
+          <div id="eca-gender"></div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:var(--gray-500)">🎂 Age breakdown</span><button type="button" class="btn btn-ghost btn-sm" onclick="_ecaAddRow('age')" style="font-size:11px">＋</button></div>
+          <div id="eca-age"></div>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="ec-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="ec-status"><option>Active</option><option>Invited</option><option>Onboarded</option><option>Paused</option><option>Inactive</option></select></div>
@@ -3303,53 +3338,6 @@ html, body { overflow-x: hidden; }
       <div class="form-group"><label class="form-label">Highlight <span style="color:var(--gray-400);font-weight:400">(optional)</span></label><textarea class="form-textarea" id="kit-highlight" placeholder="What should this kit emphasise?"></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('genKitModal')">Cancel</button><button class="btn btn-primary" onclick="generateKit()">Generate Kit</button></div>
-  </div>
-</div>
-
-<!-- ══ MEDIA KIT AUDIENCE DEMOGRAPHICS ══ -->
-<div class="modal-overlay" id="mkAudienceModal">
-  <div class="modal" style="max-width:640px">
-    <div class="modal-header">
-      <div class="modal-title">👥 Audience data — <span id="mka-creator-name">creator</span></div>
-      <button class="modal-close" onclick="closeModal('mkAudienceModal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:12px;color:var(--gray-500);margin:0 0 14px">TikTok doesn't expose these, so enter them manually (from TikTok Analytics, Instagram Insights, or a media kit tool). They appear on the full media kit document. Leave a section empty to hide it.</p>
-
-      <div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <label class="form-label" style="margin:0">🌍 Top countries</label>
-          <button class="btn btn-ghost btn-sm" onclick="_mkaAddRow('countries')" style="font-size:11px">＋ Add</button>
-        </div>
-        <div id="mka-countries"></div>
-      </div>
-
-      <div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <label class="form-label" style="margin:0">⚧ Gender split</label>
-          <button class="btn btn-ghost btn-sm" onclick="_mkaAddRow('gender')" style="font-size:11px">＋ Add</button>
-        </div>
-        <div id="mka-gender"></div>
-      </div>
-
-      <div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <label class="form-label" style="margin:0">🎂 Age breakdown</label>
-          <button class="btn btn-ghost btn-sm" onclick="_mkaAddRow('age')" style="font-size:11px">＋ Add</button>
-        </div>
-        <div id="mka-age"></div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Image content rate</label><input class="form-input" id="mka-image-rate" placeholder="e.g. From £175"></div>
-        <div class="form-group"><label class="form-label">Video content rate</label><input class="form-input" id="mka-video-rate" placeholder="e.g. From £500"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Past collaborations</label><input class="form-input" id="mka-collabs" placeholder="e.g. Gymshark, MyProtein, HelloFresh"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('mkAudienceModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveMediaKitAudience()">💾 Save audience data</button>
-    </div>
   </div>
 </div>
 
@@ -4353,7 +4341,7 @@ async function syncAllFromDB() {
       STAFF = seeded; Storage.set('staff', STAFF);
     }
 
-    const [pp, ia, ao, ps, ke, bl, ma] = await Promise.all([
+    const [pp, ia, ao, ps, ke, bl, ma, bslogo] = await Promise.all([
       DB.getAppData('profilePics'),
       DB.getAppData('kitAnalytics'),
       DB.getAppData('adminOverrides'),
@@ -4361,6 +4349,7 @@ async function syncAllFromDB() {
       DB.getAppData('kitExtraCreators'),
       DB.getAppData('brandLogos'),
       DB.getAppData('managerAssignments'),
+      DB.getAppData('blustuLogo'),
     ]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
@@ -4369,6 +4358,7 @@ async function syncAllFromDB() {
     if (ke) { kitExtraCreators = ke; Storage.set('kitExtraCreators', kitExtraCreators); }
     if (bl) { brandLogos = bl; Storage.set('brandLogos', brandLogos); }
     if (ma) { managerAssignments = ma; Storage.set('managerAssignments', managerAssignments); }
+    if (bslogo && bslogo.dataUrl) { blustuLogo = bslogo.dataUrl; Storage.set('blustuLogo', blustuLogo); }
 
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
@@ -4462,6 +4452,7 @@ let kitExtraCreators = Storage.get('kitExtraCreators', {});  // primaryCreatorId
 let profilePics   = Storage.get('profilePics',   {});
 let pitchSubjects = Storage.get('pitchSubjects', {});  // pitch_id -> subject (stored in app_data, not pitch_decks table)
 let brandLogos          = Storage.get('brandLogos',          {});  // brand name (lowercase) -> data URL or image URL
+let blustuLogo          = Storage.get('blustuLogo',          null); // shared BluStu logo (data URL) for media kit corner
 let managerAssignments  = Storage.get('managerAssignments',  {});  // staffEmail -> [creatorId, ...]
 function saveInbox()    { Storage.set('inboxMessages', inboxMessages); }
 function saveAnalyticsData() { Storage.set('kitAnalytics', kitAnalytics); }
@@ -5434,6 +5425,30 @@ async function addCreator(){
  * Open the Edit Creator modal, pre-filled with the current creator's info.
  * Called from the ✏️ Edit button on the profile header.
  */
+// ── CRM edit form: audience demographic rows (shared preset options) ──
+let _ecaData = { countries: [], gender: [], age: [] };
+const ECA_PRESETS = {
+  countries: ['United States','United Kingdom','Canada','Australia','India','Ireland','Germany','France','Nigeria','South Africa','UAE','Pakistan','Bangladesh','Philippines','Other'],
+  gender:    ['Female','Male','Non-binary','Prefer not to say'],
+  age:       ['13–17','18–24','25–34','35–44','45–54','55–64','65+'],
+};
+function _ecaRenderSection(kind) {
+  const wrap = document.getElementById('eca-' + kind);
+  if (!wrap) return;
+  const opts = ECA_PRESETS[kind];
+  wrap.innerHTML = (_ecaData[kind] || []).map((row, i) => `
+    <div style="display:flex;gap:6px;margin-bottom:5px;align-items:center">
+      <select class="form-select" style="flex:1;font-size:12px;padding:4px 8px" onchange="_ecaUpdate('${kind}',${i},'label',this.value)">
+        ${opts.map(o => `<option value="${o}"${row.label===o?' selected':''}>${o}</option>`).join('')}
+      </select>
+      <input class="form-input" type="number" min="0" max="100" style="width:64px;font-size:12px;padding:4px 6px" placeholder="%" value="${row.pct != null ? row.pct : ''}" oninput="_ecaUpdate('${kind}',${i},'pct',this.value)">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="_ecaRemoveRow('${kind}',${i})" style="padding:2px 6px">✕</button>
+    </div>`).join('');
+}
+function _ecaUpdate(kind, i, field, val) { if (_ecaData[kind][i]) _ecaData[kind][i][field] = val; }
+function _ecaAddRow(kind) { _ecaData[kind].push({ label: ECA_PRESETS[kind][0], pct: '' }); _ecaRenderSection(kind); }
+function _ecaRemoveRow(kind, i) { _ecaData[kind].splice(i, 1); _ecaRenderSection(kind); }
+
 function openEditCreator(){
   if (!currentCreatorId) { showToast('No creator selected'); return; }
   if (!can('editCreator')) { showToast('You don\'t have permission to edit creators'); return; }
@@ -5450,6 +5465,18 @@ function openEditCreator(){
   if (ecBio) ecBio.value = (c.pitch_bio != null && c.pitch_bio !== '') ? c.pitch_bio : ((c.onboarding && c.onboarding.bio) || '');
   const ecGender = document.getElementById('ec-gender');
   if (ecGender) ecGender.value = c.gender || '';
+  // Media kit fields
+  const d = c.mediakit_audience || {};
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  setVal('ec-collabs', d.past_collabs);
+  setVal('ec-instagram', (c.onboarding && c.onboarding.instagram) || d.instagram);
+  setVal('ec-website', (c.onboarding && c.onboarding.website) || d.website);
+  _ecaData = {
+    countries: Array.isArray(d.countries) ? d.countries.map(r => ({ ...r })) : [],
+    gender: Array.isArray(d.gender) ? d.gender.map(r => ({ ...r })) : [],
+    age: Array.isArray(d.age) ? d.age.map(r => ({ ...r })) : [],
+  };
+  ['countries','gender','age'].forEach(_ecaRenderSection);
   // Main niche — hidden select is source of truth, search input shows the label
   const nicheKey = _resolveNicheKey(c.niche);
   const nicheSel = document.getElementById('ec-niche');
@@ -5537,6 +5564,21 @@ async function saveCreatorEdit(){
   const pitchBio = (document.getElementById('ec-bio')?.value || '').trim() || null;
   const gender = document.getElementById('ec-gender')?.value || null;
 
+  // Media kit details: past collabs, socials, audience demographics
+  const cleanAud = arr => (arr || [])
+    .filter(r => r.label && r.pct !== '' && r.pct != null)
+    .map(r => ({ label: r.label, pct: Number(r.pct) }));
+  const instagram = (document.getElementById('ec-instagram')?.value || '').trim().replace(/^@/, '');
+  const website = (document.getElementById('ec-website')?.value || '').trim();
+  const mediakit_audience = {
+    ...((orig && orig.mediakit_audience) || {}),
+    countries: cleanAud(_ecaData.countries),
+    gender: cleanAud(_ecaData.gender),
+    age: cleanAud(_ecaData.age),
+    past_collabs: (document.getElementById('ec-collabs')?.value || '').trim(),
+    instagram, website,
+  };
+
   // Staff assignment
   const assigned_staff = {
     primary:       document.getElementById('ec-staff-primary').value || null,
@@ -5549,7 +5591,7 @@ async function saveCreatorEdit(){
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showErr('Email address looks invalid'); return; }
 
   // Build update — preserve all existing fields not in this form (notes, onboarding, profile_image_url, etc.)
-  const update = { ...orig, name, email, niche, sub_niches, location, role, status, assigned_staff, tiktok_handle: tiktokHandle, pitch_bio: pitchBio, gender };
+  const update = { ...orig, name, email, niche, sub_niches, location, role, status, assigned_staff, tiktok_handle: tiktokHandle, pitch_bio: pitchBio, gender, mediakit_audience };
 
   const btn = document.getElementById('ec-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -11556,16 +11598,7 @@ function saveKitAdminData() {
   updateDashStats();
 }
 
-// ══ MEDIA KIT — AUDIENCE DEMOGRAPHICS ══
-let _mkaCreatorId = null;
-let _mkaData = { countries: [], gender: [], age: [] };
-
-// Preset options for the dropdowns (staff pick, then set the %)
-const MKA_PRESETS = {
-  countries: ['United States','United Kingdom','Canada','Australia','India','Ireland','Germany','France','Nigeria','South Africa','UAE','Pakistan','Bangladesh','Philippines','Other'],
-  gender:    ['Female','Male','Non-binary','Prefer not to say'],
-  age:       ['13–17','18–24','25–34','35–44','45–54','55–64','65+'],
-};
+// ══ MEDIA KIT — FULL DOCUMENT ══
 
 function _populateMediaKitDocDropdown() {
   const sel = document.getElementById('mkdoc-creator');
@@ -11574,76 +11607,32 @@ function _populateMediaKitDocDropdown() {
   sel.innerHTML = list.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
 }
 
-function openMediaKitAudience() {
-  const id = document.getElementById('mkdoc-creator')?.value;
-  if (!id) { showToast('Pick a creator first'); return; }
-  _mkaCreatorId = Number(id);
-  const c = creators.find(x => x.id === _mkaCreatorId);
-  if (!c) return;
-  document.getElementById('mka-creator-name').textContent = c.name;
-  const d = c.mediakit_audience || {};
-  _mkaData = {
-    countries: Array.isArray(d.countries) ? d.countries.slice() : [],
-    gender: Array.isArray(d.gender) ? d.gender.slice() : [],
-    age: Array.isArray(d.age) ? d.age.slice() : [],
+// ── Shared BluStu logo for the media kit corner ──
+async function handleBlustuLogoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 1.5 * 1024 * 1024) { showToast('Logo too large — keep it under 1.5MB'); return; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    blustuLogo = e.target.result;
+    Storage.set('blustuLogo', blustuLogo);
+    const status = document.getElementById('mk-logo-status');
+    if (status) status.textContent = '✅ BluStu logo set';
+    try { await DB.setAppData('blustuLogo', { dataUrl: blustuLogo }); showToast('✅ Logo saved'); }
+    catch(e) { showToast('Saved locally (sync failed)'); }
+    // Re-render the section so the Remove button appears
+    if (typeof renderMediaKitList === 'function') { /* status already updated */ }
   };
-  // Seed sensible empty rows so it's not blank
-  if (!_mkaData.countries.length) _mkaData.countries = [{ label: 'United States', pct: '' }];
-  if (!_mkaData.gender.length) _mkaData.gender = [{ label: 'Female', pct: '' }, { label: 'Male', pct: '' }];
-  if (!_mkaData.age.length) _mkaData.age = [{ label: '18–24', pct: '' }, { label: '25–34', pct: '' }];
-  document.getElementById('mka-image-rate').value = d.image_rate || '';
-  document.getElementById('mka-video-rate').value = d.video_rate || '';
-  document.getElementById('mka-collabs').value = d.past_collabs || '';
-  ['countries','gender','age'].forEach(_mkaRenderSection);
-  openModal('mkAudienceModal');
+  reader.readAsDataURL(file);
 }
 
-function _mkaRenderSection(kind) {
-  const wrap = document.getElementById('mka-' + kind);
-  if (!wrap) return;
-  const opts = MKA_PRESETS[kind];
-  wrap.innerHTML = _mkaData[kind].map((row, i) => `
-    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
-      <select class="form-select" style="flex:1;font-size:13px" onchange="_mkaUpdate('${kind}',${i},'label',this.value)">
-        ${opts.map(o => `<option value="${o}"${row.label===o?' selected':''}>${o}</option>`).join('')}
-      </select>
-      <input class="form-input" type="number" min="0" max="100" style="width:80px;font-size:13px" placeholder="%" value="${row.pct}" oninput="_mkaUpdate('${kind}',${i},'pct',this.value)">
-      <span style="font-size:12px;color:var(--gray-400)">%</span>
-      <button class="btn btn-ghost btn-sm" onclick="_mkaRemoveRow('${kind}',${i})" style="padding:2px 6px" title="Remove">✕</button>
-    </div>`).join('');
-}
-
-function _mkaUpdate(kind, i, field, val) {
-  if (_mkaData[kind][i]) _mkaData[kind][i][field] = field === 'pct' ? val : val;
-}
-function _mkaAddRow(kind) {
-  _mkaData[kind].push({ label: MKA_PRESETS[kind][0], pct: '' });
-  _mkaRenderSection(kind);
-}
-function _mkaRemoveRow(kind, i) {
-  _mkaData[kind].splice(i, 1);
-  _mkaRenderSection(kind);
-}
-
-async function saveMediaKitAudience() {
-  const c = creators.find(x => x.id === _mkaCreatorId);
-  if (!c) return;
-  const clean = arr => arr
-    .filter(r => r.label && r.pct !== '' && r.pct != null)
-    .map(r => ({ label: r.label, pct: Number(r.pct) }));
-  const payload = {
-    countries: clean(_mkaData.countries),
-    gender: clean(_mkaData.gender),
-    age: clean(_mkaData.age),
-    image_rate: document.getElementById('mka-image-rate').value.trim(),
-    video_rate: document.getElementById('mka-video-rate').value.trim(),
-    past_collabs: document.getElementById('mka-collabs').value.trim(),
-  };
-  c.mediakit_audience = payload;
-  const r = await DB._req('PATCH', 'creators', { mediakit_audience: payload }, '?id=eq.' + c.id);
-  if (r === null) { showToast('Save failed — run mediakit-audience.sql?'); return; }
-  closeModal('mkAudienceModal');
-  showToast('✅ Audience data saved');
+async function removeBlustuLogo() {
+  blustuLogo = null;
+  Storage.set('blustuLogo', null);
+  try { await DB.setAppData('blustuLogo', { dataUrl: null }); } catch(e) {}
+  const status = document.getElementById('mk-logo-status');
+  if (status) status.textContent = 'No logo uploaded';
+  showToast('Logo removed');
 }
 
 // ══ FULL MEDIA KIT DOCUMENT (Later-style, BluStu-branded, print/PDF) ══
@@ -11652,35 +11641,52 @@ function generateMediaKitDoc(creatorId) {
   if (!c) { showToast('Pick a creator'); return; }
   const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const r = (typeof resolveCreator === 'function') ? resolveCreator(c) : {};
-  const est = (typeof estimateCreatorRate === 'function') ? estimateCreatorRate(c) : null;
   const d = c.mediakit_audience || {};
 
   const niche = NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || '';
   const handle = c.tiktok_handle ? '@' + c.tiktok_handle : '';
+  const ttUrl = c.tiktok_handle ? 'https://www.tiktok.com/@' + c.tiktok_handle : '';
+  const igHandle = (c.onboarding && c.onboarding.instagram) || d.instagram || '';
+  const igUrl = igHandle ? 'https://instagram.com/' + igHandle.replace(/^@/, '') : '';
   const bio = (c.pitch_bio && c.pitch_bio.trim()) || (c.onboarding && c.onboarding.bio) || '';
   const location = (c.location && c.location !== '—') ? c.location : '';
+  const website = (c.onboarding && c.onboarding.website) || d.website || '';
+  const email = c.email || 'partnerships@blustu.agency';
   const pic = profilePics[c.id] || c.profile_image_url || '';
   const initial = (c.name || '?')[0].toUpperCase();
-  const website = (c.onboarding && c.onboarding.website) || '';
+  const collabs = d.past_collabs || '';
 
   // Live stats
-  const followers = c.tiktok_followers != null ? _fmtCompact(c.tiktok_followers) : (r.followers || '—');
+  const followersNum = c.tiktok_followers;
+  const followers = followersNum != null ? _fmtCompact(followersNum) : (r.followers || '—');
   const engagement = c.tiktok_engagement != null ? c.tiktok_engagement + '%' : (r.engRate ? r.engRate + '%' : '—');
   const avgViews = c.tiktok_avg_views != null ? _fmtCompact(c.tiktok_avg_views) : (r.avgViews || '—');
 
-  // Rates — from saved kit data, then manual audience, then estimate
-  const imageRate = d.image_rate || (est ? 'From £' + Number(est.min || est).toLocaleString('en-GB') : 'On request');
-  const videoRate = d.video_rate || (est ? 'From £' + Math.round((est.max || est) * 1.6).toLocaleString('en-GB') : 'On request');
-  const fromRate = d.image_rate || imageRate;
-  const collabs = d.past_collabs || '';
+  // Rate — organic base only, plus usage terms as text
+  const est = (typeof estimateCreatorRate === 'function') ? estimateCreatorRate(c) : null;
+  const tiers = (typeof estimateRateTiers === 'function') ? estimateRateTiers(c) : null;
+  const fmtGBP = v => '£' + Number(v).toLocaleString('en-GB');
+  let organicRate = 'On request';
+  if (tiers && tiers.tiers) {
+    const base = tiers.tiers.find(t => t.isBase) || tiers.tiers[0];
+    if (base) organicRate = fmtGBP(base.mid);
+  } else if (est) { organicRate = fmtGBP(est.mid || est); }
 
-  // Bar-chart section builder (Later-style horizontal bars)
-  const barSection = (title, headline, rows, accent) => {
+  // Usage terms as text lines (skip the organic base itself)
+  let usageLines = '';
+  if (tiers && tiers.tiers) {
+    usageLines = tiers.tiers.filter(t => !t.isBase).map(t =>
+      `<div class="mk-rate-line"><span class="lbl">${esc(t.label)}</span><span>${fmtGBP(t.mid)}</span></div>`
+    ).join('');
+  }
+
+  // Bar-chart section builder
+  const barSection = (title, headline, rows) => {
     if (!rows || !rows.length) return '';
     const bars = rows.map(x => `
       <div class="mk-bar-row">
         <div class="mk-bar-label">${esc(x.label)}</div>
-        <div class="mk-bar-track"><div class="mk-bar-fill" style="width:${Math.min(100, x.pct)}%;background:${accent}"></div></div>
+        <div class="mk-bar-track"><div class="mk-bar-fill" style="width:${Math.min(100, x.pct)}%"></div></div>
         <div class="mk-bar-pct">${x.pct}%</div>
       </div>`).join('');
     return `<div class="mk-aud-col">
@@ -11689,28 +11695,53 @@ function generateMediaKitDoc(creatorId) {
       ${bars}
     </div>`;
   };
-
-  // Headlines derived from the data
   const topCountry = (d.countries || [])[0];
   const topGender = (d.gender || []).slice().sort((a,b) => b.pct - a.pct)[0];
   const topAge = (d.age || []).slice().sort((a,b) => b.pct - a.pct)[0];
-
-  const audienceBlock = (d.countries?.length || d.gender?.length || d.age?.length) ? `
+  const hasAudience = (d.countries?.length || d.gender?.length || d.age?.length);
+  const audienceBlock = hasAudience ? `
     <div class="mk-section">
-      <div class="mk-section-title">Audience</div>
+      <div class="mk-section-title">TikTok Audience</div>
       <div class="mk-aud-grid">
-        ${barSection('Top Countries', topCountry ? topCountry.pct + '% from ' + topCountry.label : '', d.countries, 'var(--mk-accent)')}
-        ${barSection('By Gender', topGender ? topGender.pct + '% ' + topGender.label : '', d.gender, 'var(--mk-accent)')}
-        ${barSection('By Age', topAge ? topAge.pct + '% are ' + topAge.label : '', d.age, 'var(--mk-accent)')}
+        ${barSection('Top Countries', topCountry ? topCountry.pct + '% from ' + topCountry.label : '', d.countries)}
+        ${barSection('By Gender', topGender ? topGender.pct + '% ' + topGender.label : '', d.gender)}
+        ${barSection('By Age', topAge ? topAge.pct + '% are ' + topAge.label : '', d.age)}
       </div>
     </div>` : '';
 
-  const socialLinks = [];
-  if (c.tiktok_handle) socialLinks.push(`TikTok`);
-  if (c.onboarding?.instagram) socialLinks.push('Instagram');
+  // Feed performance — recent NON-PINNED posts from stored TikHub data
+  const posts = Array.isArray(c.tiktok_recent_posts) ? c.tiktok_recent_posts.slice(0, 3) : [];
+  const feedBlock = posts.length ? `
+    <div class="mk-section">
+      <div class="mk-section-title">TikTok Feed Performance</div>
+      <div class="mk-feed-wrap">
+        <div class="mk-feed-stats">
+          ${c.tiktok_avg_views != null ? `<div class="mk-feed-stat"><div class="l">Avg Views</div><div class="v">${_fmtCompact(c.tiktok_avg_views)}</div></div>` : ''}
+          ${c.tiktok_avg_likes != null ? `<div class="mk-feed-stat"><div class="l">Avg Likes</div><div class="v">${_fmtCompact(c.tiktok_avg_likes)}</div></div>` : ''}
+          ${c.tiktok_engagement != null ? `<div class="mk-feed-stat"><div class="l">Avg Engagement</div><div class="v">${c.tiktok_engagement}%</div></div>` : ''}
+        </div>
+        <div class="mk-feed-posts">
+          ${posts.map(p => `<div class="mk-post">
+            ${p.cover ? `<div class="mk-post-img" style="background-image:url('${p.cover}')"></div>` : `<div class="mk-post-img mk-post-noimg">▶</div>`}
+            <div class="mk-post-views">${_fmtCompact(p.views||0)} views</div>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>` : '';
+
   const avatar = pic
     ? `<div class="mk-avatar" style="background-image:url('${pic}')"></div>`
     : `<div class="mk-avatar mk-avatar-letter">${initial}</div>`;
+
+  // Social links (clickable)
+  const socials = [];
+  if (ttUrl) socials.push(`<a href="${ttUrl}" class="mk-social">TikTok ↗</a>`);
+  if (igUrl) socials.push(`<a href="${igUrl}" class="mk-social">Instagram ↗</a>`);
+  const socialsHtml = socials.length ? `<div class="mk-socials">${socials.join('')}</div>` : '';
+
+  const logoHtml = blustuLogo
+    ? `<img src="${blustuLogo}" class="mk-corner-logo" alt="BluStu">`
+    : `<div class="mk-corner-logo mk-corner-text">BluStu</div>`;
 
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
@@ -11719,53 +11750,70 @@ function generateMediaKitDoc(creatorId) {
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap');
     :root{ --mk-accent:#2198ED; --mk-dark:#0f172a; --mk-gray:#64748b; --mk-line:#e5e9f0; }
     *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#eef1f6;font-size:14px;line-height:1.5;}
-    .page{background:#fff;width:210mm;min-height:297mm;margin:0 auto 20px;padding:20mm 18mm;position:relative;}
-    @media screen{.page{box-shadow:0 4px 24px rgba(0,0,0,.1);}}
+    body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#eef1f6;font-size:13px;line-height:1.5;}
+    .page{background:#fff;width:210mm;height:297mm;margin:0 auto;padding:15mm 16mm;position:relative;overflow:hidden;}
+    @media screen{.page{box-shadow:0 4px 24px rgba(0,0,0,.1);margin:0 auto 20px;}}
     @page{size:A4 portrait;margin:0;}
-    @media print{html,body{background:#fff;width:210mm;} .page{width:210mm;min-height:297mm;margin:0;box-shadow:none;page-break-after:always;} .page:last-child{page-break-after:auto;}}
+    @media print{html,body{background:#fff;width:210mm;} .page{width:210mm;height:297mm;margin:0;box-shadow:none;}}
 
-    .mk-head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;padding-bottom:20px;border-bottom:1px solid var(--mk-line);}
-    .mk-id{display:flex;gap:16px;align-items:flex-start;}
-    .mk-avatar{width:76px;height:76px;border-radius:50%;background-size:cover;background-position:center;flex-shrink:0;border:2px solid var(--mk-line);}
-    .mk-avatar-letter{background:var(--mk-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;font-family:'DM Serif Display',serif;}
-    .mk-name{font-size:26px;font-weight:800;font-family:'DM Serif Display',serif;line-height:1.1;}
-    .mk-meta{font-size:13px;color:var(--mk-gray);margin-top:4px;}
-    .mk-web{font-size:12px;color:var(--mk-accent);margin-top:2px;}
-    .mk-rate-card{border:1px solid var(--mk-line);border-radius:14px;padding:18px;min-width:210px;}
-    .mk-rate-from{font-size:22px;font-weight:800;font-family:'DM Serif Display',serif;}
-    .mk-rate-contact{background:var(--mk-accent);color:#fff;text-align:center;padding:9px;border-radius:9px;font-weight:600;font-size:13px;margin:10px 0;}
-    .mk-rate-line{display:flex;justify-content:space-between;font-size:12px;padding:7px 0;border-top:1px solid var(--mk-line);}
+    .mk-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid var(--mk-line);}
+    .mk-id{display:flex;gap:14px;align-items:flex-start;}
+    .mk-avatar{width:66px;height:66px;border-radius:50%;background-size:cover;background-position:center;flex-shrink:0;border:2px solid var(--mk-line);}
+    .mk-avatar-letter{background:var(--mk-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;font-family:'DM Serif Display',serif;}
+    .mk-name{font-size:23px;font-weight:800;font-family:'DM Serif Display',serif;line-height:1.1;}
+    .mk-meta{font-size:12px;color:var(--mk-gray);margin-top:3px;}
+    .mk-web{font-size:11px;color:var(--mk-accent);margin-top:2px;}
+    .mk-socials{margin-top:6px;display:flex;gap:12px;}
+    .mk-social{font-size:11px;color:var(--mk-accent);text-decoration:none;font-weight:600;}
+    .mk-corner-logo{max-height:42px;max-width:150px;object-fit:contain;}
+    .mk-corner-text{font-size:22px;font-weight:800;color:var(--mk-accent);font-family:'DM Serif Display',serif;}
+
+    .mk-body{display:flex;gap:20px;margin-top:16px;}
+    .mk-left{flex:1;min-width:0;}
+    .mk-right{width:200px;flex-shrink:0;}
+
+    .mk-rate-card{border:1px solid var(--mk-line);border-radius:12px;padding:16px;}
+    .mk-rate-from{font-size:11px;color:var(--mk-gray);}
+    .mk-rate-organic{font-size:24px;font-weight:800;font-family:'DM Serif Display',serif;color:var(--mk-dark);}
+    .mk-rate-contact{background:var(--mk-accent);color:#fff;text-align:center;padding:9px;border-radius:9px;font-weight:600;font-size:12px;margin:12px 0;word-break:break-all;}
+    .mk-rate-terms-h{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--mk-gray);margin:4px 0 4px;font-weight:700;}
+    .mk-rate-line{display:flex;justify-content:space-between;font-size:11px;padding:5px 0;border-top:1px solid var(--mk-line);}
     .mk-rate-line .lbl{color:var(--mk-gray);}
-    .mk-rate-note{font-size:11px;color:var(--mk-gray);margin-top:8px;line-height:1.4;}
+    .mk-rate-note{font-size:10px;color:var(--mk-gray);margin-top:8px;line-height:1.4;}
 
-    .mk-info-row{display:flex;gap:32px;margin-top:18px;}
-    .mk-info-block{font-size:13px;}
-    .mk-info-label{font-weight:700;font-size:12px;margin-bottom:2px;}
-    .mk-info-val{color:var(--mk-gray);}
-    .mk-bio{font-size:14px;color:#334155;margin-top:16px;line-height:1.6;max-width:70%;}
+    .mk-collabs{font-size:12px;margin-bottom:10px;}
+    .mk-collabs .h{font-weight:700;font-size:11px;margin-bottom:1px;}
+    .mk-collabs .v{color:var(--mk-gray);}
+    .mk-bio{font-size:13px;color:#334155;line-height:1.6;}
 
-    .mk-overview{margin-top:22px;padding-top:22px;border-top:1px solid var(--mk-line);}
-    .mk-ov-label{font-size:13px;color:var(--mk-gray);margin-bottom:8px;}
-    .mk-ov-text{font-size:20px;line-height:1.5;font-weight:500;}
+    .mk-overview{margin-top:16px;padding-top:14px;border-top:1px solid var(--mk-line);}
+    .mk-ov-label{font-size:11px;color:var(--mk-gray);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
+    .mk-ov-text{font-size:17px;line-height:1.5;font-weight:500;}
     .mk-ov-text b{color:var(--mk-accent);font-weight:700;}
 
-    .mk-section{margin-top:26px;}
-    .mk-section-title{font-size:19px;font-weight:800;font-family:'DM Serif Display',serif;margin-bottom:16px;}
-    .mk-aud-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px;}
-    .mk-aud-title{font-size:12px;color:var(--mk-gray);font-weight:600;}
-    .mk-aud-headline{font-size:16px;font-weight:700;margin:2px 0 12px;}
-    .mk-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:11px;}
-    .mk-bar-label{width:78px;flex-shrink:0;color:#334155;}
-    .mk-bar-track{flex:1;height:9px;background:#e8edf3;border-radius:6px;overflow:hidden;}
-    .mk-bar-fill{height:100%;border-radius:6px;}
-    .mk-bar-pct{width:34px;text-align:right;color:var(--mk-gray);flex-shrink:0;}
+    .mk-section{margin-top:18px;}
+    .mk-section-title{font-size:17px;font-weight:800;font-family:'DM Serif Display',serif;margin-bottom:12px;}
+    .mk-aud-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;}
+    .mk-aud-title{font-size:11px;color:var(--mk-gray);font-weight:600;}
+    .mk-aud-headline{font-size:14px;font-weight:700;margin:2px 0 10px;}
+    .mk-bar-row{display:flex;align-items:center;gap:7px;margin-bottom:6px;font-size:10px;}
+    .mk-bar-label{width:70px;flex-shrink:0;color:#334155;}
+    .mk-bar-track{flex:1;height:8px;background:#e8edf3;border-radius:6px;overflow:hidden;}
+    .mk-bar-fill{height:100%;border-radius:6px;background:var(--mk-accent);}
+    .mk-bar-pct{width:32px;text-align:right;color:var(--mk-gray);flex-shrink:0;}
 
-    .mk-perf{display:flex;gap:40px;margin-top:8px;}
-    .mk-perf-stat .v{font-size:26px;font-weight:800;font-family:'DM Serif Display',serif;}
-    .mk-perf-stat .l{font-size:12px;color:var(--mk-gray);}
+    .mk-feed-wrap{display:flex;gap:20px;align-items:flex-start;}
+    .mk-feed-stats{width:150px;flex-shrink:0;}
+    .mk-feed-stat{margin-bottom:12px;}
+    .mk-feed-stat .l{font-size:11px;color:var(--mk-gray);}
+    .mk-feed-stat .v{font-size:22px;font-weight:800;font-family:'DM Serif Display',serif;}
+    .mk-feed-posts{flex:1;display:flex;gap:10px;}
+    .mk-post{flex:1;}
+    .mk-post-img{width:100%;height:150px;border-radius:10px;background-size:cover;background-position:center;background-color:#eef1f6;}
+    .mk-post-noimg{display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--mk-accent);}
+    .mk-post-views{font-size:11px;color:var(--mk-gray);margin-top:5px;text-align:center;}
 
-    .mk-foot{position:absolute;bottom:14mm;left:18mm;right:18mm;text-align:center;font-size:11px;color:#aab;border-top:1px solid var(--mk-line);padding-top:12px;}
+    .mk-foot{position:absolute;bottom:10mm;left:16mm;right:16mm;text-align:center;font-size:10px;color:#aab;border-top:1px solid var(--mk-line);padding-top:10px;}
     .mk-logo{font-weight:800;color:var(--mk-accent);}
   </style></head><body>
   <div class="page">
@@ -11777,44 +11825,42 @@ function generateMediaKitDoc(creatorId) {
           <div class="mk-meta">${location ? 'Located in ' + esc(location) : ''}${location && niche ? ' · ' : ''}${niche ? esc(niche) : ''}</div>
           ${handle ? `<div class="mk-meta">${esc(handle)}</div>` : ''}
           ${website ? `<div class="mk-web">${esc(website)}</div>` : ''}
-          ${socialLinks.length ? `<div class="mk-meta" style="margin-top:6px">${socialLinks.map(s=>esc(s)).join(' · ')}</div>` : ''}
+          ${socialsHtml}
         </div>
       </div>
-      <div class="mk-rate-card">
-        <div class="mk-rate-from">${esc(fromRate)}</div>
-        <div class="mk-rate-contact">Contact for collaboration</div>
-        <div class="mk-rate-line"><span class="lbl">Image Content</span><span>${esc(imageRate)}</span></div>
-        <div class="mk-rate-line"><span class="lbl">Video Content</span><span>${esc(videoRate)}</span></div>
-        <div class="mk-rate-note">Open to other content formats and collaboration types.</div>
-      </div>
+      ${logoHtml}
     </div>
 
-    ${collabs ? `<div class="mk-info-row"><div class="mk-info-block"><div class="mk-info-label">Past Collaborations</div><div class="mk-info-val">${esc(collabs)}</div></div></div>` : ''}
-    ${bio ? `<div class="mk-bio">${esc(bio)}</div>` : ''}
-
-    <div class="mk-overview">
-      <div class="mk-ov-label">Overview</div>
-      <div class="mk-ov-text">${handle ? esc(handle) : esc(c.name)} has <b>${followers} followers</b> with an average <b>engagement rate of ${engagement}</b>${avgViews!=='—'?` and <b>${avgViews} average views</b>`:''}.</div>
+    <div class="mk-body">
+      <div class="mk-left">
+        ${collabs ? `<div class="mk-collabs"><div class="h">Past Collaborations</div><div class="v">${esc(collabs)}</div></div>` : ''}
+        ${bio ? `<div class="mk-bio">${esc(bio)}</div>` : ''}
+        <div class="mk-overview">
+          <div class="mk-ov-label">TikTok Overview</div>
+          <div class="mk-ov-text">${handle ? esc(handle) : esc(c.name)} has <b>${followers} followers</b> with an average <b>engagement rate of ${engagement}</b>${avgViews!=='—'?` and <b>${avgViews} average views</b>`:''}.</div>
+        </div>
+      </div>
+      <div class="mk-right">
+        <div class="mk-rate-card">
+          <div class="mk-rate-from">Organic content</div>
+          <div class="mk-rate-organic">${esc(organicRate)}</div>
+          <div class="mk-rate-contact">${esc(email)}</div>
+          ${usageLines ? `<div class="mk-rate-terms-h">Usage add-ons</div>${usageLines}` : ''}
+          <div class="mk-rate-note">Short-form content (TikTok / Instagram). Open to other formats and collaboration types.</div>
+        </div>
+      </div>
     </div>
 
     ${audienceBlock}
-
-    <div class="mk-section">
-      <div class="mk-section-title">Performance</div>
-      <div class="mk-perf">
-        <div class="mk-perf-stat"><div class="v">${followers}</div><div class="l">Followers</div></div>
-        <div class="mk-perf-stat"><div class="v">${engagement}</div><div class="l">Avg Engagement</div></div>
-        <div class="mk-perf-stat"><div class="v">${avgViews}</div><div class="l">Avg Views</div></div>
-      </div>
-    </div>
+    ${feedBlock}
 
     <div class="mk-foot">
-      Represented by <span class="mk-logo">BluStu</span> · partnerships@blustu.agency · Media kit generated ${today}
+      Represented by <span class="mk-logo">BluStu</span> · partnerships@blustu.agency · Data from official TikTok · ${today}
     </div>
   </div>
   <script>
     (function(){
-      function imgs(){var a=[];document.querySelectorAll('.mk-avatar').forEach(function(el){var b=getComputedStyle(el).backgroundImage||'';var m=b.match(/url\\(["']?(.*?)["']?\\)/);if(m&&m[1]&&m[1]!=='none'){var i=new Image();i.src=m[1];a.push(new Promise(function(r){i.onload=i.onerror=r;}));}});return Promise.all(a);}
+      function imgs(){var a=[];document.querySelectorAll('.mk-avatar,.mk-post-img').forEach(function(el){var b=getComputedStyle(el).backgroundImage||'';var m=b.match(/url\\(["']?(.*?)["']?\\)/);if(m&&m[1]&&m[1]!=='none'){var i=new Image();i.src=m[1];a.push(new Promise(function(r){i.onload=i.onerror=r;}));}});document.querySelectorAll('img').forEach(function(im){if(!im.complete)a.push(new Promise(function(r){im.onload=im.onerror=r;}));});return Promise.all(a);}
       var f=(document.fonts&&document.fonts.ready)?document.fonts.ready:Promise.resolve();
       Promise.all([f,imgs()]).then(function(){return new Promise(function(r){setTimeout(r,250);});}).then(function(){window.print();}).catch(function(){setTimeout(function(){window.print();},1200);});
     })();
