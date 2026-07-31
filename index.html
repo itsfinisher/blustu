@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-i (media kit feed: clean 3-average stat row, per-post cards removed) -->
+<!-- blustu panel build 2026-07-15-j (media kit: gender pie chart + content pillars + category pills to fill the page) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3075,6 +3075,10 @@ html, body { overflow-x: hidden; }
           <label class="form-label" style="font-size:11px">Past collaborations</label>
           <input class="form-input" id="ec-collabs" placeholder="e.g. Gymshark, MyProtein, HelloFresh">
         </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label class="form-label" style="font-size:11px">Content pillars <span style="color:var(--gray-400)">(comma-separated, shows on media kit)</span></label>
+          <input class="form-input" id="ec-pillars" placeholder="e.g. Day-in-the-life vlogs, Product integrations, Trend-led skits">
+        </div>
         <div class="form-row">
           <div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:11px">Instagram handle <span style="color:var(--gray-400)">(without @)</span></label><input class="form-input" id="ec-instagram" placeholder="e.g. thatcreator"></div>
           <div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:11px">Website <span style="color:var(--gray-400)">(optional)</span></label><input class="form-input" id="ec-website" placeholder="e.g. creator.com"></div>
@@ -5469,6 +5473,7 @@ function openEditCreator(){
   const d = c.mediakit_audience || {};
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
   setVal('ec-collabs', d.past_collabs);
+  setVal('ec-pillars', d.content_pillars);
   setVal('ec-instagram', (c.onboarding && c.onboarding.instagram) || d.instagram);
   setVal('ec-website', (c.onboarding && c.onboarding.website) || d.website);
   _ecaData = {
@@ -5576,6 +5581,7 @@ async function saveCreatorEdit(){
     gender: cleanAud(_ecaData.gender),
     age: cleanAud(_ecaData.age),
     past_collabs: (document.getElementById('ec-collabs')?.value || '').trim(),
+    content_pillars: (document.getElementById('ec-pillars')?.value || '').trim(),
     instagram, website,
   };
 
@@ -11695,6 +11701,39 @@ function generateMediaKitDoc(creatorId) {
       ${bars}
     </div>`;
   };
+
+  // Pie-chart section builder (used for gender — few slices, reads well as a pie)
+  const pieSection = (title, headline, rows) => {
+    if (!rows || !rows.length) return '';
+    const palette = ['#2198ED', '#0f4c81', '#7cc4f5', '#c8e4fb'];
+    const total = rows.reduce((s, x) => s + Number(x.pct), 0) || 100;
+    let acc = 0;
+    const R = 42, C = 50; // radius, centre in a 100x100 viewBox
+    const slices = rows.map((x, i) => {
+      const frac = Number(x.pct) / total;
+      const a0 = acc * 2 * Math.PI - Math.PI / 2;
+      acc += frac;
+      const a1 = acc * 2 * Math.PI - Math.PI / 2;
+      const large = frac > 0.5 ? 1 : 0;
+      const x0 = C + R * Math.cos(a0), y0 = C + R * Math.sin(a0);
+      const x1 = C + R * Math.cos(a1), y1 = C + R * Math.sin(a1);
+      // Full-circle guard (single 100% slice)
+      if (frac >= 0.999) return `<circle cx="${C}" cy="${C}" r="${R}" fill="${palette[i % palette.length]}"/>`;
+      return `<path d="M${C},${C} L${x0.toFixed(2)},${y0.toFixed(2)} A${R},${R} 0 ${large} 1 ${x1.toFixed(2)},${y1.toFixed(2)} Z" fill="${palette[i % palette.length]}"/>`;
+    }).join('');
+    const legend = rows.map((x, i) =>
+      `<div class="mk-pie-leg"><span class="mk-pie-dot" style="background:${palette[i % palette.length]}"></span>${esc(x.label)} ${x.pct}%</div>`
+    ).join('');
+    return `<div class="mk-aud-col">
+      <div class="mk-aud-title">${esc(title)}</div>
+      <div class="mk-aud-headline">${esc(headline)}</div>
+      <div class="mk-pie-wrap">
+        <svg viewBox="0 0 100 100" class="mk-pie">${slices}</svg>
+        <div class="mk-pie-legend">${legend}</div>
+      </div>
+    </div>`;
+  };
+
   const topCountry = (d.countries || [])[0];
   const topGender = (d.gender || []).slice().sort((a,b) => b.pct - a.pct)[0];
   const topAge = (d.age || []).slice().sort((a,b) => b.pct - a.pct)[0];
@@ -11704,7 +11743,7 @@ function generateMediaKitDoc(creatorId) {
       <div class="mk-section-title">TikTok Audience</div>
       <div class="mk-aud-grid">
         ${barSection('Top Countries', topCountry ? topCountry.pct + '% from ' + topCountry.label : '', d.countries)}
-        ${barSection('By Gender', topGender ? topGender.pct + '% ' + topGender.label : '', d.gender)}
+        ${pieSection('By Gender', topGender ? topGender.pct + '% ' + topGender.label : '', d.gender)}
         ${barSection('By Age', topAge ? topAge.pct + '% are ' + topAge.label : '', d.age)}
       </div>
     </div>` : '';
@@ -11719,6 +11758,29 @@ function generateMediaKitDoc(creatorId) {
       <div class="mk-section-title">TikTok Feed Performance</div>
       <div class="mk-perf">
         ${feedStats.map(([l, v]) => `<div class="mk-perf-stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}
+      </div>
+    </div>` : '';
+
+  // Content Pillars — what this creator makes (editable per creator)
+  const pillars = (d.content_pillars || '').split(',').map(s => s.trim()).filter(Boolean);
+  const pillarsBlock = pillars.length ? `
+    <div class="mk-section">
+      <div class="mk-section-title">Content Pillars</div>
+      <div class="mk-pillars">
+        ${pillars.map(p => `<div class="mk-pillar"><span class="mk-pillar-dot"></span>${esc(p)}</div>`).join('')}
+      </div>
+    </div>` : '';
+
+  // Niche / sub-niche pills (no extra input needed — already on the creator)
+  const subNiches = Array.isArray(c.sub_niches)
+    ? c.sub_niches.map(k => NICHE_CATALOG[_resolveNicheKey(k)]?.label || k).filter(Boolean)
+    : [];
+  const allTags = [niche, ...subNiches].filter((t, i, a) => t && a.indexOf(t) === i);
+  const nicheBlock = allTags.length ? `
+    <div class="mk-section">
+      <div class="mk-section-title">Categories</div>
+      <div class="mk-tags">
+        ${allTags.map((t, i) => `<span class="mk-tag${i===0?' mk-tag-main':''}">${esc(t)}</span>`).join('')}
       </div>
     </div>` : '';
 
@@ -11794,6 +11856,17 @@ function generateMediaKitDoc(creatorId) {
     .mk-bar-track{flex:1;height:8px;background:#e8edf3;border-radius:6px;overflow:hidden;}
     .mk-bar-fill{height:100%;border-radius:6px;background:var(--mk-accent);}
     .mk-bar-pct{width:32px;text-align:right;color:var(--mk-gray);flex-shrink:0;}
+    .mk-pie-wrap{display:flex;align-items:center;gap:12px;}
+    .mk-pie{width:82px;height:82px;flex-shrink:0;}
+    .mk-pie-legend{display:flex;flex-direction:column;gap:5px;}
+    .mk-pie-leg{font-size:10px;color:#334155;display:flex;align-items:center;gap:5px;}
+    .mk-pie-dot{width:9px;height:9px;border-radius:2px;display:inline-block;flex-shrink:0;}
+    .mk-pillars{display:flex;flex-wrap:wrap;gap:10px;}
+    .mk-pillar{display:flex;align-items:center;gap:7px;font-size:13px;background:#f5f9fe;border:1px solid #dceafb;border-radius:9px;padding:9px 14px;font-weight:500;}
+    .mk-pillar-dot{width:7px;height:7px;border-radius:50%;background:var(--mk-accent);flex-shrink:0;}
+    .mk-tags{display:flex;flex-wrap:wrap;gap:8px;}
+    .mk-tag{font-size:12px;background:var(--mk-line);color:#475569;border-radius:20px;padding:5px 13px;font-weight:500;}
+    .mk-tag-main{background:var(--mk-accent);color:#fff;font-weight:700;}
 
     .mk-feed-wrap{display:flex;gap:24px;align-items:flex-start;}
     .mk-perf{display:flex;gap:48px;margin-top:4px;}
@@ -11840,6 +11913,8 @@ function generateMediaKitDoc(creatorId) {
 
     ${audienceBlock}
     ${feedBlock}
+    ${pillarsBlock}
+    ${nicheBlock}
 
     <div class="mk-foot">
       Represented by <span class="mk-logo">BluStu</span> · partnerships@blustu.agency · Data from official TikTok · ${today}
