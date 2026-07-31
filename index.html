@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-g (media kit rebuilt: one-page TikTok kit, organic rate + usage terms, email contact, audience+collabs on CRM edit, uploadable BluStu logo, print-safe) -->
+<!-- blustu panel build 2026-07-15-h (media kit feed: stat-only post cards, no thumbnails — TikTok CDN blocks them) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -11709,9 +11709,11 @@ function generateMediaKitDoc(creatorId) {
       </div>
     </div>` : '';
 
-  // Feed performance — recent NON-PINNED posts from stored TikHub data
+  // Feed performance — recent NON-PINNED posts from stored TikHub data.
+  // Thumbnails aren't used: TikTok's CDN blocks its cover images from loading
+  // outside tiktok.com, so we show a clean text card of per-post stats instead.
   const posts = Array.isArray(c.tiktok_recent_posts) ? c.tiktok_recent_posts.slice(0, 3) : [];
-  const feedBlock = posts.length ? `
+  const feedBlock = (posts.length || c.tiktok_avg_views != null) ? `
     <div class="mk-section">
       <div class="mk-section-title">TikTok Feed Performance</div>
       <div class="mk-feed-wrap">
@@ -11720,12 +11722,17 @@ function generateMediaKitDoc(creatorId) {
           ${c.tiktok_avg_likes != null ? `<div class="mk-feed-stat"><div class="l">Avg Likes</div><div class="v">${_fmtCompact(c.tiktok_avg_likes)}</div></div>` : ''}
           ${c.tiktok_engagement != null ? `<div class="mk-feed-stat"><div class="l">Avg Engagement</div><div class="v">${c.tiktok_engagement}%</div></div>` : ''}
         </div>
-        <div class="mk-feed-posts">
-          ${posts.map(p => `<div class="mk-post">
-            ${p.cover ? `<div class="mk-post-img" style="background-image:url('${p.cover}')"></div>` : `<div class="mk-post-img mk-post-noimg">▶</div>`}
-            <div class="mk-post-views">${_fmtCompact(p.views||0)} views</div>
+        ${posts.length ? `<div class="mk-feed-posts">
+          <div class="mk-recent-label">Recent posts</div>
+          ${posts.map(p => `<div class="mk-post-card">
+            <div class="mk-post-metrics">
+              <span class="mk-pm"><b>${_fmtCompact(p.views||0)}</b> views</span>
+              <span class="mk-pm"><b>${_fmtCompact(p.likes||0)}</b> likes</span>
+              <span class="mk-pm"><b>${_fmtCompact(p.comments||0)}</b> comments</span>
+            </div>
+            ${p.caption ? `<div class="mk-post-cap">${esc(String(p.caption).slice(0,80))}${String(p.caption).length>80?'…':''}</div>` : ''}
           </div>`).join('')}
-        </div>
+        </div>` : ''}
       </div>
     </div>` : '';
 
@@ -11802,16 +11809,18 @@ function generateMediaKitDoc(creatorId) {
     .mk-bar-fill{height:100%;border-radius:6px;background:var(--mk-accent);}
     .mk-bar-pct{width:32px;text-align:right;color:var(--mk-gray);flex-shrink:0;}
 
-    .mk-feed-wrap{display:flex;gap:20px;align-items:flex-start;}
+    .mk-feed-wrap{display:flex;gap:24px;align-items:flex-start;}
     .mk-feed-stats{width:150px;flex-shrink:0;}
     .mk-feed-stat{margin-bottom:12px;}
     .mk-feed-stat .l{font-size:11px;color:var(--mk-gray);}
     .mk-feed-stat .v{font-size:22px;font-weight:800;font-family:'DM Serif Display',serif;}
-    .mk-feed-posts{flex:1;display:flex;gap:10px;}
-    .mk-post{flex:1;}
-    .mk-post-img{width:100%;height:150px;border-radius:10px;background-size:cover;background-position:center;background-color:#eef1f6;}
-    .mk-post-noimg{display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--mk-accent);}
-    .mk-post-views{font-size:11px;color:var(--mk-gray);margin-top:5px;text-align:center;}
+    .mk-feed-posts{flex:1;}
+    .mk-recent-label{font-size:11px;color:var(--mk-gray);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:8px;}
+    .mk-post-card{border:1px solid var(--mk-line);border-radius:10px;padding:11px 14px;margin-bottom:8px;}
+    .mk-post-metrics{display:flex;gap:16px;flex-wrap:wrap;}
+    .mk-pm{font-size:12px;color:var(--mk-gray);}
+    .mk-pm b{color:var(--mk-dark);font-weight:700;font-size:14px;}
+    .mk-post-cap{font-size:11px;color:var(--mk-gray);margin-top:5px;line-height:1.4;}
 
     .mk-foot{position:absolute;bottom:10mm;left:16mm;right:16mm;text-align:center;font-size:10px;color:#aab;border-top:1px solid var(--mk-line);padding-top:10px;}
     .mk-logo{font-weight:800;color:var(--mk-accent);}
@@ -11860,7 +11869,7 @@ function generateMediaKitDoc(creatorId) {
   </div>
   <script>
     (function(){
-      function imgs(){var a=[];document.querySelectorAll('.mk-avatar,.mk-post-img').forEach(function(el){var b=getComputedStyle(el).backgroundImage||'';var m=b.match(/url\\(["']?(.*?)["']?\\)/);if(m&&m[1]&&m[1]!=='none'){var i=new Image();i.src=m[1];a.push(new Promise(function(r){i.onload=i.onerror=r;}));}});document.querySelectorAll('img').forEach(function(im){if(!im.complete)a.push(new Promise(function(r){im.onload=im.onerror=r;}));});return Promise.all(a);}
+      function imgs(){var a=[];document.querySelectorAll('.mk-avatar').forEach(function(el){var b=getComputedStyle(el).backgroundImage||'';var m=b.match(/url\\(["']?(.*?)["']?\\)/);if(m&&m[1]&&m[1]!=='none'){var i=new Image();i.src=m[1];a.push(new Promise(function(r){i.onload=i.onerror=r;}));}});document.querySelectorAll('img').forEach(function(im){if(!im.complete)a.push(new Promise(function(r){im.onload=im.onerror=r;}));});return Promise.all(a);}
       var f=(document.fonts&&document.fonts.ready)?document.fonts.ready:Promise.resolve();
       Promise.all([f,imgs()]).then(function(){return new Promise(function(r){setTimeout(r,250);});}).then(function(){window.print();}).catch(function(){setTimeout(function(){window.print();},1200);});
     })();
