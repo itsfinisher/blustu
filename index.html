@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-n (media kit: Featured Posts heading above the thumbnails) -->
+<!-- blustu panel build 2026-07-15-o (media kit: multi-creator builder like pitch doc — filters, select-all, BluStu cover page, one page per creator) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1601,6 +1601,7 @@ html, body { overflow-x: hidden; }
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
                 <select class="form-select" id="mkdoc-creator" style="flex:1;min-width:160px"></select>
                 <button class="btn btn-primary btn-sm" onclick="generateMediaKitDoc(document.getElementById('mkdoc-creator').value)">Generate</button>
+                <button class="btn btn-ghost btn-sm" onclick="openMediaKitBuilder()" title="Build a document for multiple creators">👥 Multiple</button>
               </div>
               <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--gray-500)">
                 <span id="mk-logo-status">${blustuLogo ? '✅ BluStu logo set' : 'No logo uploaded'}</span>
@@ -3668,6 +3669,61 @@ agency | Adidas | Tom Reed | Wavemaker | Account Director | Sportswear | tom@wav
 </div>
 
 <!-- ══ CALENDAR EVENT MODAL ══ -->
+<!-- ══ MEDIA KIT BUILDER (multi-creator) ══ -->
+<div class="modal-overlay" id="mkBuilderModal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <div class="modal-title">📄 Build Media Kit Document</div>
+      <button class="modal-close" onclick="closeModal('mkBuilderModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--blue-light);color:var(--blue);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px">
+        ℹ️ One media-kit page per creator, with a BluStu cover page. Opens in a new tab — use Print → Save as PDF to export. Pick a single creator or several.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Document title <span style="color:var(--gray-400);font-weight:400">(cover page)</span></label>
+        <input class="form-input" id="mkb-title" value="BluStu Creator Media Kits" placeholder="e.g. BluStu Creators — Beauty">
+      </div>
+      <div style="border-top:1px solid var(--gray-100);margin-top:6px;padding-top:14px">
+        <div class="form-label" style="margin-bottom:8px">Filters <span style="color:var(--gray-400);font-weight:400">(narrow the list — not shown on document)</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label class="form-label" style="font-size:11px">Gender</label>
+            <select class="form-select" id="mkf-gender" onchange="_applyMkFilters()">
+              <option value="">Any</option><option value="female">Female</option><option value="male">Male</option><option value="couple">Couple / Duo</option><option value="brand">Brand / Page</option><option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0"><label class="form-label" style="font-size:11px">Main niche</label>
+            <select class="form-select" id="mkf-niche" onchange="_applyMkFilters()"></select>
+          </div>
+          <div class="form-group" style="margin:0"><label class="form-label" style="font-size:11px">Min followers</label>
+            <input class="form-input" id="mkf-minfoll" type="number" min="0" placeholder="e.g. 5000" oninput="_applyMkFilters()">
+          </div>
+          <div class="form-group" style="margin:0"><label class="form-label" style="font-size:11px">Min engagement %</label>
+            <input class="form-input" id="mkf-mineng" type="number" min="0" step="0.1" placeholder="e.g. 4" oninput="_applyMkFilters()">
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <div style="font-size:11px;color:var(--gray-400)"><span id="mkf-match-count">0</span> match filters</div>
+          <button class="btn btn-ghost btn-sm" onclick="_clearMkFilters()">Clear filters</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px">
+        <label class="form-label" style="margin:0">Select creators</label>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-ghost btn-sm" onclick="_mkSelectAll(true)">Select all shown</button>
+          <button class="btn btn-ghost btn-sm" onclick="_mkSelectAll(false)">Clear</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px"><span id="mkb-count">0</span> selected</div>
+      <div id="mkb-creator-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--gray-100);border-radius:10px;padding:6px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('mkBuilderModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="generateMediaKitDoc()">📄 Generate document</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ PITCH DOC BUILDER ══ -->
 <div class="modal-overlay" id="pitchBuilderModal">
   <div class="modal" style="max-width:640px">
@@ -11703,9 +11759,8 @@ async function removeBlustuLogo() {
 }
 
 // ══ FULL MEDIA KIT DOCUMENT (Later-style, BluStu-branded, print/PDF) ══
-function generateMediaKitDoc(creatorId) {
-  const c = creators.find(x => x.id === Number(creatorId));
-  if (!c) { showToast('Pick a creator'); return; }
+// Builds ONE creator's media-kit page (inner .page markup only — CSS is shared).
+function _mediaKitPageHtml(c) {
   const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const r = (typeof resolveCreator === 'function') ? resolveCreator(c) : {};
   const d = c.mediakit_audience || {};
@@ -11880,8 +11935,55 @@ function generateMediaKitDoc(creatorId) {
 
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(c.name)} — Media Kit</title>
-  <style>
+  return `
+  <div class="page">
+    <div class="mk-head">
+      <div class="mk-id">
+        ${avatar}
+        <div>
+          <div class="mk-name">${esc(c.name)}</div>
+          <div class="mk-meta">${location ? 'Located in ' + esc(location) : ''}${location && niche ? ' · ' : ''}${niche ? esc(niche) : ''}</div>
+          ${subNicheText ? `<div class="mk-subniche">${esc(subNicheText)}</div>` : ''}
+          ${handle ? `<div class="mk-meta">${esc(handle)}</div>` : ''}
+          ${website ? `<div class="mk-web">${esc(website)}</div>` : ''}
+          ${socialsHtml}
+        </div>
+      </div>
+      ${logoHtml}
+    </div>
+
+    <div class="mk-body">
+      <div class="mk-left">
+        ${collabs ? `<div class="mk-collabs"><div class="h">Past Collaborations</div><div class="v">${esc(collabs)}</div></div>` : ''}
+        ${bio ? `<div class="mk-bio">${esc(bio)}</div>` : ''}
+        <div class="mk-overview">
+          <div class="mk-ov-label">TikTok Overview</div>
+          <div class="mk-ov-text">${handle ? esc(handle) : esc(c.name)} has <b>${followers} followers</b> with an average <b>engagement rate of ${engagement}</b>${avgViews!=='—'?` and <b>${avgViews} average views</b>`:''}.</div>
+        </div>
+      </div>
+      <div class="mk-right">
+        <div class="mk-rate-card">
+          <div class="mk-rate-from">Organic content</div>
+          <div class="mk-rate-organic">${esc(organicRate)}</div>
+          <div class="mk-rate-contact">${esc(email)}</div>
+          ${usageLines ? `<div class="mk-rate-terms-h">Usage add-ons</div>${usageLines}` : ''}
+          <div class="mk-rate-note">Short-form content (TikTok / Instagram). Open to other formats and collaboration types.</div>
+        </div>
+      </div>
+    </div>
+
+    ${audienceBlock}
+    ${feedBlock}
+    ${pillarsBlock}
+
+    <div class="mk-foot">
+      Represented by <span class="mk-logo">BluStu</span> · partnerships@blustu.agency · Data from official TikTok · ${today}
+    </div>
+  </div>`;
+}
+
+// Shared CSS for the media kit document (single or multi-creator).
+const _MEDIA_KIT_CSS = `
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap');
     :root{ --mk-accent:#2198ED; --mk-dark:#0f172a; --mk-gray:#64748b; --mk-line:#e5e9f0; }
     *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -11889,7 +11991,7 @@ function generateMediaKitDoc(creatorId) {
     .page{background:#fff;width:210mm;height:297mm;margin:0 auto;padding:15mm 16mm;position:relative;overflow:hidden;}
     @media screen{.page{box-shadow:0 4px 24px rgba(0,0,0,.1);margin:0 auto 20px;}}
     @page{size:A4 portrait;margin:0;}
-    @media print{html,body{background:#fff;width:210mm;} .page{width:210mm;height:297mm;margin:0;box-shadow:none;}}
+    @media print{html,body{background:#fff;width:210mm;} .page{width:210mm;height:297mm;margin:0;box-shadow:none;page-break-after:always;} .page:last-child{page-break-after:auto;}}
 
     .mk-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid var(--mk-line);}
     .mk-id{display:flex;gap:14px;align-items:flex-start;}
@@ -11897,6 +11999,7 @@ function generateMediaKitDoc(creatorId) {
     .mk-avatar-letter{background:var(--mk-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;font-family:'DM Serif Display',serif;}
     .mk-name{font-size:23px;font-weight:800;font-family:'DM Serif Display',serif;line-height:1.1;}
     .mk-meta{font-size:12px;color:var(--mk-gray);margin-top:3px;}
+    .mk-subniche{font-size:10px;color:var(--mk-gray);margin-top:1px;text-transform:uppercase;letter-spacing:.4px;}
     .mk-web{font-size:11px;color:var(--mk-accent);margin-top:2px;}
     .mk-socials{margin-top:6px;display:flex;gap:12px;}
     .mk-social{font-size:11px;color:var(--mk-accent);text-decoration:none;font-weight:600;}
@@ -11944,9 +12047,7 @@ function generateMediaKitDoc(creatorId) {
     .mk-pillars{display:flex;flex-wrap:wrap;gap:10px;}
     .mk-pillar{display:flex;align-items:center;gap:7px;font-size:13px;background:#f5f9fe;border:1px solid #dceafb;border-radius:9px;padding:9px 14px;font-weight:500;}
     .mk-pillar-dot{width:7px;height:7px;border-radius:50%;background:var(--mk-accent);flex-shrink:0;}
-    .mk-subniche{font-size:10px;color:var(--mk-gray);margin-top:1px;text-transform:uppercase;letter-spacing:.4px;}
 
-    .mk-feed-wrap{display:flex;gap:24px;align-items:flex-start;}
     .mk-feed-layout{display:flex;gap:28px;align-items:flex-start;margin-top:4px;}
     .mk-feed-statcol{width:120px;flex-shrink:0;}
     .mk-fs{margin-bottom:14px;}
@@ -11964,64 +12065,176 @@ function generateMediaKitDoc(creatorId) {
 
     .mk-foot{position:absolute;bottom:10mm;left:16mm;right:16mm;text-align:center;font-size:10px;color:#aab;border-top:1px solid var(--mk-line);padding-top:10px;}
     .mk-logo{font-weight:800;color:var(--mk-accent);}
-  </style></head><body>
-  <div class="page">
-    <div class="mk-head">
-      <div class="mk-id">
-        ${avatar}
-        <div>
-          <div class="mk-name">${esc(c.name)}</div>
-          <div class="mk-meta">${location ? 'Located in ' + esc(location) : ''}${location && niche ? ' · ' : ''}${niche ? esc(niche) : ''}</div>
-          ${subNicheText ? `<div class="mk-subniche">${esc(subNicheText)}</div>` : ''}
-          ${handle ? `<div class="mk-meta">${esc(handle)}</div>` : ''}
-          ${website ? `<div class="mk-web">${esc(website)}</div>` : ''}
-          ${socialsHtml}
-        </div>
-      </div>
-      ${logoHtml}
-    </div>
 
-    <div class="mk-body">
-      <div class="mk-left">
-        ${collabs ? `<div class="mk-collabs"><div class="h">Past Collaborations</div><div class="v">${esc(collabs)}</div></div>` : ''}
-        ${bio ? `<div class="mk-bio">${esc(bio)}</div>` : ''}
-        <div class="mk-overview">
-          <div class="mk-ov-label">TikTok Overview</div>
-          <div class="mk-ov-text">${handle ? esc(handle) : esc(c.name)} has <b>${followers} followers</b> with an average <b>engagement rate of ${engagement}</b>${avgViews!=='—'?` and <b>${avgViews} average views</b>`:''}.</div>
-        </div>
-      </div>
-      <div class="mk-right">
-        <div class="mk-rate-card">
-          <div class="mk-rate-from">Organic content</div>
-          <div class="mk-rate-organic">${esc(organicRate)}</div>
-          <div class="mk-rate-contact">${esc(email)}</div>
-          ${usageLines ? `<div class="mk-rate-terms-h">Usage add-ons</div>${usageLines}` : ''}
-          <div class="mk-rate-note">Short-form content (TikTok / Instagram). Open to other formats and collaboration types.</div>
-        </div>
-      </div>
-    </div>
+    .mk-cover{display:flex;flex-direction:column;height:100%;}
+    .mk-cover-logo{max-height:70px;max-width:260px;object-fit:contain;margin-bottom:auto;}
+    .mk-cover-logo-text{font-size:40px;font-weight:800;color:var(--mk-accent);font-family:'DM Serif Display',serif;margin-bottom:auto;}
+    .mk-cover-title{font-size:40px;font-weight:800;font-family:'DM Serif Display',serif;line-height:1.1;}
+    .mk-cover-sub{font-size:15px;color:var(--mk-gray);margin-top:12px;}
+    .mk-cover-list{margin-top:28px;display:flex;flex-direction:column;gap:2px;}
+    .mk-cover-cr{font-size:14px;color:#334155;padding:7px 0;border-bottom:1px solid var(--mk-line);display:flex;justify-content:space-between;}
+    .mk-cover-cr .n{font-weight:600;}
+    .mk-cover-cr .s{color:var(--mk-gray);font-size:12px;}
+    .mk-cover-foot{margin-top:auto;font-size:12px;color:var(--mk-gray);border-top:1px solid var(--mk-line);padding-top:14px;}
+`;
 
-    ${audienceBlock}
-    ${feedBlock}
-    ${pillarsBlock}
-
-    <div class="mk-foot">
-      Represented by <span class="mk-logo">BluStu</span> · partnerships@blustu.agency · Data from official TikTok · ${today}
-    </div>
-  </div>
-  <script>
+function _mediaKitPrintScript() {
+  return `<scr`+`ipt>
     (function(){
       function imgs(){var a=[];document.querySelectorAll('.mk-avatar,.mk-fp-img').forEach(function(el){var b=getComputedStyle(el).backgroundImage||'';var m=b.match(/url\\(["']?(.*?)["']?\\)/);if(m&&m[1]&&m[1]!=='none'){var i=new Image();i.src=m[1];a.push(new Promise(function(r){i.onload=i.onerror=r;}));}});document.querySelectorAll('img').forEach(function(im){if(!im.complete)a.push(new Promise(function(r){im.onload=im.onerror=r;}));});return Promise.all(a);}
       var f=(document.fonts&&document.fonts.ready)?document.fonts.ready:Promise.resolve();
       Promise.all([f,imgs()]).then(function(){return new Promise(function(r){setTimeout(r,250);});}).then(function(){window.print();}).catch(function(){setTimeout(function(){window.print();},1200);});
     })();
-  <\/script>
+  <\/scr`+`ipt>`;
+}
+
+function _mediaKitCoverHtml(title, list) {
+  const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  const logo = blustuLogo
+    ? `<img src="${blustuLogo}" class="mk-cover-logo" alt="BluStu">`
+    : `<div class="mk-cover-logo-text">BluStu</div>`;
+  const rows = list.map(c => {
+    const niche = NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || '';
+    const foll = c.tiktok_followers != null ? _fmtCompact(c.tiktok_followers) + ' followers' : '';
+    const sub = [niche, foll].filter(Boolean).join(' · ');
+    return `<div class="mk-cover-cr"><span class="n">${esc(c.name)}</span><span class="s">${esc(sub)}</span></div>`;
+  }).join('');
+  return `
+  <div class="page">
+    <div class="mk-cover">
+      ${logo}
+      <div class="mk-cover-title">${esc(title)}</div>
+      <div class="mk-cover-sub">${list.length} creator${list.length !== 1 ? 's' : ''} · Media kits · ${today}</div>
+      <div class="mk-cover-list">${rows}</div>
+      <div class="mk-cover-foot">Represented by BluStu · partnerships@blustu.agency · Data from official TikTok</div>
+    </div>
+  </div>`;
+}
+
+// ── MEDIA KIT BUILDER (multi-creator select, mirrors the pitch builder) ──
+let _mkSelected = new Set();
+let _mkFilters = { gender: '', niche: '', minFoll: 0, minEng: 0 };
+
+function openMediaKitBuilder() {
+  _mkSelected = new Set();
+  _mkFilters = { gender: '', niche: '', minFoll: 0, minEng: 0 };
+  const nicheSel = document.getElementById('mkf-niche');
+  if (nicheSel) nicheSel.innerHTML = '<option value="">Any niche</option>' + _nicheOptionsHtml('');
+  ['mkf-gender','mkf-niche','mkf-minfoll','mkf-mineng'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  _renderMkCreatorList();
+  _updateMkCount();
+  openModal('mkBuilderModal');
+}
+
+function _mkFilteredList() {
+  const base = (typeof activeCreators === 'function' ? activeCreators() : creators);
+  const f = _mkFilters;
+  return base.filter(c => {
+    if (f.gender && (c.gender || '') !== f.gender) return false;
+    if (f.minFoll > 0 && !(Number(c.tiktok_followers || 0) >= f.minFoll)) return false;
+    if (f.minEng > 0 && !(Number(c.tiktok_engagement || 0) >= f.minEng)) return false;
+    if (f.niche) {
+      const mainKey = _resolveNicheKey(c.niche);
+      const subKeys = Array.isArray(c.sub_niches) ? c.sub_niches.map(_resolveNicheKey) : [];
+      if (mainKey !== f.niche && !subKeys.includes(f.niche)) return false;
+    }
+    return true;
+  });
+}
+
+function _applyMkFilters() {
+  _mkFilters = {
+    gender: document.getElementById('mkf-gender')?.value || '',
+    niche: document.getElementById('mkf-niche')?.value || '',
+    minFoll: Number(document.getElementById('mkf-minfoll')?.value || 0),
+    minEng: Number(document.getElementById('mkf-mineng')?.value || 0),
+  };
+  _renderMkCreatorList();
+}
+function _clearMkFilters() {
+  _mkFilters = { gender: '', niche: '', minFoll: 0, minEng: 0 };
+  ['mkf-gender','mkf-niche','mkf-minfoll','mkf-mineng'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  _renderMkCreatorList();
+}
+function _mkToggle(id, on) {
+  if (on) _mkSelected.add(id); else _mkSelected.delete(id);
+  _renderMkCreatorList();
+  _updateMkCount();
+}
+function _renderMkCreatorList() {
+  const wrap = document.getElementById('mkb-creator-list');
+  if (!wrap) return;
+  const list = _mkFilteredList();
+  const matchEl = document.getElementById('mkf-match-count');
+  if (matchEl) matchEl.textContent = list.length;
+  if (!list.length) { wrap.innerHTML = '<div style="padding:16px;text-align:center;color:var(--gray-400);font-size:13px">No creators match these filters.</div>'; return; }
+  wrap.innerHTML = list.map(c => {
+    const hasStats = c.tiktok_followers != null;
+    const checked = _mkSelected.has(c.id) ? 'checked' : '';
+    const niche = NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || '—';
+    const engStr = c.tiktok_engagement != null ? ' · ' + c.tiktok_engagement + '% eng' : '';
+    const d = c.mediakit_audience || {};
+    const hasAud = (d.countries?.length || d.gender?.length || d.age?.length);
+    const flags = [];
+    if (!hasStats) flags.push('<span style="font-size:9px;color:#b45309">no live stats</span>');
+    if (!hasAud) flags.push('<span style="font-size:9px;color:var(--gray-400)">no audience data</span>');
+    return `<div style="border-bottom:1px solid var(--gray-50)">
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer">
+        <input type="checkbox" ${checked} onchange="_mkToggle(${c.id},this.checked)" style="width:16px;height:16px;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--gray-900)">${escapeHtml(c.name)}</div>
+          <div style="font-size:11px;color:var(--gray-400)">${escapeHtml(niche)}${c.tiktok_followers != null ? ' · ' + _fmtCompact(c.tiktok_followers) + ' followers' : ' · no live stats'}${engStr}${flags.length ? ' · ' + flags.join(' · ') : ''}</div>
+        </div>
+        ${hasStats ? '<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:6px;font-weight:700">● LIVE</span>' : ''}
+      </label>
+    </div>`;
+  }).join('');
+}
+function _mkSelectAll(on) {
+  _mkSelected = new Set();
+  if (on) _mkFilteredList().forEach(c => _mkSelected.add(c.id));
+  _renderMkCreatorList();
+  _updateMkCount();
+}
+function _updateMkCount() {
+  const el = document.getElementById('mkb-count');
+  if (el) el.textContent = _mkSelected.size;
+}
+
+// Generate the media kit document — single creator (id passed) or the builder's
+// current multi-selection (no arg).
+function generateMediaKitDoc(creatorId) {
+  let list;
+  let title = 'BluStu Creator Media Kits';
+  if (creatorId != null && creatorId !== '') {
+    const c = creators.find(x => x.id === Number(creatorId));
+    if (!c) { showToast('Pick a creator'); return; }
+    list = [c];
+  } else {
+    list = [...(_mkSelected || [])].map(id => creators.find(c => c.id === id)).filter(Boolean);
+    title = (document.getElementById('mkb-title')?.value || title).trim() || title;
+    if (!list.length) { showToast('Select at least one creator'); return; }
+  }
+
+  const multi = list.length > 1;
+  const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const pages = [];
+  if (multi) pages.push(_mediaKitCoverHtml(title, list));
+  list.forEach(c => pages.push(_mediaKitPageHtml(c)));
+
+  const docTitle = multi ? title : (list[0].name + ' — Media Kit');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(docTitle)}</title>
+  <style>${_MEDIA_KIT_CSS}</style></head><body>
+  ${pages.join('\n')}
+  ${_mediaKitPrintScript()}
   </body></html>`;
 
   const w = window.open('', '_blank');
   if (!w) { showToast('Allow pop-ups to generate the media kit'); return; }
   w.document.write(html);
   w.document.close();
+  if (typeof closeModal === 'function') closeModal('mkBuilderModal');
 }
 
 function selectKitPreview(id){
