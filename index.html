@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-o (media kit: multi-creator builder like pitch doc — filters, select-all, BluStu cover page, one page per creator) -->
+<!-- blustu panel build 2026-07-15-p (fixes: invoice mark-paid confirm was showing delete screen; dashboard creator unread now persists after refresh) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -948,7 +948,7 @@ html, body { overflow-x: hidden; }
 <div class="modal-overlay" id="confirmModal">
   <div class="modal confirm-modal">
     <div class="modal-body" style="text-align:center;padding:32px 24px">
-      <div class="confirm-icon">
+      <div class="confirm-icon" id="confirmIcon">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
       </div>
       <div style="font-family:'DM Serif Display',serif;font-size:20px;margin-bottom:8px" id="confirmTitle">Are you sure?</div>
@@ -4484,10 +4484,11 @@ async function refetch(table) {
     // Re-render once baselines are known so counts are accurate
     try { _refreshMyCreatorsPanel(false); } catch(e) {}
     try { _refreshCreatorActivity(false); } catch(e) {}
+    // Kick off the live email check ONLY after baselines are loaded, so cleared
+    // inboxes don't briefly re-show as "new" (the baseline must be in memory
+    // before we recompute unread counts from fetched email).
+    setTimeout(() => { try { _refreshMyCreatorsPanel(true); } catch(e) {} }, 1200);
   });
-  // On first load the dashboard is already the active page, so kick off the
-  // creator email check once accounts are ready.
-  setTimeout(() => { try { _refreshMyCreatorsPanel(true); } catch(e) {} }, 1500);
   return true;
 }
 
@@ -8125,12 +8126,20 @@ async function loadReadBaselines() {
   const me = currentUser?.email;
   if (!me) return;
   // Seed from the local cache first so the UI is correct immediately
-  try { _readBaselines = JSON.parse(localStorage.getItem('inboxReadBaseline_' + me) || '{}'); } catch(e) { _readBaselines = {}; }
+  let cached = {};
+  try { cached = JSON.parse(localStorage.getItem('inboxReadBaseline_' + me) || '{}'); } catch(e) { cached = {}; }
+  _readBaselines = { ...cached };
   try {
     const rows = await DB.select('inbox_read_baselines', `?staff_email=eq.${encodeURIComponent(me)}`);
     if (Array.isArray(rows)) {
-      const map = {};
-      rows.forEach(r => { map[r.mailbox] = new Date(r.cleared_at).getTime(); });
+      // Merge: keep the LATEST baseline per mailbox across DB + local cache, so a
+      // clear that only saved locally (e.g. table was briefly unavailable) isn't
+      // wiped by an older/empty DB result.
+      const map = { ...cached };
+      rows.forEach(r => {
+        const ts = new Date(r.cleared_at).getTime();
+        map[r.mailbox] = Math.max(Number(map[r.mailbox]) || 0, ts);
+      });
       _readBaselines = map;
       try { localStorage.setItem('inboxReadBaseline_' + me, JSON.stringify(map)); } catch(e) {}
     }
@@ -9372,10 +9381,31 @@ async function saveManagerAssignments() {
 }
 
 // ── CONFIRM MODAL HELPER ─────────────────────────────────────
-function showConfirm(title, msg, onOk) {
+function showConfirm(title, msg, onOk, opts) {
+  opts = opts || {};
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmMsg').textContent = msg;
   const btn = document.getElementById('confirmOkBtn');
+  // Auto-detect destructive actions from the title (Delete/Remove/…), unless
+  // the caller explicitly sets opts.danger.
+  const autoDanger = /^(delete|remove|discard|clear all|wipe)\b/i.test(title || '');
+  const danger = opts.danger != null ? opts.danger : autoDanger;
+  // Sensible default label: destructive → the verb in the title; else "Confirm"
+  let label = opts.okLabel;
+  if (!label) {
+    if (/mark.*paid/i.test(title)) label = 'Mark Paid';
+    else if (danger) label = /^remove/i.test(title) ? 'Remove' : 'Delete';
+    else label = 'Confirm';
+  }
+  btn.textContent = label;
+  btn.className = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
+  const icon = document.getElementById('confirmIcon');
+  if (icon) {
+    icon.innerHTML = danger
+      ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>'
+      : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
+    icon.style.background = danger ? '' : 'rgba(33,152,237,.1)';
+  }
   btn.onclick = () => { closeModal('confirmModal'); onOk(); };
   openModal('confirmModal');
 }
