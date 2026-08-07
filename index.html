@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-r (weekly targets: owner sets per-staff minimums, auto-count snipes + manual tick calls, monthly creator feedback, dashboard tracker) -->
+<!-- blustu panel build 2026-07-15-s (login welcome popup: patch notes + your to-dos + creators missing media-kit data) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -73,6 +73,11 @@
 [data-theme="dark"] .snipe-row-rejected   { background:rgba(248,113,113,.13); }
 [data-theme="dark"] .snipe-row-no_reply   { background:rgba(255,255,255,.03); }
 .snipe-row-followup-due { background:#fef3c7; box-shadow:inset 3px 0 0 var(--amber); }
+.welcome-sec { border-top:1px solid var(--gray-100); margin-top:14px; padding-top:14px; }
+.welcome-sec:first-of-type { border-top:none; margin-top:10px; padding-top:0; }
+.welcome-sec-h { font-size:13px; font-weight:700; margin-bottom:8px; }
+.welcome-todo { display:flex; align-items:center; gap:10px; padding:7px 0; font-size:13px; color:var(--gray-700); border-bottom:1px solid var(--gray-50); }
+.welcome-todo:last-child { border-bottom:none; }
 [data-theme="dark"] .snipe-row-followup-due { background:rgba(245,158,11,.16); box-shadow:inset 3px 0 0 var(--amber); }
 
 /* Searchable niche dropdown */
@@ -3528,6 +3533,20 @@ html, body { overflow-x: hidden; }
   </div>
 </div>
 
+<!-- ══ LOGIN WELCOME POPUP ══ -->
+<div class="modal-overlay" id="welcomeModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">👋 Welcome back</div>
+      <button class="modal-close" onclick="dismissWelcome()">✕</button>
+    </div>
+    <div class="modal-body" id="welcomeBody" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="dismissWelcome()">Got it</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ WEEKLY TARGETS SETTINGS (owner) ══ -->
 <div class="modal-overlay" id="targetsSettingsModal">
   <div class="modal" style="max-width:680px">
@@ -4508,6 +4527,8 @@ async function syncAllFromDB() {
     // Owner sees the settings cog on the targets card
     const cog = document.getElementById('dashTargetsSettingsBtn');
     if (cog && currentUser?.systemRole === 'owner') cog.style.display = '';
+    // Welcome popup — patch notes, to-dos, missing media-kit data
+    try { setTimeout(maybeShowWelcome, 600); } catch(e) {}
   });
   loadCalEvents();
 }
@@ -17323,6 +17344,139 @@ function _renderFeedbackDue() {
       <button class="btn btn-primary btn-sm" style="padding:3px 10px;font-size:11px" onclick="logCreatorFeedback(${c.id})">✓ Log feedback</button>
     </div>`;
   }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LOGIN WELCOME POPUP — patch notes + your to-dos + missing media-kit data
+// ═══════════════════════════════════════════════════════════════════
+
+// Patch notes — newest first. Bump PATCH_NOTES_VERSION when you add an entry;
+// staff see unseen notes once, then it's marked read for them.
+const PATCH_NOTES_VERSION = '2026-08-07';
+const PATCH_NOTES = [
+  { date: '07 Aug 2026', items: [
+    'Weekly targets — owner sets per-staff minimums; dashboard shows what you have left this week.',
+    'Monthly creator feedback tracking — log feedback and it counts toward your target.',
+    'Bulk snipe follow-up — follow up 10/20/50 or all due snipes at once in the background.',
+    'Media kits — multi-creator documents with a BluStu cover page.',
+  ]},
+  { date: '31 Jul 2026', items: [
+    'New one-page media kit generator with editable audience data, featured posts and rate card.',
+    'Fixed: marking an invoice paid no longer shows a delete screen.',
+    'Fixed: clearing a creator\'s unread email now sticks after refresh.',
+  ]},
+];
+
+function _welcomeSeenKey() { return 'welcomeSeen_' + (currentUser?.email || '') ; }
+
+/** Show the welcome popup on login if there's anything worth surfacing. */
+function maybeShowWelcome() {
+  if (!currentUser) return;
+  const seen = (() => { try { return localStorage.getItem(_welcomeSeenKey()); } catch(e) { return null; } })();
+  const hasNewNotes = seen !== PATCH_NOTES_VERSION;
+
+  // Gather this staff member's to-dos
+  const todos = _welcomeTodos();
+  const missing = _welcomeMissingMediaKit();
+
+  // Only pop if there's something new or something to do
+  if (!hasNewNotes && !todos.length && !missing.length) return;
+
+  const body = document.getElementById('welcomeBody');
+  if (!body) return;
+
+  let html = `<div style="font-size:14px;color:var(--gray-600);margin-bottom:4px">Welcome back, <strong>${escapeHtml(currentUser.name)}</strong> 👋</div>`;
+
+  // To-dos
+  if (todos.length) {
+    html += `<div class="welcome-sec"><div class="welcome-sec-h">📋 Your to-dos</div>`;
+    html += todos.map(t => `<div class="welcome-todo"><span>${t.icon}</span><div style="flex:1">${t.text}</div>${t.action ? `<button class="btn btn-ghost btn-sm" style="padding:2px 10px;font-size:11px" onclick="${t.action}">${t.actionLabel}</button>` : ''}</div>`).join('');
+    html += `</div>`;
+  }
+
+  // Missing media-kit data
+  if (missing.length) {
+    html += `<div class="welcome-sec"><div class="welcome-sec-h">📄 Creators missing media-kit data</div>`;
+    html += `<div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">These of your creators can't generate a full media kit yet:</div>`;
+    html += missing.slice(0, 8).map(m => `<div class="welcome-todo">
+      <span>⚠️</span>
+      <div style="flex:1"><strong>${escapeHtml(m.name)}</strong> <span style="font-size:11px;color:var(--gray-400)">— ${m.missing.join(', ')}</span></div>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 10px;font-size:11px" onclick="closeModal('welcomeModal');openEditCreator(${m.id})">Fix</button>
+    </div>`).join('');
+    if (missing.length > 8) html += `<div style="font-size:11px;color:var(--gray-400);margin-top:6px">+ ${missing.length - 8} more</div>`;
+    html += `</div>`;
+  }
+
+  // Patch notes
+  if (hasNewNotes) {
+    html += `<div class="welcome-sec"><div class="welcome-sec-h">✨ What's new</div>`;
+    html += PATCH_NOTES.map(pn => `
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--gray-400);font-weight:600;margin-bottom:3px">${pn.date}</div>
+        ${pn.items.map(i => `<div style="font-size:12.5px;color:var(--gray-600);padding:2px 0 2px 14px;position:relative"><span style="position:absolute;left:0;color:var(--blue)">•</span>${escapeHtml(i)}</div>`).join('')}
+      </div>`).join('');
+    html += `</div>`;
+  }
+
+  body.innerHTML = html;
+  openModal('welcomeModal');
+}
+
+/** Mark patch notes as seen so they don't pop again until the next version. */
+function dismissWelcome() {
+  try { localStorage.setItem(_welcomeSeenKey(), PATCH_NOTES_VERSION); } catch(e) {}
+  closeModal('welcomeModal');
+}
+
+/** Build the staff member's actionable to-dos. */
+function _welcomeTodos() {
+  const todos = [];
+  const me = currentUser?.email;
+
+  // Feedback due this month
+  try {
+    const target = _targetsFor(me).feedback_monthly;
+    if (target) {
+      const due = _feedbackDueList();
+      if (due.length) todos.push({ icon: '💬', text: `<strong>${due.length}</strong> creator${due.length!==1?'s':''} still need feedback this month`, action: "closeModal('welcomeModal');showPage('dashboard')", actionLabel: 'View' });
+    }
+  } catch(e) {}
+
+  // Snipes due for follow-up
+  try {
+    const due = (typeof _dueFollowUpSnipes === 'function') ? _dueFollowUpSnipes().filter(s => s.owner_email === me) : [];
+    if (due.length) todos.push({ icon: '↪', text: `<strong>${due.length}</strong> snipe${due.length!==1?'s':''} due for follow-up`, action: "closeModal('welcomeModal');showPage('snipes')", actionLabel: 'Go' });
+  } catch(e) {}
+
+  // Weekly targets not yet hit
+  try {
+    const t = _targetsFor(me);
+    const behind = TARGET_METRICS.filter(m => t[m.key] > 0 && !m.monthly && _progressFor(me, m.key) < t[m.key]);
+    if (behind.length) {
+      const names = behind.map(m => m.label.toLowerCase()).join(', ');
+      todos.push({ icon: '🎯', text: `Weekly target not yet hit: ${names}`, action: "closeModal('welcomeModal');showPage('dashboard')", actionLabel: 'View' });
+    }
+  } catch(e) {}
+
+  return todos;
+}
+
+/** Creators assigned to the current user that lack data needed for a full media kit. */
+function _welcomeMissingMediaKit() {
+  const me = currentUser?.email;
+  const mine = (typeof activeCreators === 'function' ? activeCreators() : creators)
+    .filter(c => creatorPrimaryStaffEmail(c) === me);
+  const out = [];
+  mine.forEach(c => {
+    const d = c.mediakit_audience || {};
+    const missing = [];
+    if (c.tiktok_followers == null) missing.push('live TikTok stats');
+    if (!(d.countries?.length || d.gender?.length || d.age?.length)) missing.push('audience data');
+    const bio = (c.pitch_bio && c.pitch_bio.trim()) || (c.onboarding && c.onboarding.bio);
+    if (!bio) missing.push('bio');
+    if (missing.length) out.push({ id: c.id, name: c.name, missing });
+  });
+  return out;
 }
 
 function _populateComposeTemplates(creatorName, mode) {
