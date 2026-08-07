@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-p (fixes: invoice mark-paid confirm was showing delete screen; dashboard creator unread now persists after refresh) -->
+<!-- blustu panel build 2026-07-15-r (weekly targets: owner sets per-staff minimums, auto-count snipes + manual tick calls, monthly creator feedback, dashboard tracker) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1331,6 +1331,23 @@ html, body { overflow-x: hidden; }
           <div id="creatorActivityFeed"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading recent posts…</div></div>
         </div>
       </div>
+
+      <!-- Weekly targets + feedback due -->
+      <div class="dashboard-grid" style="margin-bottom:20px">
+        <div class="card" id="dashTargetsCard" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+            <div class="card-title" style="margin:0">🎯 Weekly Targets <span style="font-size:11px;color:var(--gray-400);font-weight:400">— this week</span></div>
+            <button class="btn btn-ghost btn-sm" id="dashTargetsSettingsBtn" onclick="openTargetsSettings()" style="display:none" title="Set targets">⚙ Set targets</button>
+          </div>
+          <div id="dashTargetsBody"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading…</div></div>
+        </div>
+        <div class="card" id="dashFeedbackCard" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+            <div class="card-title" style="margin:0">💬 Feedback Due <span style="font-size:11px;color:var(--gray-400);font-weight:400">— this month</span></div>
+          </div>
+          <div id="dashFeedbackBody"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading…</div></div>
+        </div>
+      </div>
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <div class="card-title">Active Campaigns</div>
@@ -2636,6 +2653,7 @@ html, body { overflow-x: hidden; }
           <p>Scouting tracker for new influencers. Your snipes show by default — toggle to see the whole team's.</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="openBulkFollowUp()">↪ Follow up due</button>
           <button class="btn btn-ghost btn-sm" onclick="openSnipeImport()">⬆ Import</button>
           <button class="btn btn-ghost btn-sm" onclick="exportSnipesCSV()">⬇ Export CSV</button>
         </div>
@@ -3506,6 +3524,45 @@ html, body { overflow-x: hidden; }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="_resetComposeAttachments();closeModal('composeEmailModal')">Cancel</button>
       <button class="btn btn-primary" id="composeSendBtn" onclick="sendComposedEmail()">Send →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ WEEKLY TARGETS SETTINGS (owner) ══ -->
+<div class="modal-overlay" id="targetsSettingsModal">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <div class="modal-title">🎯 Weekly Targets — per staff</div>
+      <button class="modal-close" onclick="closeModal('targetsSettingsModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--gray-500);margin:0 0 14px">Set each staff member's weekly minimums. Creator &amp; brand snipes are counted automatically; calls are ticked off manually on the dashboard. Feedback is per-creator per month. Leave blank / 0 to not track a metric.</p>
+      <div id="targets-settings-body"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('targetsSettingsModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTargetsSettings()">💾 Save targets</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BULK FOLLOW-UP PICKER ══ -->
+<div class="modal-overlay" id="bulkFollowUpModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">↪ Bulk Follow-up</div>
+      <button class="modal-close" onclick="closeModal('bulkFollowUpModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray-600);margin:0 0 6px"><strong id="bfu-due-count">0</strong> snipes are due for follow-up.</p>
+      <p style="font-size:12px;color:var(--gray-400);margin:0 0 16px">Each gets your follow-up template as a fresh email, sent automatically in the background. You can keep using the panel — a progress pill shows in the corner. Next nudge is auto-scheduled 3 weeks out.</p>
+      <div style="font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:8px">How many now?</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn btn-ghost" id="bfu-10" onclick="runBulkFollowUp(10)">First 10</button>
+        <button class="btn btn-ghost" id="bfu-20" onclick="runBulkFollowUp(20)">First 20</button>
+        <button class="btn btn-ghost" id="bfu-50" onclick="runBulkFollowUp(50)">First 50</button>
+        <button class="btn btn-primary" id="bfu-all" onclick="runBulkFollowUp('all')">All</button>
+      </div>
     </div>
   </div>
 </div>
@@ -4406,7 +4463,7 @@ async function syncAllFromDB() {
       STAFF = seeded; Storage.set('staff', STAFF);
     }
 
-    const [pp, ia, ao, ps, ke, bl, ma, bslogo] = await Promise.all([
+    const [pp, ia, ao, ps, ke, bl, ma, bslogo, tgt, fbs] = await Promise.all([
       DB.getAppData('profilePics'),
       DB.getAppData('kitAnalytics'),
       DB.getAppData('adminOverrides'),
@@ -4415,6 +4472,8 @@ async function syncAllFromDB() {
       DB.getAppData('brandLogos'),
       DB.getAppData('managerAssignments'),
       DB.getAppData('blustuLogo'),
+      DB.getAppData('weeklyTargets'),
+      DB.getAppData('feedbackSchedule'),
     ]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
@@ -4424,6 +4483,8 @@ async function syncAllFromDB() {
     if (bl) { brandLogos = bl; Storage.set('brandLogos', brandLogos); }
     if (ma) { managerAssignments = ma; Storage.set('managerAssignments', managerAssignments); }
     if (bslogo && bslogo.dataUrl) { blustuLogo = bslogo.dataUrl; Storage.set('blustuLogo', blustuLogo); }
+    if (tgt) { weeklyTargets = tgt; Storage.set('weeklyTargets', weeklyTargets); }
+    if (fbs) { feedbackSchedule = fbs; Storage.set('feedbackSchedule', feedbackSchedule); }
 
   } catch(e) { console.warn('[Sync] Failed, using cache:', e); }
   showSyncBanner(false);
@@ -4439,8 +4500,14 @@ async function syncAllFromDB() {
     loadInvoices(),
     loadSnipes(),
     loadEmailTemplates(),
+    loadStaffProgress(),
   ]).then(() => {
     try { updateDashStats(); } catch(e) { /* dashboard not on screen */ }
+    try { _renderDashboardTargets(); } catch(e) {}
+    try { _renderFeedbackDue(); } catch(e) {}
+    // Owner sees the settings cog on the targets card
+    const cog = document.getElementById('dashTargetsSettingsBtn');
+    if (cog && currentUser?.systemRole === 'owner') cog.style.display = '';
   });
   loadCalEvents();
 }
@@ -4519,6 +4586,10 @@ let profilePics   = Storage.get('profilePics',   {});
 let pitchSubjects = Storage.get('pitchSubjects', {});  // pitch_id -> subject (stored in app_data, not pitch_decks table)
 let brandLogos          = Storage.get('brandLogos',          {});  // brand name (lowercase) -> data URL or image URL
 let blustuLogo          = Storage.get('blustuLogo',          null); // shared BluStu logo (data URL) for media kit corner
+let weeklyTargets       = Storage.get('weeklyTargets',       {});   // per-staff weekly minimums {email:{creator_snipes,brand_snipes,calls_booked,calls_done,feedback_monthly}}
+let feedbackSchedule    = Storage.get('feedbackSchedule',    {});   // creatorId -> {dueDay:1-28, staff_email} for monthly feedback
+let staffProgress       = [];   // rows from staff_progress (manual tick-offs)
+let creatorFeedbackLog  = [];   // rows from creator_feedback
 let managerAssignments  = Storage.get('managerAssignments',  {});  // staffEmail -> [creatorId, ...]
 function saveInbox()    { Storage.set('inboxMessages', inboxMessages); }
 function saveAnalyticsData() { Storage.set('kitAnalytics', kitAnalytics); }
@@ -4903,7 +4974,7 @@ function showPage(id, btn) {
   if (id === 'users')      { renderUsersPage(); }
   if (id === 'pipeline')   { renderPipeline(); }
   if (id === 'campaigns')  { renderCampaigns(currentCampaignFilter); }
-  if (id === 'dashboard')  { _refreshMyCreatorsPanel(true); _refreshCreatorActivity(false); }
+  if (id === 'dashboard')  { _refreshMyCreatorsPanel(true); _refreshCreatorActivity(false); try{_renderDashboardTargets();_renderFeedbackDue();}catch(e){} }
   if (id === 'campaigndetail' && _cdCampaign) { _renderCampaignDetail(); }
   if (id === 'brandsnipes') { loadBrandSnipes(); }
   if (id === 'brandtemplates') { renderBrandTemplates(); }
@@ -16862,6 +16933,396 @@ async function _markFollowUpSent(toAddress) {
   }, '?id=eq.' + s.id).catch(()=>{});
   try { renderSnipes(); } catch(e) {}
   showToast('↪ Followed up · next nudge ' + nextFollowUp);
+}
+
+// ══ BULK FOLLOW-UP — send follow-ups to many due snipes in the background ══
+let _bulkFollowUp = { running: false, done: 0, total: 0, ok: 0, failed: 0, cancel: false };
+
+/** The follow-up email body for a snipe, using this staff member's template. */
+function _followUpBodyFor(s) {
+  const followUps = emailTemplates.filter(t => t.niche === 'followup');
+  let tpl = null;
+  if (followUps.length > 1) {
+    const defId = _followUpDefaultId();
+    tpl = followUps.find(t => String(t.id) === String(defId)) || followUps[0];
+  } else if (followUps.length === 1) {
+    tpl = followUps[0];
+  }
+  if (tpl) return _fillTemplate(tpl.body, s.name);
+  return `Hi ${s.name},\n\nJust following up on my message from a couple of weeks back — I know things get busy so no worries if it slipped through!\n\nWe'd still love to work with you and I'd be happy to share more details or answer any questions.\n\nWould you be open to a quick chat?\n\nBest,\n${currentUser?.name || ''}`;
+}
+
+/** The snipes currently DUE for follow-up (sent, not yet, date reached). */
+function _dueFollowUpSnipes() {
+  return snipes.filter(s => s.email && _snipeFollowUpDue(s));
+}
+
+/** Open the batch picker: choose how many due follow-ups to send now. */
+function openBulkFollowUp() {
+  const due = _dueFollowUpSnipes();
+  if (!due.length) { showToast('No snipes are due for follow-up right now'); return; }
+  const followUps = emailTemplates.filter(t => t.niche === 'followup');
+  if (!followUps.length) {
+    if (!confirm(`You haven't set a follow-up template yet — a generic one will be used for all ${due.length} follow-ups. Continue?\n\n(Set your own under Email Templates → Follow-up Templates.)`)) return;
+  }
+  document.getElementById('bfu-due-count').textContent = due.length;
+  // Enable/disable batch buttons based on how many are actually due
+  [['bfu-10',10],['bfu-20',20],['bfu-50',50]].forEach(([id,n]) => {
+    const b = document.getElementById(id);
+    if (b) { b.disabled = due.length < n; b.style.opacity = due.length < n ? .4 : 1; }
+  });
+  const allBtn = document.getElementById('bfu-all');
+  if (allBtn) allBtn.textContent = `All (${due.length})`;
+  openModal('bulkFollowUpModal');
+}
+
+/** Kick off a background batch of N follow-ups (N = Infinity for all). */
+async function runBulkFollowUp(count) {
+  if (_bulkFollowUp.running) { showToast('A follow-up batch is already running'); return; }
+  closeModal('bulkFollowUpModal');
+
+  const accounts = await loadEmailAccounts();
+  const myMailbox = (STAFF.find(x => x.email === currentUser?.email) || {}).snipe_from_mailbox;
+  const mailbox = (myMailbox && accounts.find(a => a.local === myMailbox)) ? myMailbox : (accounts[0]?.local);
+  if (!mailbox) { showToast('Email system not ready'); return; }
+  await loadEmailTemplates();
+
+  const due = _dueFollowUpSnipes().slice(0, count === 'all' ? undefined : count);
+  if (!due.length) { showToast('Nothing due'); return; }
+
+  _bulkFollowUp = { running: true, done: 0, total: due.length, ok: 0, failed: 0, cancel: false };
+  _renderBulkFollowUpStatus();
+
+  const fromName = friendlyFromName(mailbox);
+  const sigHtml = _mySignature() || '';
+
+  // Send sequentially with a small gap so MXroute doesn't rate-limit us.
+  (async () => {
+    for (const s of due) {
+      if (_bulkFollowUp.cancel) break;
+      try {
+        const body = _followUpBodyFor(s);
+        const { html, textBody } = _buildEmailPayload(body, sigHtml, null);
+        await emailApi('/send', {
+          mailbox, to: s.email, subject: s.name + SNIPE_SUBJECT_SUFFIX,
+          body: textBody, html, fromName,
+        });
+        // Mark followed-up + push next nudge 3 weeks out
+        const nextFollowUp = _followUpDateFromNow(21);
+        s.followed_up = 'yes';
+        s.followed_up_at = new Date().toISOString();
+        s.follow_up = nextFollowUp;
+        await DB._req('PATCH', 'snipes', {
+          followed_up: 'yes', followed_up_at: s.followed_up_at, follow_up: nextFollowUp,
+        }, '?id=eq.' + s.id).catch(()=>{});
+        _bulkFollowUp.ok++;
+      } catch(e) {
+        _bulkFollowUp.failed++;
+      }
+      _bulkFollowUp.done++;
+      _renderBulkFollowUpStatus();
+      try { renderSnipes(); } catch(e) {}
+      // Gap between sends (skip after the last one)
+      if (_bulkFollowUp.done < _bulkFollowUp.total && !_bulkFollowUp.cancel) {
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    }
+    _bulkFollowUp.running = false;
+    _renderBulkFollowUpStatus();
+    const { ok, failed } = _bulkFollowUp;
+    showToast(`↪ Follow-ups sent: ${ok}${failed ? ` · ${failed} failed` : ''}`);
+  })();
+
+  showToast(`↪ Sending ${due.length} follow-up${due.length !== 1 ? 's' : ''} in the background…`);
+}
+
+function cancelBulkFollowUp() { _bulkFollowUp.cancel = true; }
+
+/** Renders the little progress pill (like the stats-refresh indicator). */
+function _renderBulkFollowUpStatus() {
+  let el = document.getElementById('bulkFollowUpStatus');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'bulkFollowUpStatus';
+    el.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;background:var(--white);border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.15);padding:12px 16px;font-size:13px;min-width:220px';
+    document.body.appendChild(el);
+  }
+  const b = _bulkFollowUp;
+  if (!b.running && b.done === 0) { el.remove(); return; }
+  const pct = b.total ? Math.round((b.done / b.total) * 100) : 0;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+      <span style="font-weight:700">↪ Follow-ups ${b.running ? '' : '· done'}</span>
+      <span style="color:var(--gray-400)">${b.done}/${b.total}</span>
+    </div>
+    <div style="height:6px;background:var(--gray-100);border-radius:6px;overflow:hidden;margin-bottom:6px">
+      <div style="height:100%;width:${pct}%;background:var(--blue);transition:width .3s"></div>
+    </div>
+    <div style="font-size:11px;color:var(--gray-400)">${b.ok} sent${b.failed ? ` · ${b.failed} failed` : ''}${b.running ? ` · <span style="color:var(--blue);cursor:pointer" onclick="cancelBulkFollowUp()">cancel</span>` : ` · <span style="cursor:pointer" onclick="document.getElementById('bulkFollowUpStatus').remove()">dismiss</span>`}</div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WEEKLY TARGETS SYSTEM
+// Owner sets per-staff weekly minimums; the panel auto-counts what it can
+// (snipes, brand snipes) and lets staff tick off the rest (calls, feedback).
+// ═══════════════════════════════════════════════════════════════════
+
+// The metrics we track, with how each is measured.
+const TARGET_METRICS = [
+  { key: 'creator_snipes', label: 'Creator snipes', auto: true,  icon: '🎯' },
+  { key: 'brand_snipes',   label: 'Brand snipes',   auto: true,  icon: '🏷️' },
+  { key: 'calls_booked',   label: 'Calls booked',   auto: false, icon: '📞' },
+  { key: 'calls_done',     label: 'Calls done',     auto: false, icon: '✅' },
+  { key: 'feedback_monthly', label: 'Creator feedback (monthly)', auto: false, icon: '💬', monthly: true },
+];
+
+// ISO week string for a date, e.g. '2026-W32'. Weeks start Monday.
+function _isoWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;          // Mon=0..Sun=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);        // nearest Thursday
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((d - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return d.getUTCFullYear() + '-W' + String(week).padStart(2, '0');
+}
+function _currentIsoWeek() { return _isoWeek(new Date()); }
+
+// Monday 00:00 of the week containing `date` (local time).
+function _weekStart(date) {
+  const d = new Date(date);
+  const dayNum = (d.getDay() + 6) % 7;
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - dayNum);
+  return d;
+}
+
+/** Load manual progress + feedback log from Supabase. */
+async function loadStaffProgress() {
+  try {
+    const rows = await DB.select('staff_progress', '?order=updated_at.desc');
+    if (Array.isArray(rows)) staffProgress = rows;
+  } catch(e) { /* table may not exist yet */ }
+  try {
+    const rows = await DB.select('creator_feedback', '?order=given_on.desc');
+    if (Array.isArray(rows)) creatorFeedbackLog = rows;
+  } catch(e) { /* table may not exist yet */ }
+}
+
+/** The target numbers for a staff member (0 if unset). */
+function _targetsFor(email) {
+  const t = weeklyTargets[email] || {};
+  const out = {};
+  TARGET_METRICS.forEach(m => { out[m.key] = Number(t[m.key] || 0); });
+  return out;
+}
+
+/** Auto-counted progress this week for a staff member. */
+function _autoProgressFor(email, weekStart) {
+  const ws = weekStart || _weekStart(new Date());
+  const we = new Date(ws); we.setDate(we.getDate() + 7);
+  const inWeek = row => {
+    const d = new Date(row.created_at || row.sent_at || 0);
+    return d >= ws && d < we;
+  };
+  return {
+    creator_snipes: snipes.filter(s => s.owner_email === email && inWeek(s)).length,
+    brand_snipes:   brandSnipes.filter(s => s.owner_email === email && inWeek(s)).length,
+  };
+}
+
+/** Manual tick-off count for a staff member this week for a metric. */
+function _manualProgress(email, metric, isoWeek) {
+  const wk = isoWeek || _currentIsoWeek();
+  const row = staffProgress.find(r => r.staff_email === email && r.iso_week === wk && r.metric === metric);
+  return row ? Number(row.count || 0) : 0;
+}
+
+/** Feedback given this calendar month by a staff member (count of distinct creators). */
+function _feedbackThisMonth(email) {
+  const now = new Date();
+  const ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const seen = new Set();
+  creatorFeedbackLog.forEach(f => {
+    if (f.staff_email !== email) return;
+    if (String(f.given_on || '').slice(0, 7) === ym) seen.add(f.creator_id);
+  });
+  return seen.size;
+}
+
+/** Combined progress for one metric (auto or manual). */
+function _progressFor(email, metricKey) {
+  const m = TARGET_METRICS.find(x => x.key === metricKey);
+  if (!m) return 0;
+  if (m.monthly) return _feedbackThisMonth(email);
+  if (m.auto) return _autoProgressFor(email)[metricKey] || 0;
+  return _manualProgress(email, metricKey);
+}
+
+/** Bump a manual tick-off (calls booked/done) up or down. */
+async function _bumpManualProgress(email, metric, delta) {
+  const wk = _currentIsoWeek();
+  let row = staffProgress.find(r => r.staff_email === email && r.iso_week === wk && r.metric === metric);
+  const newCount = Math.max(0, (row ? Number(row.count || 0) : 0) + delta);
+  if (row) { row.count = newCount; row.updated_at = new Date().toISOString(); }
+  else { row = { staff_email: email, iso_week: wk, metric, count: newCount, updated_at: new Date().toISOString() }; staffProgress.push(row); }
+  // delete-then-insert to avoid needing upsert headers
+  await DB._req('DELETE', 'staff_progress', null, `?staff_email=eq.${encodeURIComponent(email)}&iso_week=eq.${wk}&metric=eq.${metric}`);
+  const r = await DB._req('POST', 'staff_progress', [{ staff_email: email, iso_week: wk, metric, count: newCount, updated_at: row.updated_at }], '');
+  if (r === null) showToast('⚠ Saved locally — run weekly-targets.sql to sync');
+  _renderDashboardTargets();
+}
+
+// ── OWNER SETTINGS: set per-staff target numbers ──
+function openTargetsSettings() {
+  if (currentUser?.systemRole !== 'owner') { showToast('Owner only'); return; }
+  _renderTargetsSettings();
+  openModal('targetsSettingsModal');
+}
+function _renderTargetsSettings() {
+  const wrap = document.getElementById('targets-settings-body');
+  if (!wrap) return;
+  const staff = STAFF.filter(s => s.systemRole !== 'readonly');
+  const weeklyMetrics = TARGET_METRICS.filter(m => !m.monthly);
+  wrap.innerHTML = staff.map(s => {
+    const t = _targetsFor(s.email);
+    return `<div style="border:1px solid var(--gray-100);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px">${escapeHtml(s.name)} <span style="font-size:11px;color:var(--gray-400);font-weight:400">${s.email}</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">
+        ${weeklyMetrics.map(m => `
+          <div>
+            <label style="font-size:11px;color:var(--gray-500);display:block;margin-bottom:2px">${m.icon} ${m.label}/wk</label>
+            <input class="form-input" type="number" min="0" value="${t[m.key]||''}" placeholder="0" style="font-size:13px;padding:5px 8px"
+              onchange="_setTargetValue('${s.email}','${m.key}',this.value)">
+          </div>`).join('')}
+        <div>
+          <label style="font-size:11px;color:var(--gray-500);display:block;margin-bottom:2px">💬 Feedback/creator/mo</label>
+          <input class="form-input" type="number" min="0" value="${t.feedback_monthly||''}" placeholder="0" style="font-size:13px;padding:5px 8px"
+            onchange="_setTargetValue('${s.email}','feedback_monthly',this.value)">
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function _setTargetValue(email, metric, value) {
+  if (!weeklyTargets[email]) weeklyTargets[email] = {};
+  weeklyTargets[email][metric] = Math.max(0, Number(value) || 0);
+}
+async function saveTargetsSettings() {
+  Storage.set('weeklyTargets', weeklyTargets);
+  const r = await DB.setAppData('weeklyTargets', weeklyTargets);
+  if (r === false) showToast('⚠ Saved locally only');
+  else showToast('✅ Targets saved');
+  closeModal('targetsSettingsModal');
+  _renderDashboardTargets();
+}
+
+// ── DASHBOARD WIDGET: what each person has remaining this week ──
+function _renderDashboardTargets() {
+  const wrap = document.getElementById('dashTargetsBody');
+  const card = document.getElementById('dashTargetsCard');
+  if (!wrap || !card) return;
+  const me = currentUser?.email;
+  const isOwner = currentUser?.systemRole === 'owner';
+  // Owner sees everyone; others see just themselves.
+  const staff = isOwner ? STAFF.filter(s => s.systemRole !== 'readonly') : STAFF.filter(s => s.email === me);
+  const withTargets = staff.filter(s => {
+    const t = _targetsFor(s.email);
+    return TARGET_METRICS.some(m => t[m.key] > 0);
+  });
+  if (!withTargets.length) {
+    card.style.display = isOwner ? 'block' : 'none';
+    wrap.innerHTML = isOwner
+      ? '<div style="font-size:13px;color:var(--gray-400);padding:8px 0">No targets set yet. <span style="color:var(--blue);cursor:pointer" onclick="openTargetsSettings()">Set weekly targets →</span></div>'
+      : '';
+    return;
+  }
+  card.style.display = 'block';
+  wrap.innerHTML = withTargets.map(s => {
+    const t = _targetsFor(s.email);
+    const metrics = TARGET_METRICS.filter(m => t[m.key] > 0);
+    const isMe = s.email === me;
+    const pills = metrics.map(m => {
+      const done = _progressFor(s.email, m.key);
+      const goal = t[m.key];
+      const met = done >= goal;
+      const remaining = Math.max(0, goal - done);
+      const color = met ? 'var(--green)' : (done > 0 ? 'var(--amber)' : 'var(--gray-400)');
+      // Manual metrics get +/- buttons for the current user (or owner)
+      const canTick = !m.auto && !m.monthly && (isMe || isOwner);
+      const ticker = canTick
+        ? `<span style="display:inline-flex;gap:3px;margin-left:4px">
+             <span onclick="_bumpManualProgress('${s.email}','${m.key}',-1)" style="cursor:pointer;width:16px;height:16px;line-height:15px;text-align:center;border:1px solid var(--gray-200);border-radius:4px;font-size:11px">−</span>
+             <span onclick="_bumpManualProgress('${s.email}','${m.key}',1)" style="cursor:pointer;width:16px;height:16px;line-height:15px;text-align:center;border:1px solid var(--gray-200);border-radius:4px;font-size:11px">+</span>
+           </span>`
+        : '';
+      return `<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 0">
+        <span style="width:15px">${m.icon}</span>
+        <span style="flex:1;color:var(--gray-600)">${m.label}${m.monthly?' <span style=\"color:var(--gray-300)\">(mo)</span>':''}</span>
+        <span style="font-weight:700;color:${color}">${done}/${goal}</span>
+        ${met ? '<span style="color:var(--green);font-size:11px">✓</span>' : `<span style="font-size:10px;color:var(--gray-400)">${remaining} left</span>`}
+        ${ticker}
+      </div>`;
+    }).join('');
+    const allMet = metrics.every(m => _progressFor(s.email, m.key) >= t[m.key]);
+    return `<div style="border:1px solid var(--gray-100);border-radius:10px;padding:10px 14px;margin-bottom:8px;${allMet?'background:#f0fdf4':''}">
+      ${isOwner ? `<div style="font-weight:700;font-size:13px;margin-bottom:4px">${escapeHtml(s.name)}${isMe?' <span style=\"font-size:10px;color:var(--blue)\">you</span>':''}${allMet?' <span style=\"font-size:11px;color:var(--green)\">· all hit 🎉</span>':''}</div>` : ''}
+      ${pills}
+    </div>`;
+  }).join('');
+}
+
+// ── CREATOR FEEDBACK: log + schedule ──
+async function logCreatorFeedback(creatorId) {
+  const c = creators.find(x => x.id === Number(creatorId));
+  if (!c) return;
+  const note = prompt(`Log feedback given to ${c.name} today?\n\nOptional note:`, '');
+  if (note === null) return; // cancelled
+  const row = { creator_id: c.id, creator_name: c.name, staff_email: currentUser?.email, given_on: new Date().toISOString().slice(0,10), note: note || null, created_at: new Date().toISOString() };
+  creatorFeedbackLog.unshift(row);
+  const r = await DB._req('POST', 'creator_feedback', [row], '');
+  if (r === null) showToast('⚠ Saved locally — run weekly-targets.sql to sync');
+  else showToast('✅ Feedback logged for ' + c.name);
+  _renderDashboardTargets();
+  try { _renderFeedbackDue(); } catch(e) {}
+}
+
+/** Creators whose monthly feedback is due (no feedback logged this month) for the current user. */
+function _feedbackDueList() {
+  const me = currentUser?.email;
+  const now = new Date();
+  const ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const mine = (typeof activeCreators === 'function' ? activeCreators() : creators)
+    .filter(c => creatorPrimaryStaffEmail(c) === me);
+  return mine.filter(c => {
+    const logged = creatorFeedbackLog.some(f => f.creator_id === c.id && String(f.given_on||'').slice(0,7) === ym);
+    return !logged;
+  });
+}
+
+function _renderFeedbackDue() {
+  const wrap = document.getElementById('dashFeedbackBody');
+  const card = document.getElementById('dashFeedbackCard');
+  if (!wrap || !card) return;
+  const due = _feedbackDueList();
+  const target = _targetsFor(currentUser?.email).feedback_monthly;
+  if (!target) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  if (!due.length) {
+    wrap.innerHTML = '<div style="font-size:13px;color:var(--green);padding:8px 0">✓ All your creators have feedback logged this month.</div>';
+    return;
+  }
+  wrap.innerHTML = due.map(c => {
+    const pic = profilePics[c.id] || c.profile_image_url;
+    const avatar = pic
+      ? `<div style="width:30px;height:30px;border-radius:50%;background:#fff url('${pic}') center/cover;flex-shrink:0"></div>`
+      : `<div style="width:30px;height:30px;border-radius:50%;background:var(--blue-light);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0">${(c.name||'?')[0].toUpperCase()}</div>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gray-50)">
+      ${avatar}
+      <div style="flex:1;font-size:13px;font-weight:600">${escapeHtml(c.name)}</div>
+      <button class="btn btn-primary btn-sm" style="padding:3px 10px;font-size:11px" onclick="logCreatorFeedback(${c.id})">✓ Log feedback</button>
+    </div>`;
+  }).join('');
 }
 
 function _populateComposeTemplates(creatorName, mode) {
