@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-s (login welcome popup: patch notes + your to-dos + creators missing media-kit data) -->
+<!-- blustu panel build 2026-07-15-t (dashboard: weekly targets + feedback moved above My Creators, under the 4 stat cards) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1320,22 +1320,6 @@ html, body { overflow-x: hidden; }
         <div class="stat-card"><div class="stat-label">Total Profit</div><div class="stat-value" id="stat-pipeline" style="color:var(--green)">£0</div><div class="stat-change up" id="stat-pipeline-sub">All agency revenue</div></div>
         <div class="stat-card"><div class="stat-label">Avg. Engagement</div><div class="stat-value" id="stat-avg-eng">—</div><div class="stat-change neutral" id="stat-avg-eng-sub">From admin data</div></div>
       </div>
-      <div class="grid-2">
-        <div class="card" id="myCreatorsCard" style="display:none">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
-            <div class="card-title" style="margin:0">👤 My Creators <span id="myCreatorsUnread" style="font-size:11px;color:var(--gray-400);font-weight:400"></span></div>
-            <button class="btn btn-ghost btn-sm" id="myCreatorsRefresh" onclick="_refreshMyCreatorsPanel(true)" title="Check for new emails">↻ Check email</button>
-          </div>
-          <div id="myCreatorsList"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading your creators…</div></div>
-        </div>
-        <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
-            <div class="card-title" style="margin:0">🎬 Creator Activity <span style="font-size:11px;color:var(--gray-400);font-weight:400">— latest posts</span></div>
-            <button class="btn btn-ghost btn-sm" onclick="_refreshCreatorActivity(true)" id="creatorActivityRefresh" title="Pull the latest posts from TikTok">↻ Refresh</button>
-          </div>
-          <div id="creatorActivityFeed"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading recent posts…</div></div>
-        </div>
-      </div>
 
       <!-- Weekly targets + feedback due -->
       <div class="dashboard-grid" style="margin-bottom:20px">
@@ -1353,6 +1337,24 @@ html, body { overflow-x: hidden; }
           <div id="dashFeedbackBody"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading…</div></div>
         </div>
       </div>
+
+      <div class="grid-2">
+        <div class="card" id="myCreatorsCard" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+            <div class="card-title" style="margin:0">👤 My Creators <span id="myCreatorsUnread" style="font-size:11px;color:var(--gray-400);font-weight:400"></span></div>
+            <button class="btn btn-ghost btn-sm" id="myCreatorsRefresh" onclick="_refreshMyCreatorsPanel(true)" title="Check for new emails">↻ Check email</button>
+          </div>
+          <div id="myCreatorsList"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading your creators…</div></div>
+        </div>
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+            <div class="card-title" style="margin:0">🎬 Creator Activity <span style="font-size:11px;color:var(--gray-400);font-weight:400">— latest posts</span></div>
+            <button class="btn btn-ghost btn-sm" onclick="_refreshCreatorActivity(true)" id="creatorActivityRefresh" title="Pull the latest posts from TikTok">↻ Refresh</button>
+          </div>
+          <div id="creatorActivityFeed"><div style="font-size:13px;color:var(--gray-400);padding:8px 0">Loading recent posts…</div></div>
+        </div>
+      </div>
+
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <div class="card-title">Active Campaigns</div>
