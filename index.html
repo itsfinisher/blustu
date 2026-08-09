@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-t (dashboard: weekly targets + feedback moved above My Creators, under the 4 stat cards) -->
+<!-- blustu panel build 2026-07-15-u (snipes: Send button on unsent list rows; media kit: AI paste-import for audience demographics) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3110,8 +3110,11 @@ html, body { overflow-x: hidden; }
           <div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:11px">Website <span style="color:var(--gray-400)">(optional)</span></label><input class="form-input" id="ec-website" placeholder="e.g. creator.com"></div>
         </div>
 
-        <label class="form-label" style="font-size:12px;margin-top:8px">👥 Audience demographics</label>
-        <div class="form-hint" style="margin-bottom:8px">TikTok doesn't expose these — enter from TikTok Analytics. Leave empty to hide on the kit.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px">
+          <label class="form-label" style="font-size:12px;margin:0">👥 Audience demographics</label>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="openAudienceAiImport()" style="font-size:11px;color:var(--blue)" title="Paste from AI to fill all three at once">✨ AI paste</button>
+        </div>
+        <div class="form-hint" style="margin-bottom:8px">Enter from TikTok Analytics, or use ✨ AI paste to fill from screenshots. Leave empty to hide on the kit.</div>
         <div style="margin-bottom:10px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:var(--gray-500)">🌍 Top countries</span><button type="button" class="btn btn-ghost btn-sm" onclick="_ecaAddRow('countries')" style="font-size:11px">＋</button></div>
           <div id="eca-countries"></div>
@@ -3531,6 +3534,33 @@ html, body { overflow-x: hidden; }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="_resetComposeAttachments();closeModal('composeEmailModal')">Cancel</button>
       <button class="btn btn-primary" id="composeSendBtn" onclick="sendComposedEmail()">Send →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ AUDIENCE AI IMPORT ══ -->
+<div class="modal-overlay" id="audienceAiModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title">✨ AI paste — audience data</div>
+      <button class="modal-close" onclick="closeModal('audienceAiModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--blue-light);color:var(--blue);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px">
+        Screenshot the creator's TikTok Analytics → Followers (countries, gender, age). Give the screenshots + the prompt below to ChatGPT/Claude, then paste its answer here.
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:6px">Step 1 — copy this prompt</div>
+      <div style="position:relative;margin-bottom:16px">
+        <textarea id="aud-ai-prompt" readonly rows="6" class="form-textarea" style="font-size:11px;font-family:monospace;background:var(--gray-50);width:100%"></textarea>
+        <button class="btn btn-ghost btn-sm" onclick="_copyAudiencePrompt()" style="position:absolute;top:6px;right:6px;font-size:11px">📋 Copy</button>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:6px">Step 2 — paste the AI's answer</div>
+      <textarea id="aud-ai-paste" rows="6" class="form-textarea" placeholder="Paste the AI output here…" style="font-size:12px;width:100%" oninput="_previewAudienceAi()"></textarea>
+      <div id="aud-ai-preview" style="margin-top:10px;font-size:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('audienceAiModal')">Cancel</button>
+      <button class="btn btn-primary" id="aud-ai-apply" onclick="_applyAudienceAi()" disabled>Fill in the fields</button>
     </div>
   </div>
 </div>
@@ -5596,18 +5626,116 @@ function _ecaRenderSection(kind) {
   const wrap = document.getElementById('eca-' + kind);
   if (!wrap) return;
   const opts = ECA_PRESETS[kind];
-  wrap.innerHTML = (_ecaData[kind] || []).map((row, i) => `
+  wrap.innerHTML = (_ecaData[kind] || []).map((row, i) => {
+    // Ensure the row's current label is always selectable (e.g. from AI import)
+    const allOpts = opts.includes(row.label) || !row.label ? opts : [row.label, ...opts];
+    return `
     <div style="display:flex;gap:6px;margin-bottom:5px;align-items:center">
       <select class="form-select" style="flex:1;font-size:12px;padding:4px 8px" onchange="_ecaUpdate('${kind}',${i},'label',this.value)">
-        ${opts.map(o => `<option value="${o}"${row.label===o?' selected':''}>${o}</option>`).join('')}
+        ${allOpts.map(o => `<option value="${escapeHtml(o)}"${row.label===o?' selected':''}>${escapeHtml(o)}</option>`).join('')}
       </select>
       <input class="form-input" type="number" min="0" max="100" style="width:64px;font-size:12px;padding:4px 6px" placeholder="%" value="${row.pct != null ? row.pct : ''}" oninput="_ecaUpdate('${kind}',${i},'pct',this.value)">
       <button type="button" class="btn btn-ghost btn-sm" onclick="_ecaRemoveRow('${kind}',${i})" style="padding:2px 6px">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 function _ecaUpdate(kind, i, field, val) { if (_ecaData[kind][i]) _ecaData[kind][i][field] = val; }
 function _ecaAddRow(kind) { _ecaData[kind].push({ label: ECA_PRESETS[kind][0], pct: '' }); _ecaRenderSection(kind); }
 function _ecaRemoveRow(kind, i) { _ecaData[kind].splice(i, 1); _ecaRenderSection(kind); }
+
+// ── AI paste: fill audience demographics from screenshots via an AI ──
+const AUDIENCE_AI_PROMPT = `You are reading screenshots of a TikTok creator's Analytics → Followers tab.
+Extract the audience breakdown and reply with ONLY a JSON object, no other text, in exactly this shape:
+
+{
+  "countries": [{"label": "United Kingdom", "pct": 62}, {"label": "United States", "pct": 14}],
+  "gender": [{"label": "Female", "pct": 58}, {"label": "Male", "pct": 42}],
+  "age": [{"label": "18-24", "pct": 47}, {"label": "25-34", "pct": 33}]
+}
+
+Rules:
+- pct values are whole or one-decimal numbers (no % sign).
+- Use these age buckets exactly when present: 13-17, 18-24, 25-34, 35-44, 45-54, 55-64, 65+
+- Gender labels: Female, Male, Non-binary, Other.
+- Country labels in full English (e.g. "United Kingdom", "United States").
+- Only include rows you can actually see. Omit a whole section if it's not in the screenshots.
+- Output the raw JSON only — no code fences, no commentary.`;
+
+function openAudienceAiImport() {
+  document.getElementById('aud-ai-prompt').value = AUDIENCE_AI_PROMPT;
+  document.getElementById('aud-ai-paste').value = '';
+  document.getElementById('aud-ai-preview').innerHTML = '';
+  document.getElementById('aud-ai-apply').disabled = true;
+  _audienceAiParsed = null;
+  openModal('audienceAiModal');
+}
+
+function _copyAudiencePrompt() {
+  const ta = document.getElementById('aud-ai-prompt');
+  ta.select();
+  navigator.clipboard?.writeText(ta.value).then(() => showToast('📋 Prompt copied')).catch(() => {
+    try { document.execCommand('copy'); showToast('📋 Prompt copied'); } catch(e) { showToast('Select + copy manually'); }
+  });
+}
+
+let _audienceAiParsed = null;
+
+// Tolerant parser: pull the JSON object out of whatever the AI returned.
+function _parseAudienceAi(text) {
+  if (!text || !text.trim()) return null;
+  let raw = text.trim();
+  // Strip code fences if present
+  raw = raw.replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+  // Grab the outermost { ... }
+  const start = raw.indexOf('{'), end = raw.lastIndexOf('}');
+  if (start < 0 || end < 0) return null;
+  let obj;
+  try { obj = JSON.parse(raw.slice(start, end + 1)); } catch(e) { return null; }
+  const clean = arr => Array.isArray(arr)
+    ? arr.map(r => ({ label: String(r.label || '').trim(), pct: Number(r.pct) }))
+         .filter(r => r.label && !isNaN(r.pct))
+    : [];
+  // Age buckets: convert plain hyphens to en-dashes so they match the presets
+  const normAge = rows => rows.map(r => ({ label: r.label.replace(/(\d)\s*-\s*(\d)/, '$1–$2'), pct: r.pct }));
+  const out = { countries: clean(obj.countries), gender: clean(obj.gender), age: normAge(clean(obj.age)) };
+  if (!out.countries.length && !out.gender.length && !out.age.length) return null;
+  return out;
+}
+
+function _previewAudienceAi() {
+  const parsed = _parseAudienceAi(document.getElementById('aud-ai-paste').value);
+  _audienceAiParsed = parsed;
+  const el = document.getElementById('aud-ai-preview');
+  const btn = document.getElementById('aud-ai-apply');
+  if (!parsed) {
+    el.innerHTML = document.getElementById('aud-ai-paste').value.trim()
+      ? '<span style="color:var(--red)">Couldn\'t read that — make sure you pasted the AI\'s full JSON answer.</span>'
+      : '';
+    btn.disabled = true;
+    return;
+  }
+  const sec = (title, rows) => rows.length
+    ? `<div style="margin-bottom:6px"><strong>${title}:</strong> ${rows.map(r => `${escapeHtml(r.label)} ${r.pct}%`).join(', ')}</div>`
+    : '';
+  el.innerHTML = `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px">
+    <div style="color:var(--green);font-weight:700;margin-bottom:6px">✓ Read successfully</div>
+    ${sec('Countries', parsed.countries)}${sec('Gender', parsed.gender)}${sec('Age', parsed.age)}
+  </div>`;
+  btn.disabled = false;
+}
+
+function _applyAudienceAi() {
+  if (!_audienceAiParsed) return;
+  // Replace only the sections that came back with data; keep the rest as-is.
+  ['countries','gender','age'].forEach(kind => {
+    if (_audienceAiParsed[kind] && _audienceAiParsed[kind].length) {
+      _ecaData[kind] = _audienceAiParsed[kind].map(r => ({ label: r.label, pct: r.pct }));
+      _ecaRenderSection(kind);
+    }
+  });
+  closeModal('audienceAiModal');
+  showToast('✨ Audience data filled — review, then Save');
+}
 
 // ── CRM edit form: featured posts (curated example work for the media kit) ──
 let _efPosts = [];   // [{ cover(dataURL), brand, views, link }]
@@ -16697,7 +16825,10 @@ function renderSnipes() {
     else if (followedUp) fuCell += `<div style="font-size:9px;color:var(--green);font-weight:700;margin-top:2px">✓ FOLLOWED UP</div>`;
     // Follow-up action button — prominent when due, quieter otherwise
     let fuBtn = '';
-    if (sentYes && s.email && (due || !followedUp)) {
+    if (!sentYes && s.email) {
+      // Not yet sent — offer a Send button that opens the outreach email
+      fuBtn = `<button class="btn btn-primary btn-sm" onclick="_sendSnipeEmail('${s.id}')" title="Open the outreach email with your template" style="padding:2px 10px;font-size:11px">✉ Send</button>`;
+    } else if (sentYes && s.email && (due || !followedUp)) {
       fuBtn = `<button class="btn btn-sm" onclick="openSnipeFollowUp('${s.id}')" title="Send a follow-up email" style="padding:2px 8px;font-size:11px;${due?'background:var(--amber);color:#fff':''}">↪ Follow up</button>`;
     } else if (followedUp && s.email) {
       fuBtn = `<button class="btn btn-ghost btn-sm" onclick="openSnipeFollowUp('${s.id}')" title="Send another follow-up" style="padding:2px 6px;font-size:11px">↪</button>`;
@@ -16750,6 +16881,7 @@ async function quickAddSnipe() {
     email:          document.getElementById('qs-email').value.trim() || null,
     link:           document.getElementById('qs-link').value.trim() || null,
     contact_method: document.getElementById('qs-contact').value,
+    notes:          'Niche: ' + (document.getElementById('qs-niche')?.value || 'general'),
     sent:           'no',
     reply_status:   'waiting',
     created_at:     new Date().toISOString(),
@@ -16835,6 +16967,20 @@ async function quickAddSnipeAndEmail() {
 }
 
 /** Open the compose modal pre-filled for a snipe outreach. */
+// Open the outreach email for a not-yet-sent snipe straight from the list view.
+// Uses the snipe's niche template; sending flips it to "sent" automatically via
+// _markSnipeSentByEmail (already hooked into the send flow).
+function _sendSnipeEmail(snipeId) {
+  const s = snipes.find(x => String(x.id) === String(snipeId));
+  if (!s) return;
+  if (!s.email) { showToast('No email on this snipe — add one via Edit first'); return; }
+  // Niche is stashed in notes as "Niche: <key>" by the quick-add flow
+  let niche = 'general';
+  const m = /Niche:\s*([a-z0-9_-]+)/i.exec(s.notes || '');
+  if (m) niche = m[1];
+  openSnipeCompose({ creatorName: s.name || '', to: s.email, niche });
+}
+
 async function openSnipeCompose({ creatorName, to, niche }) {
   await loadEmailTemplates();
   const accounts = await loadEmailAccounts();
