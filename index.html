@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-v (AI snipe outreach: Gemini via worker writes a personalised opening paragraph into the snipe template) -->
+<!-- blustu panel build 2026-07-15-w (AI snipe: rewrote prompt to force full 3-4 sentence paragraph, raised token cap so it doesn't cut off) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -17039,18 +17039,23 @@ async function _runAiSnipe() {
 
   const c = _aiSnipeCtx;
   const scoutName = currentUser?.name || 'our scout';
-  const prompt = `You are ${scoutName}, a talent scout at BluStu, a creator agency. Write ONE short, warm, natural paragraph (2-4 sentences) that will open an outreach email to a TikTok/Instagram creator named ${c.name}.
+  const prompt = `Write the opening paragraph of a friendly outreach email from ${scoutName}, a talent scout at the creator agency BluStu, to a content creator named ${c.name}. This paragraph goes right after "Hi ${c.name}," and before the agency's pitch.
 
-The scout genuinely watched their content. Here's what the scout noticed:
+What the scout genuinely noticed about ${c.name}'s content:
 "${desc}"
+${c.followers ? `\nThey have around ${c.followers} followers.` : ''}${c.location ? `\nThey're based in ${c.location}.` : ''}
 
-${c.followers ? `They have around ${c.followers} followers. ` : ''}${c.location ? `They're based in ${c.location}. ` : ''}
+Requirements:
+- Write EXACTLY 3 to 4 full sentences. Do not stop after one sentence — write a complete, flowing paragraph.
+- Sound like a real person who actually watched their videos: warm, specific, genuine, a little enthusiastic but not fake or salesy.
+- Reference the specific things noted above (the actual content, places, style) so it's obviously personal and not a mass copy-paste.
+- Naturally build toward why the scout was impressed enough to reach out.
 
-Write the paragraph so it sounds like a real person who actually watched their videos — specific, genuine, complimentary but not over-the-top or salesy. Mention something concrete from the description so it clearly isn't a mass copy-paste. Do NOT include a greeting (no "Hi ${c.name}"), do NOT introduce yourself or the agency, do NOT pitch representation — just the observation about their content and why you like it. Output ONLY the paragraph, no preamble, no quotes.`;
+Do NOT write a greeting (no "Hi ${c.name}") — that's already there. Do NOT introduce the agency or pitch representation — that comes later. Output ONLY the 3-4 sentence paragraph itself, with no preamble, quotes, or sign-off.`;
 
   let para = '';
   try {
-    const res = await emailApi('/ai/generate', { prompt, temperature: 0.85, maxTokens: 300 });
+    const res = await emailApi('/ai/generate', { prompt, maxTokens: 2048 });
     para = (res && res.text || '').trim();
     if (!para) throw new Error('AI returned nothing');
   } catch (e) {
