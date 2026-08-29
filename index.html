@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-u (snipes: Send button on unsent list rows; media kit: AI paste-import for audience demographics) -->
+<!-- blustu panel build 2026-07-15-v (AI snipe outreach: Gemini via worker writes a personalised opening paragraph into the snipe template) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2743,6 +2743,7 @@ html, body { overflow-x: hidden; }
           </select>
           <button class="btn btn-ghost btn-sm" onclick="quickAddSnipe()" style="white-space:nowrap">+ Add</button>
           <button class="btn btn-primary btn-sm" onclick="quickAddSnipeAndEmail()" style="white-space:nowrap" title="Add snipe then open a pre-filled outreach email">+ Snipe & Email ✉️</button>
+          <button class="btn btn-sm" onclick="quickAddSnipeAndEmailAI()" style="white-space:nowrap;background:linear-gradient(135deg,#7c3aed,#2198ED);color:#fff" title="Add snipe, then AI writes a personalised opening about their content">✨ AI Snipe & Email</button>
         </div>
       </div>
 
@@ -3593,6 +3594,26 @@ html, body { overflow-x: hidden; }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('targetsSettingsModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveTargetsSettings()">💾 Save targets</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ AI SNIPE DESCRIBE ══ -->
+<div class="modal-overlay" id="aiSnipeModal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title">✨ Personalise with AI</div>
+      <button class="modal-close" onclick="closeModal('aiSnipeModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray-600);margin:0 0 4px">Describe <strong id="ai-snipe-name">this creator</strong>'s content in a few words — what they post, their vibe, anything you noticed.</p>
+      <p style="font-size:12px;color:var(--gray-400);margin:0 0 12px">AI adds a natural opening paragraph to your template so the outreach reads like a real scout who watched their content.</p>
+      <textarea class="form-textarea" id="ai-snipe-desc" rows="4" placeholder="e.g. Funny London day-in-the-life vlogs, great editing, loads of comments asking where her outfits are from, really consistent posting…" style="width:100%;font-size:13px"></textarea>
+      <div id="ai-snipe-error" style="display:none;color:var(--red);font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('aiSnipeModal')">Cancel</button>
+      <button class="btn btn-primary" id="ai-snipe-go" onclick="_runAiSnipe()" style="background:linear-gradient(135deg,#7c3aed,#2198ED)">✨ Generate &amp; open email</button>
     </div>
   </div>
 </div>
@@ -16981,7 +17002,83 @@ function _sendSnipeEmail(snipeId) {
   openSnipeCompose({ creatorName: s.name || '', to: s.email, niche });
 }
 
-async function openSnipeCompose({ creatorName, to, niche }) {
+// ── AI-personalised snipe outreach ──
+let _aiSnipeCtx = null;
+
+/** Validate the quick-add row, then open the "describe the creator" modal. */
+async function quickAddSnipeAndEmailAI() {
+  const name  = document.getElementById('qs-name').value.trim();
+  const email = document.getElementById('qs-email').value.trim();
+  if (!name)  { document.getElementById('qs-name').focus(); showToast('Add a name'); return; }
+  if (!email) { showToast('Add an email address to use AI Snipe & Email'); document.getElementById('qs-email').focus(); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('That email looks invalid'); return; }
+
+  _aiSnipeCtx = {
+    name, email,
+    niche:     document.getElementById('qs-niche')?.value || 'general',
+    followers: document.getElementById('qs-followers').value.trim(),
+    location:  document.getElementById('qs-location').value.trim(),
+    link:      document.getElementById('qs-link').value.trim(),
+  };
+  document.getElementById('ai-snipe-name').textContent = name;
+  document.getElementById('ai-snipe-desc').value = '';
+  document.getElementById('ai-snipe-error').style.display = 'none';
+  openModal('aiSnipeModal');
+  setTimeout(() => document.getElementById('ai-snipe-desc')?.focus(), 100);
+}
+
+/** Generate the AI opening paragraph, add the snipe, open compose with it woven in. */
+async function _runAiSnipe() {
+  if (!_aiSnipeCtx) return;
+  const desc = document.getElementById('ai-snipe-desc').value.trim();
+  const errEl = document.getElementById('ai-snipe-error');
+  const btn = document.getElementById('ai-snipe-go');
+  if (!desc) { errEl.textContent = 'Describe the creator first — even a few words helps.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = '✨ Writing…';
+
+  const c = _aiSnipeCtx;
+  const scoutName = currentUser?.name || 'our scout';
+  const prompt = `You are ${scoutName}, a talent scout at BluStu, a creator agency. Write ONE short, warm, natural paragraph (2-4 sentences) that will open an outreach email to a TikTok/Instagram creator named ${c.name}.
+
+The scout genuinely watched their content. Here's what the scout noticed:
+"${desc}"
+
+${c.followers ? `They have around ${c.followers} followers. ` : ''}${c.location ? `They're based in ${c.location}. ` : ''}
+
+Write the paragraph so it sounds like a real person who actually watched their videos — specific, genuine, complimentary but not over-the-top or salesy. Mention something concrete from the description so it clearly isn't a mass copy-paste. Do NOT include a greeting (no "Hi ${c.name}"), do NOT introduce yourself or the agency, do NOT pitch representation — just the observation about their content and why you like it. Output ONLY the paragraph, no preamble, no quotes.`;
+
+  let para = '';
+  try {
+    const res = await emailApi('/ai/generate', { prompt, temperature: 0.85, maxTokens: 300 });
+    para = (res && res.text || '').trim();
+    if (!para) throw new Error('AI returned nothing');
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '✨ Generate & open email';
+    errEl.textContent = 'AI failed: ' + (e.message || 'unknown') + '. You can still add the snipe manually.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  // Add the snipe (same shape as quickAddSnipeAndEmail)
+  const row = {
+    owner_email: currentUser?.email || '', owner_name: currentUser?.name || currentUser?.email || '',
+    name: c.name, followers: c.followers || null, location: c.location || null,
+    email: c.email, link: c.link || null, contact_method: 'email',
+    sent: 'no', reply_status: 'waiting', notes: 'Niche: ' + c.niche,
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  };
+  await DB._req('POST', 'snipes', [row], '').catch(()=>{});
+  ['qs-name','qs-followers','qs-location','qs-email','qs-link'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  await loadSnipes();
+
+  btn.disabled = false; btn.textContent = '✨ Generate & open email';
+  closeModal('aiSnipeModal');
+  _aiSnipeCtx = null;
+  await openSnipeCompose({ creatorName: c.name, to: c.email, niche: c.niche, aiParagraph: para });
+}
+
+async function openSnipeCompose({ creatorName, to, niche, aiParagraph }) {
   await loadEmailTemplates();
   const accounts = await loadEmailAccounts();
   const sel = document.getElementById('compose-from');
@@ -17005,6 +17102,10 @@ async function openSnipeCompose({ creatorName, to, niche }) {
   // Body = chosen niche template (plain text). Signature is applied separately at send time.
   const tpl = emailTemplates.find(t => t.niche === niche) || emailTemplates.find(t => t.niche === 'general');
   let body = tpl ? _fillTemplate(tpl.body, creatorName) : `Hi ${creatorName},\n\n`;
+  // If an AI opening paragraph was generated, weave it in after the greeting line
+  if (aiParagraph && aiParagraph.trim()) {
+    body = _injectAiParagraph(body, aiParagraph.trim(), creatorName);
+  }
   document.getElementById('compose-body').value = body;
   document.getElementById('compose-body').dataset.creatorName = creatorName;
   // Turn signature on by default if the user has one
@@ -17014,11 +17115,28 @@ async function openSnipeCompose({ creatorName, to, niche }) {
   const tplSel = document.getElementById('compose-template');
   if (tplSel && tpl) tplSel.value = tpl.id;
 
-  document.getElementById('composeModalTitle').textContent = '✉ Snipe Outreach';
+  document.getElementById('composeModalTitle').textContent = aiParagraph ? '✨ AI Snipe Outreach' : '✉ Snipe Outreach';
   document.getElementById('compose-error').style.display = 'none';
   updateFromPreview();
   openModal('composeEmailModal');
   setTimeout(() => document.getElementById('compose-body')?.focus(), 100);
+}
+
+// Insert the AI paragraph right after the first greeting line (Hi X,) so it
+// reads like a natural personal opening before the template's pitch.
+function _injectAiParagraph(body, para, creatorName) {
+  const lines = body.split('\n');
+  // Find the greeting line (starts with Hi/Hey/Hello) — insert after it + its blank line
+  let idx = lines.findIndex(l => /^\s*(hi|hey|hello|dear)\b/i.test(l));
+  if (idx === -1) {
+    // No greeting found — prepend paragraph at the very top
+    return para + '\n\n' + body;
+  }
+  // Skip a following blank line if present
+  let insertAt = idx + 1;
+  if (lines[insertAt] !== undefined && lines[insertAt].trim() === '') insertAt++;
+  lines.splice(insertAt, 0, para, '');
+  return lines.join('\n');
 }
 
 // ── Follow-up outreach — new thread, per-staff follow-up template ──
