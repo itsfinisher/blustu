@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-w (AI snipe: rewrote prompt to force full 3-4 sentence paragraph, raised token cap so it doesn't cut off) -->
+<!-- blustu panel build 2026-07-15-x (welcome popup: 7-day snooze after Got it, so it stops nagging every login) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -17639,12 +17639,19 @@ const PATCH_NOTES = [
 ];
 
 function _welcomeSeenKey() { return 'welcomeSeen_' + (currentUser?.email || '') ; }
+function _welcomeSnoozeKey() { return 'welcomeSnooze_' + (currentUser?.email || '') ; }
 
 /** Show the welcome popup on login if there's anything worth surfacing. */
 function maybeShowWelcome() {
   if (!currentUser) return;
+  // 7-day snooze: once "Got it" is pressed, don't reshow for a week — even if
+  // there are still to-dos or missing data. New patch notes override the snooze.
   const seen = (() => { try { return localStorage.getItem(_welcomeSeenKey()); } catch(e) { return null; } })();
   const hasNewNotes = seen !== PATCH_NOTES_VERSION;
+  if (!hasNewNotes) {
+    const snoozedUntil = (() => { try { return Number(localStorage.getItem(_welcomeSnoozeKey())) || 0; } catch(e) { return 0; } })();
+    if (Date.now() < snoozedUntil) return; // still within the 7-day window
+  }
 
   // Gather this staff member's to-dos
   const todos = _welcomeTodos();
@@ -17693,9 +17700,12 @@ function maybeShowWelcome() {
   openModal('welcomeModal');
 }
 
-/** Mark patch notes as seen so they don't pop again until the next version. */
+/** "Got it" — mark patch notes seen and snooze the popup for 7 days. */
 function dismissWelcome() {
-  try { localStorage.setItem(_welcomeSeenKey(), PATCH_NOTES_VERSION); } catch(e) {}
+  try {
+    localStorage.setItem(_welcomeSeenKey(), PATCH_NOTES_VERSION);
+    localStorage.setItem(_welcomeSnoozeKey(), String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  } catch(e) {}
   closeModal('welcomeModal');
 }
 
