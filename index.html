@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-aa (AI prompts: forbid em/en dashes + strip any that slip through, so output reads human) -->
+<!-- blustu panel build 2026-07-15-ab (bulk follow-up: optional AI vary wording so batches dont look mass-sent; falls back to template on failure) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3648,7 +3648,11 @@ html, body { overflow-x: hidden; }
     </div>
     <div class="modal-body">
       <p style="font-size:13px;color:var(--gray-600);margin:0 0 6px"><strong id="bfu-due-count">0</strong> snipes are due for follow-up.</p>
-      <p style="font-size:12px;color:var(--gray-400);margin:0 0 16px">Each gets your follow-up template as a fresh email, sent automatically in the background. You can keep using the panel — a progress pill shows in the corner. Next nudge is auto-scheduled 3 weeks out.</p>
+      <p style="font-size:12px;color:var(--gray-400);margin:0 0 12px">Each gets your follow-up template as a fresh email, sent automatically in the background. You can keep using the panel — a progress pill shows in the corner. Next nudge is auto-scheduled 3 weeks out.</p>
+      <label style="display:flex;align-items:flex-start;gap:8px;background:var(--blue-light);border-radius:8px;padding:10px 12px;margin-bottom:16px;cursor:pointer">
+        <input type="checkbox" id="bfu-ai-vary" style="margin-top:2px">
+        <span style="font-size:12px;color:var(--gray-600)"><strong style="color:var(--blue)">✨ Vary wording with AI</strong> — rewrites each follow-up so a batch doesn't look mass-sent. Same message, fresher phrasing. Slightly slower &amp; uses your Gemini key.</span>
+      </label>
       <div style="font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:8px">How many now?</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <button class="btn btn-ghost" id="bfu-10" onclick="runBulkFollowUp(10)">First 10</button>
@@ -17274,6 +17278,31 @@ function _dueFollowUpSnipes() {
   return snipes.filter(s => s.email && _snipeFollowUpDue(s));
 }
 
+// AI-vary a follow-up body so a batch doesn't look mass-sent. Keeps the SAME
+// meaning and structure as the template, just freshens the wording. Falls back
+// to the original template text on any failure so the send still goes out.
+async function _aiVaryFollowUp(baseBody, snipe) {
+  const myName = currentUser?.name || '';
+  const prompt = `You are ${myName || 'a talent scout'} at BluStu, a creator talent agency. Below is a follow-up email you're sending to a creator named ${snipe.name} who hasn't replied to your first message yet.
+
+Rewrite it so it says the SAME things and keeps the SAME friendly, low-pressure intent, but with naturally varied wording so it doesn't look like a mass-sent template. Keep it about the same length. Keep the greeting to ${snipe.name}. Do not add new claims, offers, figures, or links that aren't already in the text.
+
+IMPORTANT: Do NOT use em dashes (—) or en dashes (–) anywhere. Use commas, full stops, or "and", so it reads like a real person typing.
+Do NOT add a signature or sign-off name (that's added separately). Output ONLY the rewritten email body.
+
+The email to rewrite:
+"""
+${baseBody}
+"""`;
+  try {
+    const res = await emailApi('/ai/generate', { prompt, maxTokens: 2048 });
+    const out = _stripDashes((res && res.text || '').trim());
+    return out && out.length > 20 ? out : baseBody; // sanity check, else fall back
+  } catch (e) {
+    return baseBody; // AI failed — send the plain template
+  }
+}
+
 /** Open the batch picker: choose how many due follow-ups to send now. */
 function openBulkFollowUp() {
   const due = _dueFollowUpSnipes();
@@ -17296,6 +17325,7 @@ function openBulkFollowUp() {
 /** Kick off a background batch of N follow-ups (N = Infinity for all). */
 async function runBulkFollowUp(count) {
   if (_bulkFollowUp.running) { showToast('A follow-up batch is already running'); return; }
+  const aiVary = !!document.getElementById('bfu-ai-vary')?.checked;
   closeModal('bulkFollowUpModal');
 
   const accounts = await loadEmailAccounts();
@@ -17307,7 +17337,7 @@ async function runBulkFollowUp(count) {
   const due = _dueFollowUpSnipes().slice(0, count === 'all' ? undefined : count);
   if (!due.length) { showToast('Nothing due'); return; }
 
-  _bulkFollowUp = { running: true, done: 0, total: due.length, ok: 0, failed: 0, cancel: false };
+  _bulkFollowUp = { running: true, done: 0, total: due.length, ok: 0, failed: 0, cancel: false, ai: aiVary };
   _renderBulkFollowUpStatus();
 
   const fromName = friendlyFromName(mailbox);
@@ -17318,7 +17348,9 @@ async function runBulkFollowUp(count) {
     for (const s of due) {
       if (_bulkFollowUp.cancel) break;
       try {
-        const body = _followUpBodyFor(s);
+        let body = _followUpBodyFor(s);
+        // AI-vary the wording so the batch doesn't look mass-sent (opt-in)
+        if (aiVary) body = await _aiVaryFollowUp(body, s);
         const { html, textBody } = _buildEmailPayload(body, sigHtml, null);
         await emailApi('/send', {
           mailbox, to: s.email, subject: s.name + SNIPE_SUBJECT_SUFFIX,
@@ -17369,7 +17401,7 @@ function _renderBulkFollowUpStatus() {
   const pct = b.total ? Math.round((b.done / b.total) * 100) : 0;
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
-      <span style="font-weight:700">↪ Follow-ups ${b.running ? '' : '· done'}</span>
+      <span style="font-weight:700">↪ Follow-ups ${b.ai ? '<span style="font-size:10px;color:var(--blue)">✨AI</span> ' : ''}${b.running ? '' : '· done'}</span>
       <span style="color:var(--gray-400)">${b.done}/${b.total}</span>
     </div>
     <div style="height:6px;background:var(--gray-100);border-radius:6px;overflow:hidden;margin-bottom:6px">
