@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-y (AI draft reply: button in reply compose drafts a contextual response from the inbound email) -->
+<!-- blustu panel build 2026-07-15-aa (AI prompts: forbid em/en dashes + strip any that slip through, so output reads human) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3536,6 +3536,26 @@ html, body { overflow-x: hidden; }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="_resetComposeAttachments();closeModal('composeEmailModal')">Cancel</button>
       <button class="btn btn-primary" id="composeSendBtn" onclick="sendComposedEmail()">Send →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ AI DRAFT REPLY — what to say ══ -->
+<div class="modal-overlay" id="aiReplyModal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title">✨ AI draft reply</div>
+      <button class="modal-close" onclick="closeModal('aiReplyModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray-600);margin:0 0 4px">What do you want the reply to say? Give the gist — AI writes it out properly in your tone.</p>
+      <p style="font-size:12px;color:var(--gray-400);margin:0 0 12px">Optional — leave blank and AI will infer a suitable reply from their message.</p>
+      <textarea class="form-textarea" id="ai-reply-intent" rows="4" placeholder="e.g. Yes we'd love to work with them, suggest a call next week, keep it casual&#10;or: politely decline for now but say we'll keep them in mind&#10;or: answer their question about how we get paid — we take commission, no upfront fees" style="width:100%;font-size:13px"></textarea>
+      <div id="ai-reply-error" style="display:none;color:var(--red);font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('aiReplyModal')">Cancel</button>
+      <button class="btn btn-primary" id="ai-reply-go" onclick="_runAiReply()" style="background:linear-gradient(135deg,#7c3aed,#2198ED)">✨ Write it</button>
     </div>
   </div>
 </div>
@@ -17052,12 +17072,14 @@ Requirements:
 - Reference the specific things noted above (the actual content, places, style) so it's obviously personal and not a mass copy-paste.
 - Naturally build toward why the scout was impressed enough to reach out.
 
-Do NOT write a greeting (no "Hi ${c.name}") — that's already there. Do NOT introduce the agency or pitch representation — that comes later. Output ONLY the 3-4 sentence paragraph itself, with no preamble, quotes, or sign-off.`;
+Do NOT write a greeting (no "Hi ${c.name}") — that's already there. Do NOT introduce the agency or pitch representation — that comes later.
+IMPORTANT: Do NOT use em dashes (—) or en dashes (–) anywhere. Use commas, full stops, or the word "and" instead. Write the way a real person types a casual email, with normal punctuation only.
+Output ONLY the 3-4 sentence paragraph itself, with no preamble, quotes, or sign-off.`;
 
   let para = '';
   try {
     const res = await emailApi('/ai/generate', { prompt, maxTokens: 2048 });
-    para = (res && res.text || '').trim();
+    para = _stripDashes((res && res.text || '').trim());
     if (!para) throw new Error('AI returned nothing');
   } catch (e) {
     btn.disabled = false; btn.textContent = '✨ Generate & open email';
@@ -17764,23 +17786,32 @@ function _welcomeMissingMediaKit() {
 }
 
 // ── AI draft reply — drafts a contextual response to an inbound email ──
-async function _aiDraftReply() {
+// The button opens a small box where the user says what they want to convey;
+// _runAiReply does the generation. Intent is optional — blank = AI infers.
+function _aiDraftReply() {
   const bodyEl = document.getElementById('compose-body');
-  const btn = document.getElementById('compose-ai-reply-btn');
-  if (!bodyEl || !btn) return;
+  const theirText = (bodyEl?.dataset.replyQuoteText || '').trim()
+    || _htmlToText(bodyEl?.dataset.replyQuoteHtml || '').trim();
+  if (!theirText) { showToast('No message text to reply to'); return; }
+  // Prefill with anything already typed in the body as a starting steer
+  const intentEl = document.getElementById('ai-reply-intent');
+  if (intentEl) intentEl.value = (bodyEl.value || '').trim();
+  document.getElementById('ai-reply-error').style.display = 'none';
+  openModal('aiReplyModal');
+  setTimeout(() => intentEl?.focus(), 100);
+}
 
-  // The original message we're replying to (stashed by openReply)
+async function _runAiReply() {
+  const bodyEl = document.getElementById('compose-body');
+  const btn = document.getElementById('ai-reply-go');
+  const errEl = document.getElementById('ai-reply-error');
+  if (!bodyEl) return;
+
   const theirText = (bodyEl.dataset.replyQuoteText || '').trim()
     || _htmlToText(bodyEl.dataset.replyQuoteHtml || '').trim();
   const theirFrom = bodyEl.dataset.replyQuoteFrom || '';
   const subject = document.getElementById('compose-subject')?.value || '';
-
-  if (!theirText) { showToast('No message text to reply to'); return; }
-
-  // If the user already typed something, use it as a steer for the draft
-  const userSteer = bodyEl.value.trim();
-
-  const fromName = friendlyFromName(document.getElementById('compose-from')?.value || '') || 'BluStu';
+  const intent = (document.getElementById('ai-reply-intent')?.value || '').trim();
   const myName = currentUser?.name || 'the BluStu team';
 
   const prompt = `You are ${myName}, writing on behalf of BluStu, a creator talent management agency in London. You're replying to an email. Write ONLY the reply body — warm, professional, concise, and human.
@@ -17789,33 +17820,48 @@ The email you received${theirFrom ? ` (from ${theirFrom})` : ''}, subject "${sub
 """
 ${theirText.slice(0, 3000)}
 """
-${userSteer ? `\nThe sender of the reply (you) wants the reply to convey this — work it in naturally:\n"""${userSteer.slice(0, 800)}"""\n` : ''}
+${intent
+  ? `\nWrite the reply to say THIS — these are your instructions for what the reply should communicate. Follow them; phrase it naturally and in a warm on-brand tone:\n"""${intent.slice(0, 1200)}"""\n`
+  : `\nNo specific instructions were given — infer a suitable reply from their message.\n`}
 Guidance:
 - Match a friendly, on-brand agency tone: helpful, genuine, not stiff or corporate.
-- If they seem interested, warmly move things forward (e.g. suggest a quick casual call) without being pushy.
+${intent ? '' : `- If they seem interested, warmly move things forward (e.g. suggest a quick casual call) without being pushy.
 - If they asked questions, answer clearly and simply where you can; if something needs specifics you don't have, say you'll follow up with detail.
 - If they're hesitant or saying not right now, be gracious, leave the door open, no pressure.
-- Keep it fairly short — a few tight sentences, not an essay.
-- Do NOT invent specific figures, rates, dates, or promises. Keep specifics vague and defer to a call where needed.
+`}- Keep it fairly short — a few tight sentences, not an essay.
+- Do NOT invent specific figures, rates, dates, or promises beyond what's in the instructions above. Where specifics aren't given, keep it vague and defer to a call.
 - Do NOT add a subject line. Do NOT add a signature or sign-off name (that's added separately). Start straight into the reply (a greeting like "Hi," is fine).
+- Do NOT use em dashes (—) or en dashes (–) anywhere. Use commas, full stops, or "and" instead, so it reads like a real person typing with normal punctuation.
 Output ONLY the reply text.`;
 
-  const original = btn.textContent;
-  btn.disabled = true; btn.textContent = '✨ Drafting…';
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = '✨ Writing…';
   try {
     const res = await emailApi('/ai/generate', { prompt, maxTokens: 2048 });
-    const draft = (res && res.text || '').trim();
+    const draft = _stripDashes((res && res.text || '').trim());
     if (!draft) throw new Error('AI returned nothing');
-    // Put the draft in the body for review. Preserve nothing the user typed —
-    // it's been folded into the draft as a steer.
     bodyEl.value = draft;
+    closeModal('aiReplyModal');
     bodyEl.focus();
     showToast('✨ Draft ready — review & edit before sending');
   } catch (e) {
-    showToast('AI failed: ' + (e.message || 'unknown'));
+    errEl.textContent = 'AI failed: ' + (e.message || 'unknown') + '. You can still write the reply yourself.';
+    errEl.style.display = 'block';
   } finally {
-    btn.disabled = false; btn.textContent = original;
+    btn.disabled = false; btn.textContent = '✨ Write it';
   }
+}
+
+// Safety net: strip em/en dashes from AI output so nothing reads as AI-written.
+// Replaces " — " style breaks with a comma, and any stray em/en dash with a
+// simple hyphen or nothing, matching how a person would actually type.
+function _stripDashes(s) {
+  if (!s) return s;
+  return s
+    .replace(/\s*[—–]\s*/g, ', ')   // "word — word" -> "word, word"
+    .replace(/[—–]/g, '-')            // any remaining em/en dash -> hyphen
+    .replace(/ ,/g, ',')               // tidy stray " ,"
+    .replace(/,\s*,/g, ',');           // collapse any double commas
 }
 
 // Minimal HTML→text for when only an HTML body is available.
