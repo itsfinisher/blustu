@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ab (bulk follow-up: optional AI vary wording so batches dont look mass-sent; falls back to template on failure) -->
+<!-- blustu panel build 2026-07-15-ac (follow-up AI: stores what-they-post per snipe, personalises follow-ups from it, prompts card-by-card for any missing before an AI batch; editable in snipe edit) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3659,6 +3659,29 @@ html, body { overflow-x: hidden; }
         <button class="btn btn-ghost" id="bfu-20" onclick="runBulkFollowUp(20)">First 20</button>
         <button class="btn btn-ghost" id="bfu-50" onclick="runBulkFollowUp(50)">First 50</button>
         <button class="btn btn-primary" id="bfu-all" onclick="runBulkFollowUp('all')">All</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FOLLOW-UP: fill "what they post" per creator (AI mode) ══ -->
+<div class="modal-overlay" id="fuDescModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">✨ Add a note to personalise <span id="fu-desc-progress" style="font-size:12px;color:var(--gray-400);font-weight:400"></span></div>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--gray-400);margin:0 0 12px">These creators don't have a saved note about their content yet. Add a few words so the AI follow-up feels personal. Take a look at their profile, then jot what they post.</p>
+      <div id="fu-desc-card" style="background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;padding:14px;margin-bottom:14px"></div>
+      <label class="form-label" style="font-size:12px">What do they post?</label>
+      <textarea class="form-textarea" id="fu-desc-input" rows="3" placeholder="e.g. street fashion hauls and outfit-of-the-day reels, lots of thrift finds, great energy" style="width:100%;font-size:13px"></textarea>
+      <div id="fu-desc-skip-note" style="display:none"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost btn-sm" onclick="_skipAllFollowUpDescs()" title="Send now — remaining ones just get reworded, no personal note">Skip all &amp; send</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="_saveFollowUpDesc(true)">Skip this one</button>
+        <button class="btn btn-primary" onclick="_saveFollowUpDesc(false)">Save &amp; next →</button>
       </div>
     </div>
   </div>
@@ -17092,12 +17115,13 @@ Output ONLY the 3-4 sentence paragraph itself, with no preamble, quotes, or sign
     return;
   }
 
-  // Add the snipe (same shape as quickAddSnipeAndEmail)
+  // Add the snipe (same shape as quickAddSnipeAndEmail). Store the "what they
+  // post" description so follow-ups can personalise from it later.
   const row = {
     owner_email: currentUser?.email || '', owner_name: currentUser?.name || currentUser?.email || '',
     name: c.name, followers: c.followers || null, location: c.location || null,
     email: c.email, link: c.link || null, contact_method: 'email',
-    sent: 'no', reply_status: 'waiting', notes: 'Niche: ' + c.niche,
+    sent: 'no', reply_status: 'waiting', notes: _buildSnipeNotes(c.niche, desc),
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   };
   await DB._req('POST', 'snipes', [row], '').catch(()=>{});
@@ -17278,15 +17302,57 @@ function _dueFollowUpSnipes() {
   return snipes.filter(s => s.email && _snipeFollowUpDue(s));
 }
 
+// ── Snipe notes: store Niche + "what they post" description in the notes field ──
+// Format keeps machine-readable lines at the top and preserves freeform notes:
+//   Niche: fashion
+//   Posts: funny London day-in-the-life vlogs, great editing
+//   <any other freeform notes the user typed>
+function _parseSnipeNotes(notes) {
+  const out = { niche: '', posts: '', rest: '' };
+  const lines = String(notes || '').split('\n');
+  const restLines = [];
+  for (const line of lines) {
+    const mN = /^Niche:\s*(.*)$/i.exec(line);
+    const mP = /^Posts:\s*(.*)$/i.exec(line);
+    if (mN) { out.niche = mN[1].trim(); continue; }
+    if (mP) { out.posts = mP[1].trim(); continue; }
+    restLines.push(line);
+  }
+  out.rest = restLines.join('\n').trim();
+  return out;
+}
+function _buildSnipeNotes(niche, posts, rest) {
+  const parts = [];
+  if (niche) parts.push('Niche: ' + niche);
+  if (posts && posts.trim()) parts.push('Posts: ' + posts.trim());
+  if (rest && rest.trim()) parts.push(rest.trim());
+  return parts.join('\n');
+}
+/** The stored "what they post" description for a snipe, if any. */
+function _snipePostsDesc(s) { return _parseSnipeNotes(s?.notes).posts; }
+
+/** Save/replace the posts description on a snipe (preserving niche + freeform). */
+async function _setSnipePostsDesc(snipeId, desc) {
+  const s = snipes.find(x => String(x.id) === String(snipeId));
+  if (!s) return;
+  const parsed = _parseSnipeNotes(s.notes);
+  s.notes = _buildSnipeNotes(parsed.niche, desc, parsed.rest);
+  await DB._req('PATCH', 'snipes', { notes: s.notes }, '?id=eq.' + s.id).catch(()=>{});
+}
+
 // AI-vary a follow-up body so a batch doesn't look mass-sent. Keeps the SAME
 // meaning and structure as the template, just freshens the wording. Falls back
 // to the original template text on any failure so the send still goes out.
 async function _aiVaryFollowUp(baseBody, snipe) {
   const myName = currentUser?.name || '';
+  const posts = _snipePostsDesc(snipe);
+  const personalise = posts
+    ? `\nThis is what the creator posts (noticed when they were first scouted). Weave in ONE short, natural, genuine reference to it so the follow-up feels personal and not mass-sent, but keep it subtle. Do not overdo it:\n"""${posts.slice(0, 500)}"""\n`
+    : '';
   const prompt = `You are ${myName || 'a talent scout'} at BluStu, a creator talent agency. Below is a follow-up email you're sending to a creator named ${snipe.name} who hasn't replied to your first message yet.
 
-Rewrite it so it says the SAME things and keeps the SAME friendly, low-pressure intent, but with naturally varied wording so it doesn't look like a mass-sent template. Keep it about the same length. Keep the greeting to ${snipe.name}. Do not add new claims, offers, figures, or links that aren't already in the text.
-
+Rewrite it so it keeps the SAME friendly, low-pressure intent, but with naturally varied wording so it doesn't look like a mass-sent template. Keep it about the same length. Keep the greeting to ${snipe.name}. Do not add new claims, offers, figures, or links that aren't already in the text${posts ? ' (the note about what they post below is context for you, not a new offer)' : ''}.
+${personalise}
 IMPORTANT: Do NOT use em dashes (—) or en dashes (–) anywhere. Use commas, full stops, or "and", so it reads like a real person typing.
 Do NOT add a signature or sign-off name (that's added separately). Output ONLY the rewritten email body.
 
@@ -17337,6 +17403,21 @@ async function runBulkFollowUp(count) {
   const due = _dueFollowUpSnipes().slice(0, count === 'all' ? undefined : count);
   if (!due.length) { showToast('Nothing due'); return; }
 
+  // If AI variation is on, any snipe with no saved "what they post" note needs a
+  // quick description so the AI has something personal to work from. Ask for
+  // those first, one profile card at a time, then start the batch.
+  if (aiVary) {
+    const missing = due.filter(s => !_snipePostsDesc(s));
+    if (missing.length) {
+      _collectFollowUpDescs(missing, () => _startFollowUpBatch(due, mailbox, true));
+      return;
+    }
+  }
+  _startFollowUpBatch(due, mailbox, aiVary);
+}
+
+/** The actual background send loop. */
+function _startFollowUpBatch(due, mailbox, aiVary) {
   _bulkFollowUp = { running: true, done: 0, total: due.length, ok: 0, failed: 0, cancel: false, ai: aiVary };
   _renderBulkFollowUpStatus();
 
@@ -17386,6 +17467,65 @@ async function runBulkFollowUp(count) {
 }
 
 function cancelBulkFollowUp() { _bulkFollowUp.cancel = true; }
+
+// ── Collect missing "what they post" notes before an AI follow-up batch ──
+// Shows a profile card per snipe (name, followers, location, link) so the user
+// can glance at them and jot a few words. Runs the callback once done.
+let _fuDescQueue = { list: [], idx: 0, onDone: null };
+
+function _collectFollowUpDescs(missingSnipes, onDone) {
+  _fuDescQueue = { list: missingSnipes.slice(), idx: 0, onDone };
+  _showNextFollowUpDesc();
+}
+
+function _showNextFollowUpDesc() {
+  const q = _fuDescQueue;
+  if (q.idx >= q.list.length) {
+    closeModal('fuDescModal');
+    const cb = q.onDone; _fuDescQueue = { list: [], idx: 0, onDone: null };
+    if (cb) cb();
+    return;
+  }
+  const s = q.list[q.idx];
+  document.getElementById('fu-desc-progress').textContent = `${q.idx + 1} of ${q.list.length}`;
+  // Profile card
+  const fol = s.followers ? _fmtCompact(String(s.followers).replace(/[^0-9]/g,'') || 0) : '—';
+  const link = s.link || '';
+  const linkHtml = link
+    ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none;word-break:break-all">${escapeHtml(link.replace(/^https?:\/\//,''))} ↗</a>`
+    : '<span style="color:var(--gray-400)">no link</span>';
+  document.getElementById('fu-desc-card').innerHTML = `
+    <div style="font-weight:700;font-size:16px;margin-bottom:6px">${escapeHtml(s.name || 'Creator')}</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--gray-500);margin-bottom:6px">
+      <span>👥 ${fol} followers</span>
+      ${s.location ? `<span>📍 ${escapeHtml(s.location)}</span>` : ''}
+    </div>
+    <div style="font-size:12px">🔗 ${linkHtml}</div>`;
+  const ta = document.getElementById('fu-desc-input');
+  ta.value = _snipePostsDesc(s) || '';
+  document.getElementById('fu-desc-skip-note').style.display = 'none';
+  openModal('fuDescModal');
+  setTimeout(() => ta.focus(), 100);
+}
+
+async function _saveFollowUpDesc(skip) {
+  const q = _fuDescQueue;
+  const s = q.list[q.idx];
+  if (!skip) {
+    const desc = document.getElementById('fu-desc-input').value.trim();
+    if (desc && s) await _setSnipePostsDesc(s.id, desc);
+  }
+  q.idx++;
+  _showNextFollowUpDesc();
+}
+
+/** Skip the rest and send now — snipes still missing a note just get varied wording. */
+function _skipAllFollowUpDescs() {
+  const q = _fuDescQueue;
+  closeModal('fuDescModal');
+  const cb = q.onDone; _fuDescQueue = { list: [], idx: 0, onDone: null };
+  if (cb) cb();
+}
 
 /** Renders the little progress pill (like the stats-refresh indicator). */
 function _renderBulkFollowUpStatus() {
@@ -18322,6 +18462,7 @@ function openEditSnipe(id) {
           <div class="form-group"><label class="form-label">Reply / status</label><select class="form-select" id="es-status"><option value="waiting">Waiting</option><option value="replied">Replied</option><option value="signed">Signed</option><option value="rejected">Rejected</option><option value="no_reply">No reply</option></select></div>
           <div class="form-group"><label class="form-label">Follow up</label><input class="form-input" id="es-followup"></div>
         </div>
+        <div class="form-group"><label class="form-label">✨ What they post <span style="font-size:11px;color:var(--gray-400);font-weight:400">— used to personalise AI follow-ups</span></label><textarea class="form-textarea" id="es-posts" rows="2" placeholder="e.g. street fashion hauls, thrift finds, outfit reels"></textarea></div>
         <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="es-notes" rows="2"></textarea></div>
       </div>
       <div class="modal-footer">
@@ -18341,7 +18482,12 @@ function openEditSnipe(id) {
   document.getElementById('es-sent').value = (s.sent||'no').toLowerCase() === 'yes' ? 'yes' : 'no';
   document.getElementById('es-status').value = s.reply_status || 'waiting';
   document.getElementById('es-followup').value = s.follow_up || '';
-  document.getElementById('es-notes').value = s.notes || '';
+  // Split the structured notes: Posts line -> its own field, rest -> Notes box
+  const _pn = _parseSnipeNotes(s.notes);
+  document.getElementById('es-posts').value = _pn.posts || '';
+  document.getElementById('es-notes').value = _pn.rest || '';
+  // Stash niche so save can preserve it
+  document.getElementById('es-id').dataset.niche = _pn.niche || '';
   openModal('snipeEditModal');
 }
 
@@ -18359,7 +18505,11 @@ async function saveSnipeEdit() {
     sent:           document.getElementById('es-sent').value,
     reply_status:   document.getElementById('es-status').value,
     follow_up:      document.getElementById('es-followup').value.trim() || null,
-    notes:          document.getElementById('es-notes').value.trim() || null,
+    notes:          _buildSnipeNotes(
+                      document.getElementById('es-id').dataset.niche || '',
+                      document.getElementById('es-posts').value.trim(),
+                      document.getElementById('es-notes').value.trim()
+                    ) || null,
     updated_at:     new Date().toISOString(),
   };
   const r = await DB._req('PATCH', 'snipes', update, '?id=eq.' + id);
