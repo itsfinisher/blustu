@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-x (welcome popup: 7-day snooze after Got it, so it stops nagging every login) -->
+<!-- blustu panel build 2026-07-15-y (AI draft reply: button in reply compose drafts a contextual response from the inbound email) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3509,6 +3509,7 @@ html, body { overflow-x: hidden; }
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
           <label class="form-label" style="margin:0">Message *</label>
           <div style="display:flex;gap:6px;align-items:center">
+            <button type="button" class="btn btn-sm" id="compose-ai-reply-btn" onclick="_aiDraftReply()" style="display:none;font-size:11px;background:linear-gradient(135deg,#7c3aed,#2198ED);color:#fff;padding:4px 10px" title="Let AI draft a reply based on their message">✨ AI draft reply</button>
             <select class="form-select" id="compose-template" onchange="applyComposeTemplate(this.value)" style="font-size:11px;padding:4px 8px;width:auto">
               <option value="">Insert template…</option>
             </select>
@@ -17121,6 +17122,7 @@ async function openSnipeCompose({ creatorName, to, niche, aiParagraph }) {
   if (tplSel && tpl) tplSel.value = tpl.id;
 
   document.getElementById('composeModalTitle').textContent = aiParagraph ? '✨ AI Snipe Outreach' : '✉ Snipe Outreach';
+  { const _ab = document.getElementById('compose-ai-reply-btn'); if (_ab) _ab.style.display = 'none'; }
   document.getElementById('compose-error').style.display = 'none';
   updateFromPreview();
   openModal('composeEmailModal');
@@ -17201,6 +17203,7 @@ async function openSnipeFollowUp(snipeId) {
   _followUpSnipeId = s.id;
 
   document.getElementById('composeModalTitle').textContent = '↪ Follow-up Outreach';
+  { const _ab = document.getElementById('compose-ai-reply-btn'); if (_ab) _ab.style.display = 'none'; }
   document.getElementById('compose-error').style.display = 'none';
   updateFromPreview();
   openModal('composeEmailModal');
@@ -17758,6 +17761,69 @@ function _welcomeMissingMediaKit() {
     if (missing.length) out.push({ id: c.id, name: c.name, missing });
   });
   return out;
+}
+
+// ── AI draft reply — drafts a contextual response to an inbound email ──
+async function _aiDraftReply() {
+  const bodyEl = document.getElementById('compose-body');
+  const btn = document.getElementById('compose-ai-reply-btn');
+  if (!bodyEl || !btn) return;
+
+  // The original message we're replying to (stashed by openReply)
+  const theirText = (bodyEl.dataset.replyQuoteText || '').trim()
+    || _htmlToText(bodyEl.dataset.replyQuoteHtml || '').trim();
+  const theirFrom = bodyEl.dataset.replyQuoteFrom || '';
+  const subject = document.getElementById('compose-subject')?.value || '';
+
+  if (!theirText) { showToast('No message text to reply to'); return; }
+
+  // If the user already typed something, use it as a steer for the draft
+  const userSteer = bodyEl.value.trim();
+
+  const fromName = friendlyFromName(document.getElementById('compose-from')?.value || '') || 'BluStu';
+  const myName = currentUser?.name || 'the BluStu team';
+
+  const prompt = `You are ${myName}, writing on behalf of BluStu, a creator talent management agency in London. You're replying to an email. Write ONLY the reply body — warm, professional, concise, and human.
+
+The email you received${theirFrom ? ` (from ${theirFrom})` : ''}, subject "${subject}":
+"""
+${theirText.slice(0, 3000)}
+"""
+${userSteer ? `\nThe sender of the reply (you) wants the reply to convey this — work it in naturally:\n"""${userSteer.slice(0, 800)}"""\n` : ''}
+Guidance:
+- Match a friendly, on-brand agency tone: helpful, genuine, not stiff or corporate.
+- If they seem interested, warmly move things forward (e.g. suggest a quick casual call) without being pushy.
+- If they asked questions, answer clearly and simply where you can; if something needs specifics you don't have, say you'll follow up with detail.
+- If they're hesitant or saying not right now, be gracious, leave the door open, no pressure.
+- Keep it fairly short — a few tight sentences, not an essay.
+- Do NOT invent specific figures, rates, dates, or promises. Keep specifics vague and defer to a call where needed.
+- Do NOT add a subject line. Do NOT add a signature or sign-off name (that's added separately). Start straight into the reply (a greeting like "Hi," is fine).
+Output ONLY the reply text.`;
+
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = '✨ Drafting…';
+  try {
+    const res = await emailApi('/ai/generate', { prompt, maxTokens: 2048 });
+    const draft = (res && res.text || '').trim();
+    if (!draft) throw new Error('AI returned nothing');
+    // Put the draft in the body for review. Preserve nothing the user typed —
+    // it's been folded into the draft as a steer.
+    bodyEl.value = draft;
+    bodyEl.focus();
+    showToast('✨ Draft ready — review & edit before sending');
+  } catch (e) {
+    showToast('AI failed: ' + (e.message || 'unknown'));
+  } finally {
+    btn.disabled = false; btn.textContent = original;
+  }
+}
+
+// Minimal HTML→text for when only an HTML body is available.
+function _htmlToText(html) {
+  if (!html) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return (tmp.textContent || tmp.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function _populateComposeTemplates(creatorName, mode) {
@@ -21739,6 +21805,7 @@ async function openCompose(presetMailbox) {
     if (el) el.value = '';
   });
   document.getElementById('composeModalTitle').textContent = '✉ New Email';
+  { const _ab = document.getElementById('compose-ai-reply-btn'); if (_ab) _ab.style.display = 'none'; }
   document.getElementById('compose-error').style.display = 'none';
   // Populate templates + reset signature toggle
   await loadEmailTemplates();
@@ -21834,6 +21901,9 @@ async function openReply(meta) {
 
   document.getElementById('composeModalTitle').textContent = '↩ Reply';
   document.getElementById('compose-error').style.display = 'none';
+  // This is a reply — enable the AI draft-reply button
+  const aiBtn = document.getElementById('compose-ai-reply-btn');
+  if (aiBtn) aiBtn.style.display = (meta.bodyText || meta.bodyHtml) ? '' : 'none';
   updateFromPreview();
   openModal('composeEmailModal');
   setTimeout(() => document.getElementById('compose-body')?.focus(), 100);
