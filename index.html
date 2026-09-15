@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-af (inbox: fetch whole thread in ONE worker call so received messages stop failing; auto-scroll to newest; robust back-and-forth sort) -->
+<!-- blustu panel build 2026-07-15-ag (inbox: resolve Sent folder name (INBOX.Sent) in thread fetch so Sent-tab threads load; merge INBOX into Sent tab so threads are complete both ways) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -20765,18 +20765,25 @@ function _prettyFolderName(f) {
  */
 async function _fetchFolderWithSentMerge(mailbox, folder, offset = 0, limit = 50) {
   const isInbox = (folder || 'INBOX').toLowerCase() === 'inbox';
+  const isSent  = (folder || '').toLowerCase() === 'sent';
   const primaryReq = emailApi('/inbox', { mailbox, folder, limit, offset });
-  // On INBOX, always fetch a wide Sent window (once, at offset 0) so reply
-  // threading works across pagination. Skip when we're loading page 2+ of
-  // INBOX — Sent is already in _currentInbox.messages from the first page.
-  const sentReq    = isInbox && offset === 0
-    ? emailApi('/inbox', { mailbox, folder: 'Sent', limit: 400, offset: 0 }).catch(() => ({ messages: [] }))
-    : Promise.resolve(null);
+  // On INBOX, also pull a wide Sent window so reply threading works. And on the
+  // SENT tab, pull a wide INBOX window so threads show the other side's replies
+  // too (otherwise a thread opened from Sent looks one-sided). Only at offset 0.
+  let mergeReq = Promise.resolve(null);
+  let mergeFolder = null;
+  if (offset === 0) {
+    if (isInbox)      { mergeFolder = 'Sent';  mergeReq = emailApi('/inbox', { mailbox, folder: 'Sent',  limit: 400, offset: 0 }).catch(() => ({ messages: [] })); }
+    else if (isSent)  { mergeFolder = 'INBOX'; mergeReq = emailApi('/inbox', { mailbox, folder: 'INBOX', limit: 400, offset: 0 }).catch(() => ({ messages: [] })); }
+  }
 
-  const [primary, sent] = await Promise.all([primaryReq, sentReq]);
+  const [primary, merged] = await Promise.all([primaryReq, mergeReq]);
   const primaryMsgs = (primary.messages || []).map(m => ({ ...m, _folder: folder }));
-  const sentMsgs    = sent ? (sent.messages || []).map(m => ({ ...m, _folder: 'Sent' })) : [];
-  return { primary: primaryMsgs, sent: sentMsgs, total: primary.total || 0 };
+  const mergedMsgs  = merged ? (merged.messages || []).map(m => ({ ...m, _folder: mergeFolder })) : [];
+  // Dedupe: a message could appear in both windows (rare) — keep by uid+folder
+  const seen = new Set(primaryMsgs.map(m => (m._folder||'') + '|' + m.uid));
+  const extraMsgs = mergedMsgs.filter(m => !seen.has((m._folder||'') + '|' + m.uid));
+  return { primary: primaryMsgs, sent: extraMsgs, total: primary.total || 0 };
 }
 
 /** Build the folder-tabs HTML strip. clickFn returns the onclick string for each folder. */
