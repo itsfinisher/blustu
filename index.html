@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ae (inbox: fetch thread messages in batches of 3 not all-at-once so long threads stop dropping messages; 3x retry + auto-retry failed) -->
+<!-- blustu panel build 2026-07-15-af (inbox: fetch whole thread in ONE worker call so received messages stop failing; auto-scroll to newest; robust back-and-forth sort) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -20830,6 +20830,32 @@ function _clearInboxCacheFor(mailbox) {
 /** Fetch a single message body, using the cache first and retrying once on a
  *  transient network failure. Returns the message object (with _folder) or
  *  throws only after cache miss + retry both fail. */
+/** Fetch many thread messages in one worker call. Retries the whole batch on a
+ *  transient failure. If the /thread route isn't deployed yet, falls back to
+ *  per-message fetches so the panel still works. Returns array of {uid,folder,...}. */
+async function _fetchThreadBatch(mailbox, items) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await emailApi('/thread', { mailbox, items });
+      if (r && Array.isArray(r.messages)) return r.messages;
+      throw new Error('bad response');
+    } catch (e) {
+      // If the endpoint is missing (older worker), fall back to per-message.
+      if (/404|not found|unknown/i.test(e.message || '')) {
+        const out = [];
+        for (const it of items) {
+          try { const m = await _fetchMessageCached(mailbox, it.folder, it.uid); out.push({ ...m, uid: it.uid, folder: it.folder }); }
+          catch(err) { out.push({ uid: it.uid, folder: it.folder, error: err.message }); }
+        }
+        return out;
+      }
+      if (attempt < 2) await new Promise(res => setTimeout(res, [500, 1200][attempt]));
+    }
+  }
+  // All retries failed — return errors so rows show retry, not a blank pane
+  return items.map(it => ({ uid: it.uid, folder: it.folder, error: 'Failed to fetch' }));
+}
+
 async function _fetchMessageCached(mailbox, folder, uid) {
   const key = _msgCacheKey(mailbox, folder, uid);
   if (_msgBodyCache[key]) return _msgBodyCache[key];
@@ -21427,7 +21453,16 @@ function _groupIntoThreads(messages) {
 
   // Build thread objects
   const threads = Object.entries(groups).map(([root, msgs]) => {
-    msgs.sort((a, b) => new Date(a.date) - new Date(b.date));
+    // Sort oldest -> newest so the conversation reads as a natural back-and-forth
+    // (their message, your reply, their message, your reply...). Guard against
+    // missing/invalid dates so a dateless message doesn't jump out of order.
+    msgs.sort((a, b) => {
+      const ta = new Date(a.date).getTime(), tb = new Date(b.date).getTime();
+      const va = isNaN(ta) ? 0 : ta, vb = isNaN(tb) ? 0 : tb;
+      if (va !== vb) return va - vb;
+      // Tie-break by UID so same-second messages keep a stable order
+      return (Number(a.uid) || 0) - (Number(b.uid) || 0);
+    });
     const participants = [];
     let anyUnread = false;
     let latestDate = msgs[0].date;
@@ -21596,26 +21631,44 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
   // the user switched threads doesn't overwrite the newer view.
   _activeThreadKey = threadKey;
 
-  // Fetch each message (cache-first, with retry). Cached ones resolve instantly.
-  // IMPORTANT: fetch in small batches, NOT all at once — firing one request per
-  // message simultaneously on a long thread overloads the mail server, which
-  // drops the excess as "Failed to fetch". Batches of 3 keep it reliable while
-  // still being fast (cached messages return instantly anyway).
+  // Fetch all the thread's message bodies in ONE worker call (single IMAP
+  // connection, folders selected once). This replaces firing a separate request
+  // per message, which opened dozens of connections and made received messages
+  // fail with "Failed to fetch" once MXroute's connection limit was hit.
+  // Cache-first: messages already loaded resolve instantly and aren't re-fetched.
   let fullMessages;
   try {
-    fullMessages = [];
-    const BATCH = 3;
-    for (let i = 0; i < thread.messages.length; i += BATCH) {
-      if (_activeThreadKey !== threadKey) return; // user switched away — stop
-      const slice = thread.messages.slice(i, i + BATCH);
-      const got = await Promise.all(slice.map(m =>
-        _fetchMessageCached(_currentInbox.mailbox, m._folder || _currentInbox.folder, m.uid)
-          .catch(e => ({ uid: m.uid, error: e.message, ...m }))
-      ));
-      fullMessages.push(...got);
-      // Tiny gap between batches so we don't hammer the server
-      if (i + BATCH < thread.messages.length) await new Promise(r => setTimeout(r, 120));
+    const need = [];        // messages not in cache — fetch these
+    const cachedByUid = {}; // uid -> cached message
+    for (const m of thread.messages) {
+      const folder = m._folder || _currentInbox.folder;
+      const ck = _msgCacheKey(_currentInbox.mailbox, folder, m.uid);
+      if (_msgBodyCache[ck]) cachedByUid[String(m.uid)] = _msgBodyCache[ck];
+      else need.push({ uid: m.uid, folder });
     }
+
+    let fetched = {};
+    if (need.length) {
+      const res = await _fetchThreadBatch(_currentInbox.mailbox, need);
+      (res || []).forEach(r => {
+        if (r && r.uid != null && !r.error) {
+          const msg = { ...r, _folder: r.folder || 'INBOX' };
+          _msgBodyCache[_msgCacheKey(_currentInbox.mailbox, msg._folder, r.uid)] = msg;
+          fetched[String(r.uid)] = msg;
+        } else if (r && r.uid != null) {
+          fetched[String(r.uid)] = { uid: r.uid, error: r.error || 'Failed to fetch' };
+        }
+      });
+    }
+
+    // Assemble in original thread order, merging in the list-row metadata
+    fullMessages = thread.messages.map(m => {
+      const u = String(m.uid);
+      if (cachedByUid[u]) return cachedByUid[u];
+      if (fetched[u] && !fetched[u].error) return fetched[u];
+      // Failed — keep list metadata so we can still show sender/date on the row
+      return { ...m, uid: m.uid, error: (fetched[u] && fetched[u].error) || 'Failed to fetch' };
+    });
   } catch(e) {
     pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--red)">❌ ${e.message}</div>`;
     return;
@@ -21697,8 +21750,6 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
     </div>`;
 
   // If any messages failed to load, quietly retry them once after a short delay.
-  // The successful ones are cached, so re-opening only re-fetches the failures —
-  // usually clearing the red "Failed to fetch" rows without the user lifting a finger.
   const anyFailed = fullMessages.some(m => m && m.error);
   if (anyFailed && !_autoRetriedThreads.has(threadKey)) {
     _autoRetriedThreads.add(threadKey);
@@ -21708,6 +21759,16 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
   } else if (!anyFailed) {
     _autoRetriedThreads.delete(threadKey); // reset so future failures can auto-retry
   }
+
+  // Jump to the latest message (expanded) so you land on the newest reply, not
+  // the top of a long thread. Rayyan: "it's never at the top, I have to scroll".
+  setTimeout(() => {
+    const container = document.getElementById('email-body-container');
+    if (!container) return;
+    const msgs = container.querySelectorAll('.thread-msg');
+    const last = msgs[msgs.length - 1];
+    if (last && last.scrollIntoView) last.scrollIntoView({ block: 'start', behavior: 'auto' });
+  }, 60);
 }
 // Tracks threads we've already auto-retried this view, so we don't loop forever
 // if a message is genuinely unfetchable.
