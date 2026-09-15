@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ah (fix: Sent tab list now shows only threads youve sent in, not all inbox threads; opening still shows both sides) -->
+<!-- blustu panel build 2026-07-15-ai (fix: thread messages keyed by folder+uid not uid alone — cross-folder UID collisions were making merged INBOX+Sent threads fail to fetch) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -21655,35 +21655,38 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
   let fullMessages;
   try {
     const need = [];        // messages not in cache — fetch these
-    const cachedByUid = {}; // uid -> cached message
     for (const m of thread.messages) {
       const folder = m._folder || _currentInbox.folder;
       const ck = _msgCacheKey(_currentInbox.mailbox, folder, m.uid);
-      if (_msgBodyCache[ck]) cachedByUid[String(m.uid)] = _msgBodyCache[ck];
-      else need.push({ uid: m.uid, folder });
+      if (!_msgBodyCache[ck]) need.push({ uid: m.uid, folder });
     }
 
     let fetched = {};
+    const fkey = (folder, uid) => (folder || 'INBOX').toLowerCase() + '|' + uid;
     if (need.length) {
       const res = await _fetchThreadBatch(_currentInbox.mailbox, need);
       (res || []).forEach(r => {
         if (r && r.uid != null && !r.error) {
           const msg = { ...r, _folder: r.folder || 'INBOX' };
           _msgBodyCache[_msgCacheKey(_currentInbox.mailbox, msg._folder, r.uid)] = msg;
-          fetched[String(r.uid)] = msg;
+          fetched[fkey(r.folder, r.uid)] = msg;
         } else if (r && r.uid != null) {
-          fetched[String(r.uid)] = { uid: r.uid, error: r.error || 'Failed to fetch' };
+          fetched[fkey(r.folder, r.uid)] = { uid: r.uid, error: r.error || 'Failed to fetch' };
         }
       });
     }
 
-    // Assemble in original thread order, merging in the list-row metadata
+    // Assemble in original thread order. Key by FOLDER+UID because a UID is only
+    // unique within its folder — an INBOX msg and a Sent msg can share a UID, so
+    // keying by uid alone made them collide and show as "Failed to fetch".
     fullMessages = thread.messages.map(m => {
-      const u = String(m.uid);
-      if (cachedByUid[u]) return cachedByUid[u];
-      if (fetched[u] && !fetched[u].error) return fetched[u];
+      const folder = m._folder || _currentInbox.folder;
+      const ck = _msgCacheKey(_currentInbox.mailbox, folder, m.uid);
+      if (_msgBodyCache[ck]) return _msgBodyCache[ck];
+      const hit = fetched[fkey(folder, m.uid)];
+      if (hit && !hit.error) return hit;
       // Failed — keep list metadata so we can still show sender/date on the row
-      return { ...m, uid: m.uid, error: (fetched[u] && fetched[u].error) || 'Failed to fetch' };
+      return { ...m, uid: m.uid, error: (hit && hit.error) || 'Failed to fetch' };
     });
   } catch(e) {
     pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--red)">❌ ${e.message}</div>`;
