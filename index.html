@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ad (inbox fixes: re-open thread after replying so it doesnt vanish; delayed refresh so just-sent emails appear; resilient long-thread matching + wider sent window) -->
+<!-- blustu panel build 2026-07-15-ae (inbox: fetch thread messages in batches of 3 not all-at-once so long threads stop dropping messages; 3x retry + auto-retry failed) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -20834,7 +20834,10 @@ async function _fetchMessageCached(mailbox, folder, uid) {
   const key = _msgCacheKey(mailbox, folder, uid);
   if (_msgBodyCache[key]) return _msgBodyCache[key];
   let lastErr;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  // 3 attempts with growing backoff — "Failed to fetch" is usually a transient
+  // network/throttle blip that succeeds on a second or third try.
+  const backoffs = [400, 1000];
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const r = await emailApi('/message', { mailbox, uid, folder: folder || 'INBOX' });
       if (r && r.message) {
@@ -20845,9 +20848,8 @@ async function _fetchMessageCached(mailbox, folder, uid) {
       lastErr = new Error('Empty message');
     } catch(e) {
       lastErr = e;
-      // brief backoff before the single retry
-      if (attempt === 0) await new Promise(res => setTimeout(res, 400));
     }
+    if (attempt < backoffs.length) await new Promise(res => setTimeout(res, backoffs[attempt]));
   }
   throw lastErr || new Error('Failed to load');
 }
@@ -21594,14 +21596,26 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
   // the user switched threads doesn't overwrite the newer view.
   _activeThreadKey = threadKey;
 
-  // Fetch each message (cache-first, with retry). Cached ones resolve instantly,
-  // so re-opening a thread never re-hits the network or shows a spurious error.
+  // Fetch each message (cache-first, with retry). Cached ones resolve instantly.
+  // IMPORTANT: fetch in small batches, NOT all at once — firing one request per
+  // message simultaneously on a long thread overloads the mail server, which
+  // drops the excess as "Failed to fetch". Batches of 3 keep it reliable while
+  // still being fast (cached messages return instantly anyway).
   let fullMessages;
   try {
-    fullMessages = await Promise.all(thread.messages.map(m =>
-      _fetchMessageCached(_currentInbox.mailbox, m._folder || _currentInbox.folder, m.uid)
-        .catch(e => ({ uid: m.uid, error: e.message, ...m }))
-    ));
+    fullMessages = [];
+    const BATCH = 3;
+    for (let i = 0; i < thread.messages.length; i += BATCH) {
+      if (_activeThreadKey !== threadKey) return; // user switched away — stop
+      const slice = thread.messages.slice(i, i + BATCH);
+      const got = await Promise.all(slice.map(m =>
+        _fetchMessageCached(_currentInbox.mailbox, m._folder || _currentInbox.folder, m.uid)
+          .catch(e => ({ uid: m.uid, error: e.message, ...m }))
+      ));
+      fullMessages.push(...got);
+      // Tiny gap between batches so we don't hammer the server
+      if (i + BATCH < thread.messages.length) await new Promise(r => setTimeout(r, 120));
+    }
   } catch(e) {
     pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--red)">❌ ${e.message}</div>`;
     return;
@@ -21681,7 +21695,23 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
     <div class="inbox-email-body" id="email-body-container" style="padding-top:0">
       ${messagesHtml}
     </div>`;
+
+  // If any messages failed to load, quietly retry them once after a short delay.
+  // The successful ones are cached, so re-opening only re-fetches the failures —
+  // usually clearing the red "Failed to fetch" rows without the user lifting a finger.
+  const anyFailed = fullMessages.some(m => m && m.error);
+  if (anyFailed && !_autoRetriedThreads.has(threadKey)) {
+    _autoRetriedThreads.add(threadKey);
+    setTimeout(() => {
+      if (_activeThreadKey === threadKey) openEmailThread(threadKey, isCreatorTab, creatorId);
+    }, 1500);
+  } else if (!anyFailed) {
+    _autoRetriedThreads.delete(threadKey); // reset so future failures can auto-retry
+  }
 }
+// Tracks threads we've already auto-retried this view, so we don't loop forever
+// if a message is genuinely unfetchable.
+const _autoRetriedThreads = new Set();
 
 function toggleThreadMsg(uid) {
   const el = document.getElementById('thread-body-' + uid);
