@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ac (follow-up AI: stores what-they-post per snipe, personalises follow-ups from it, prompts card-by-card for any missing before an AI batch; editable in snipe edit) -->
+<!-- blustu panel build 2026-07-15-ad (inbox fixes: re-open thread after replying so it doesnt vanish; delayed refresh so just-sent emails appear; resilient long-thread matching + wider sent window) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -20770,7 +20770,7 @@ async function _fetchFolderWithSentMerge(mailbox, folder, offset = 0, limit = 50
   // threading works across pagination. Skip when we're loading page 2+ of
   // INBOX — Sent is already in _currentInbox.messages from the first page.
   const sentReq    = isInbox && offset === 0
-    ? emailApi('/inbox', { mailbox, folder: 'Sent', limit: 200, offset: 0 }).catch(() => ({ messages: [] }))
+    ? emailApi('/inbox', { mailbox, folder: 'Sent', limit: 400, offset: 0 }).catch(() => ({ messages: [] }))
     : Promise.resolve(null);
 
   const [primary, sent] = await Promise.all([primaryReq, sentReq]);
@@ -20817,6 +20817,15 @@ function _emailAuthToken() {
  *  "Failed to fetch" just because you opened another thread. */
 const _msgBodyCache = {};
 function _msgCacheKey(mailbox, folder, uid) { return `${mailbox}|${folder||'INBOX'}|${uid}`; }
+
+/** Drop cached Sent message bodies for a mailbox so a refresh re-fetches them.
+ *  Used after sending, so a newly-saved Sent message isn't masked by stale cache. */
+function _clearInboxCacheFor(mailbox) {
+  if (!mailbox) return;
+  Object.keys(_msgBodyCache).forEach(k => {
+    if (k.startsWith(mailbox + '|')) delete _msgBodyCache[k];
+  });
+}
 
 /** Fetch a single message body, using the cache first and retrying once on a
  *  transient network failure. Returns the message object (with _folder) or
@@ -21292,7 +21301,7 @@ function _renderThreadRow(thread, isCreatorTab, creatorId, folder) {
   else if (hasSent)          badges.push('<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:8px;font-weight:600">↩ Replied</span>');
   else if (needsReply)       badges.push('<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-weight:600">⚠ Needs reply</span>');
 
-  return `<div class="inbox-item${thread.anyUnread ? ' unread' : ''}" data-uid="${m.uid}" onclick="openEmailThread('${thread.threadKey}', ${isCreatorTab}, ${creatorId || 'null'})">
+  return `<div class="inbox-item${thread.anyUnread ? ' unread' : ''}" data-uid="${m.uid}" data-subject="${(thread.subject || '').replace(/"/g,'&quot;')}" onclick="openEmailThread('${thread.threadKey}', ${isCreatorTab}, ${creatorId || 'null'})">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
       <div style="display:flex;align-items:center;gap:8px;min-width:0">
         <div style="width:32px;height:32px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">${initial}</div>
@@ -21550,8 +21559,25 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
 
   // Find the thread in the cached current inbox
   const threads = _groupIntoThreads(_currentInbox.messages);
-  const thread = threads.find(t => t.threadKey === threadKey);
-  if (!thread) { pane.innerHTML = '<div style="padding:32px;text-align:center;color:var(--red)">Thread not found</div>'; return; }
+  let thread = threads.find(t => t.threadKey === threadKey);
+  // On long threads the root message can fall outside the loaded window, which
+  // shifts the threadKey so an exact match fails ("Thread not found"). Fall back
+  // to the thread whose messages include this key, or that shares the subject of
+  // the row the user clicked, so the conversation still opens.
+  if (!thread) {
+    thread = threads.find(t => t.messages.some(m =>
+      (m.messageId && m.messageId.trim() === threadKey) ||
+      (m.references || '').split(/\s+/).includes(threadKey) ||
+      (m.inReplyTo || '').trim() === threadKey
+    ));
+  }
+  if (!thread) {
+    // Last resort: the clicked list row still carries the subject — match on that.
+    const clickedRow = document.querySelector(`.inbox-item[onclick*="${threadKey}"]`);
+    const clickedSubj = clickedRow ? _normaliseSubject(clickedRow.getAttribute('data-subject') || '') : '';
+    if (clickedSubj) thread = threads.find(t => _normaliseSubject(t.subject || '') === clickedSubj);
+  }
+  if (!thread) { pane.innerHTML = '<div style="padding:32px;text-align:center;color:var(--red)">Thread not found — try refreshing the inbox.</div>'; return; }
 
   _enterInboxReaderMobile(pane);
 
@@ -22061,6 +22087,7 @@ async function openCompose(presetMailbox) {
 // message (which breaks inline onclick when bodies contain quotes/newlines).
 let _threadMsgCache = {};
 let _activeThreadKey = null;
+let _replyingFromThreadKey = null;
 let _lastThreadWasCreatorTab = false;
 let _lastThreadCreatorId = null;
 
@@ -22090,6 +22117,9 @@ function replyToCachedMessage(uid) {
 }
 
 async function openReply(meta) {
+  // Remember which thread we're replying from, so after sending we can re-open
+  // it (rather than collapsing back to the list) and show the new message.
+  _replyingFromThreadKey = _activeThreadKey;
   const accounts = await loadEmailAccounts();
   const sel = document.getElementById('compose-from');
   if (!sel) return;
@@ -22302,12 +22332,32 @@ async function sendComposedEmail() {
     _markSnipeSentByEmail(to);
     _markFollowUpSent(to);
     _markBrandSnipeSentByEmail(to);
-    // Refresh whichever inbox is open
-    if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
-      renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder);
-    } else if (_currentInbox.mailbox) {
-      refreshTeamInbox();
-    }
+
+    // Refresh the inbox so the new message shows. The mail server can take a
+    // moment to index a just-saved Sent message, so we refresh the message list
+    // now AND again after a short delay, and if we were reading a thread we
+    // re-open it both times so it doesn't collapse back to the list.
+    const wasThreadKey = _replyingFromThreadKey;
+    _replyingFromThreadKey = null;
+    const reopenThread = () => {
+      if (!wasThreadKey) return;
+      // The threadKey may have shifted if the root changed, so also try to find
+      // the thread that now contains our reply's participants/subject.
+      try { openEmailThread(wasThreadKey, _lastThreadWasCreatorTab, _lastThreadCreatorId); } catch(e) {}
+    };
+    const doRefresh = (thenReopen) => {
+      if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
+        renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder).then?.(() => { if (thenReopen) reopenThread(); });
+        if (thenReopen) setTimeout(reopenThread, 300);
+      } else if (_currentInbox.mailbox) {
+        const p = loadTeamInbox(_currentInbox.mailbox, _currentInbox.folder);
+        if (thenReopen) { (p && p.then) ? p.then(reopenThread) : setTimeout(reopenThread, 300); }
+      }
+    };
+    // Immediate refresh (may not yet have the Sent message on the server)…
+    doRefresh(true);
+    // …then again once the server has had time to index the saved Sent message.
+    setTimeout(() => { _clearInboxCacheFor(_currentInbox.mailbox); doRefresh(true); }, 2500);
   } catch(e) {
     btn.disabled = false; btn.textContent = 'Send →';
     const msg = e.message || 'unknown error';
