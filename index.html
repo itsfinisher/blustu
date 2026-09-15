@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-aj (inbox: load ENTIRE thread server-side by subject search across INBOX+Sent so old threads of any age load fully, not just whats in the window) -->
+<!-- blustu panel build 2026-07-15-ak (inbox: progressive thread loading — headers first, then each body one-by-one with a progress bar; tiny requests avoid worker timeouts; per-message retry) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -78,6 +78,7 @@
 .welcome-sec-h { font-size:13px; font-weight:700; margin-bottom:8px; }
 .welcome-todo { display:flex; align-items:center; gap:10px; padding:7px 0; font-size:13px; color:var(--gray-700); border-bottom:1px solid var(--gray-50); }
 .welcome-todo:last-child { border-bottom:none; }
+@keyframes spin { to { transform: rotate(360deg); } }
 [data-theme="dark"] .snipe-row-followup-due { background:rgba(245,158,11,.16); box-shadow:inset 3px 0 0 var(--amber); }
 
 /* Searchable niche dropdown */
@@ -21603,6 +21604,70 @@ async function openEmailMessage(uid, isCreatorTab, creatorId) {
  * Shows every message stacked, oldest at top, newest at bottom — Gmail style.
  * Older messages collapsed to a one-line summary; newest one expanded.
  */
+// Renders one message in a thread. Handles three states: loading (body not yet
+// fetched), error (fetch failed, with Retry), and loaded (full body).
+function _threadMsgHtml(m, idx, lastIdx, threadKey, isCreatorTab, creatorId) {
+  const fromName = _parseFromName(m.from);
+  const fromAddr = _parseFromAddress(m.from);
+  const dateStr = m.date ? new Date(m.date).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const isExpanded = (idx === lastIdx);
+  const isSent = (m._folder || '').toLowerCase() === 'sent';
+  const initial = (fromName[0] || '?').toUpperCase();
+  const color = isSent ? 'var(--blue)' : AVATAR_COLORS[Math.abs(_hashCode(fromName || fromAddr || '?')) % AVATAR_COLORS.length];
+  const hasBody = !!(m.bodyHtml || m.bodyText);
+
+  // Body area varies by state
+  let bodyInner;
+  if (m.error) {
+    bodyInner = `<div style="padding:12px;background:#fee2e2;color:#991b1b;border-radius:8px;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <span>⚠️ Could not load: ${escapeHtml(m.error)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="_retryOneThreadMsg('${threadKey}','${(m._folder||'INBOX')}',${m.uid})" style="white-space:nowrap">↻ Retry</button>
+    </div>`;
+  } else if (!hasBody) {
+    bodyInner = `<div style="padding:14px;color:var(--gray-400);font-size:12px;display:flex;align-items:center;gap:8px">
+      <span class="thread-spinner" style="width:14px;height:14px;border:2px solid var(--gray-200);border-top-color:var(--blue);border-radius:50%;display:inline-block;animation:spin 0.7s linear infinite"></span>
+      Loading…
+    </div>`;
+  } else {
+    let bodyHtml = '';
+    if (m.bodyHtml) {
+      bodyHtml = _sanitiseEmailHtml(m.bodyHtml);
+    } else {
+      const escaped = (m.bodyText || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      bodyHtml = escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--blue)">$1</a>');
+    }
+    bodyInner = `<div class="inbox-email-body" style="border-top:1px solid var(--gray-100);padding-top:12px;margin-top:8px">${bodyHtml}</div>
+      ${_renderAttachmentsBlock(m, m._folder || _currentInbox.folder)}
+      <div class="inbox-email-actions" style="border-top:1px solid var(--gray-100);margin-top:12px;padding-top:12px">
+        <button class="btn btn-primary btn-sm" onclick="replyToCachedMessage('${m.uid}')">↩ Reply</button>
+        <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${m.uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEmailMessage(${m.uid}, ${isCreatorTab}, ${creatorId || 'null'})">Delete</button>
+      </div>`;
+  }
+
+  const previewText = hasBody
+    ? ((m.bodyText || stripHtmlForQuote(m.bodyHtml || '')) || '').slice(0, 140).replace(/</g,'&lt;')
+    : (m.error ? '' : 'loading…');
+
+  return `<div class="thread-msg${isExpanded ? ' expanded' : ''}" data-uid="${m.uid}" data-folder="${m._folder||'INBOX'}"${isSent ? ' style="background:#f0f9ff;border-left:3px solid var(--blue)"' : ''}>
+    <div class="thread-msg-head">
+      <div class="thread-msg-avatar" style="background:${color};cursor:pointer" onclick="event.stopPropagation();toggleContactDetails(${m.uid})" title="View contact details">${initial}</div>
+      <div class="thread-msg-meta" onclick="toggleThreadMsg(${m.uid})" style="cursor:pointer">
+        <div class="thread-msg-from">${isSent ? '<span style="color:var(--blue);font-size:10px;font-weight:700;margin-right:6px">↩ YOU SENT</span>' : ''}<span onclick="event.stopPropagation();toggleContactDetails(${m.uid})" style="cursor:pointer;border-bottom:1px dashed var(--gray-300)" title="View contact details">${fromName || fromAddr}</span></div>
+        <div class="thread-msg-preview">${isExpanded ? fromAddr + (m.to ? ' → ' + m.to : '') : previewText}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();toggleContactDetails(${m.uid})" title="Contact details" style="padding:2px 8px;font-size:12px;flex-shrink:0">ⓘ</button>
+      <div class="thread-msg-date" onclick="toggleThreadMsg(${m.uid})" style="cursor:pointer">${dateStr}</div>
+    </div>
+    <div class="contact-details-panel" id="contact-details-${m.uid}" style="display:none;padding:12px 16px;background:var(--gray-50);border-top:1px solid var(--gray-100);font-size:12px">
+      ${_renderContactDetails(m, fromName, fromAddr, dateStr)}
+    </div>
+    <div class="thread-msg-body" id="thread-body-${m.uid}" style="display:${isExpanded ? 'block' : 'none'}">
+      ${bodyInner}
+    </div>
+  </div>`;
+}
+
 async function openEmailThread(threadKey, isCreatorTab, creatorId) {
   _lastThreadWasCreatorTab = isCreatorTab;
   _lastThreadCreatorId = creatorId;
@@ -21649,178 +21714,137 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
 
   // Load the COMPLETE thread from the server by subject search — this pulls
   // every message in the conversation regardless of age, so old threads that
-  // fell outside the panel's loaded window still load in full. We merge these
-  // with the window messages (by folder+uid) and fetch any bodies still missing.
-  let fullMessages;
+  // fell outside the panel's loaded window still load in full.
+  //
+  // STRATEGY (progressive, robust): 1) get the complete message LIST for the
+  // thread (headers only — fast, small, never times out), including old messages
+  // via server-side subject search. 2) render the thread immediately with each
+  // message as a "Loading…" row + a progress bar. 3) fetch each body in its OWN
+  // small request, one at a time, updating that row as it arrives. This keeps
+  // every request tiny (well under Worker limits) and shows live progress.
+  const fkey = (folder, uid) => (folder || 'INBOX').toLowerCase() + '|' + uid;
+  const byKey = {};   // folder|uid -> message header/stub
+
+  // Seed with the window's known messages
+  thread.messages.forEach(m => {
+    const folder = m._folder || _currentInbox.folder;
+    byKey[fkey(folder, m.uid)] = { ...m, _folder: folder };
+  });
+
+  // Server-side full-thread header search (age-independent) to catch old messages
   try {
-    const fkey = (folder, uid) => (folder || 'INBOX').toLowerCase() + '|' + uid;
-    const byKey = {};   // folder|uid -> message (full if we have it, else stub)
-
-    // Seed with the window's known messages (gives us folder+uid+date+headers)
-    thread.messages.forEach(m => {
-      const folder = m._folder || _currentInbox.folder;
-      byKey[fkey(folder, m.uid)] = { ...m, _folder: folder };
-    });
-
-    // Server-side full-thread search (age-independent). Adds any messages the
-    // window didn't have, and gives us full bodies for everything it returns.
-    let searchWorked = false;
-    try {
-      const sr = await emailApi('/thread-search', {
-        mailbox: _currentInbox.mailbox,
-        subject: thread.subject || '',
-      });
-      if (sr && Array.isArray(sr.messages)) {
-        searchWorked = true;
-        sr.messages.forEach(r => {
-          if (r && r.uid != null && !r.error) {
-            const msg = { ...r, _folder: r.folder || 'INBOX' };
-            _msgBodyCache[_msgCacheKey(_currentInbox.mailbox, msg._folder, r.uid)] = msg;
-            byKey[fkey(msg._folder, r.uid)] = msg;
-          }
-        });
-      }
-    } catch(e) { /* fall back to window fetch below */ }
-
-    // Whatever we still don't have a full body for, fetch by folder+uid.
-    const need = [];
-    Object.values(byKey).forEach(m => {
-      const folder = m._folder || _currentInbox.folder;
-      const ck = _msgCacheKey(_currentInbox.mailbox, folder, m.uid);
-      const haveBody = _msgBodyCache[ck] || m.bodyHtml || m.bodyText;
-      if (!haveBody) need.push({ uid: m.uid, folder });
-    });
-    if (need.length) {
-      const res = await _fetchThreadBatch(_currentInbox.mailbox, need);
-      (res || []).forEach(r => {
+    const sr = await emailApi('/thread-search', { mailbox: _currentInbox.mailbox, subject: thread.subject || '' });
+    if (sr && Array.isArray(sr.messages)) {
+      sr.messages.forEach(r => {
         if (r && r.uid != null && !r.error) {
-          const msg = { ...r, _folder: r.folder || 'INBOX' };
-          _msgBodyCache[_msgCacheKey(_currentInbox.mailbox, msg._folder, r.uid)] = msg;
-          byKey[fkey(msg._folder, r.uid)] = msg;
-        } else if (r && r.uid != null) {
-          const k = fkey(r.folder, r.uid);
-          if (byKey[k] && !(byKey[k].bodyHtml || byKey[k].bodyText)) byKey[k] = { ...byKey[k], error: r.error || 'Failed to fetch' };
+          const folder = r.folder || 'INBOX';
+          const k = fkey(folder, r.uid);
+          // Keep a cached full body if we already have one; else store the header
+          const ck = _msgCacheKey(_currentInbox.mailbox, folder, r.uid);
+          byKey[k] = _msgBodyCache[ck] || { ...r, _folder: folder };
         }
       });
     }
+  } catch(e) { /* search unavailable — proceed with window messages */ }
 
-    // Assemble, sorted oldest->newest for a natural back-and-forth.
-    fullMessages = Object.values(byKey).map(m => {
-      const folder = m._folder || _currentInbox.folder;
-      const ck = _msgCacheKey(_currentInbox.mailbox, folder, m.uid);
-      if (_msgBodyCache[ck]) return _msgBodyCache[ck];
-      if (m.bodyHtml || m.bodyText) return m;
-      return { ...m, error: m.error || 'Failed to fetch' };
-    }).sort((a, b) => {
-      const da = a.date ? new Date(a.date).getTime() : 0;
-      const db = b.date ? new Date(b.date).getTime() : 0;
-      if (da !== db) return da - db;
-      return (Number(a.uid)||0) - (Number(b.uid)||0);
-    });
-  } catch(e) {
-    pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--red)">❌ ${e.message}</div>`;
-    return;
-  }
-
-  // If the user switched to a different thread while we were fetching, stop —
-  // don't clobber the newer thread's view with this one.
   if (_activeThreadKey !== threadKey) return;
 
-  // Latest message is the most recent — expanded by default
+  // Order oldest -> newest
+  const ordered = Object.values(byKey).sort((a, b) => {
+    const da = a.date ? new Date(a.date).getTime() : 0;
+    const db = b.date ? new Date(b.date).getTime() : 0;
+    if (da !== db) return da - db;
+    return (Number(a.uid)||0) - (Number(b.uid)||0);
+  });
+
   const subjectLine = (thread.subject || '(no subject)').replace(/</g,'&lt;');
-  const lastIdx = fullMessages.length - 1;
+  const lastIdx = ordered.length - 1;
 
-  // Cache the fully-fetched messages so Reply/actions can look them up by UID
-  // instead of trying to embed the whole (possibly quote-laden) body in an
-  // inline onclick attribute — which breaks when the body has quotes/newlines.
+  // Build the message cache used by Reply/actions
   _threadMsgCache = {};
-  fullMessages.forEach(m => { if (m && m.uid != null) _threadMsgCache[String(m.uid)] = m; });
+  ordered.forEach(m => { if (m && m.uid != null) _threadMsgCache[String(m.uid)] = m; });
 
-  const messagesHtml = fullMessages.map((m, idx) => {
-    if (m.error) {
-      return `<div class="thread-msg" style="padding:14px;background:#fee2e2;color:#991b1b;border-radius:8px;margin-bottom:8px;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <span>⚠️ Could not load this message: ${m.error}</span>
-        <button class="btn btn-ghost btn-sm" onclick="_retryThreadMessage('${threadKey}')" style="white-space:nowrap">↻ Retry</button>
-      </div>`;
-    }
-    const fromName = _parseFromName(m.from);
-    const fromAddr = _parseFromAddress(m.from);
-    const dateStr = m.date ? new Date(m.date).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-    const isExpanded = (idx === lastIdx);
-    const isSent = (m._folder || '').toLowerCase() === 'sent';
-    const initial = (fromName[0] || '?').toUpperCase();
-    const color = isSent
-      ? 'var(--blue)'
-      : AVATAR_COLORS[Math.abs(_hashCode(fromName)) % AVATAR_COLORS.length];
-
-    // Body content
-    let bodyHtml = '';
-    if (m.bodyHtml) {
-      bodyHtml = _sanitiseEmailHtml(m.bodyHtml);
-    } else {
-      const escaped = (m.bodyText || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-      bodyHtml = escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--blue)">$1</a>');
-    }
-    const previewText = ((m.bodyText || stripHtmlForQuote(m.bodyHtml || '')) || '').slice(0, 140).replace(/</g,'&lt;');
-
-    return `<div class="thread-msg${isExpanded ? ' expanded' : ''}" data-uid="${m.uid}"${isSent ? ' style="background:#f0f9ff;border-left:3px solid var(--blue)"' : ''}>
-      <div class="thread-msg-head">
-        <div class="thread-msg-avatar" style="background:${color};cursor:pointer" onclick="event.stopPropagation();toggleContactDetails(${m.uid})" title="View contact details">${initial}</div>
-        <div class="thread-msg-meta" onclick="toggleThreadMsg(${m.uid})" style="cursor:pointer">
-          <div class="thread-msg-from">${isSent ? '<span style="color:var(--blue);font-size:10px;font-weight:700;margin-right:6px">↩ YOU SENT</span>' : ''}<span onclick="event.stopPropagation();toggleContactDetails(${m.uid})" style="cursor:pointer;border-bottom:1px dashed var(--gray-300)" title="View contact details">${fromName || fromAddr}</span></div>
-          <div class="thread-msg-preview">${isExpanded ? fromAddr + (m.to ? ' → ' + m.to : '') : previewText}</div>
-        </div>
-        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();toggleContactDetails(${m.uid})" title="Contact details" style="padding:2px 8px;font-size:12px;flex-shrink:0">ⓘ</button>
-        <div class="thread-msg-date" onclick="toggleThreadMsg(${m.uid})" style="cursor:pointer">${dateStr}</div>
-      </div>
-      <div class="contact-details-panel" id="contact-details-${m.uid}" style="display:none;padding:12px 16px;background:var(--gray-50);border-top:1px solid var(--gray-100);font-size:12px">
-        ${_renderContactDetails(m, fromName, fromAddr, dateStr)}
-      </div>
-      <div class="thread-msg-body" id="thread-body-${m.uid}" style="display:${isExpanded ? 'block' : 'none'}">
-        <div class="inbox-email-body" style="border-top:1px solid var(--gray-100);padding-top:12px;margin-top:8px">${bodyHtml}</div>
-        ${_renderAttachmentsBlock(m, m._folder || _currentInbox.folder)}
-        <div class="inbox-email-actions" style="border-top:1px solid var(--gray-100);margin-top:12px;padding-top:12px">
-          <button class="btn btn-primary btn-sm" onclick="replyToCachedMessage('${m.uid}')">↩ Reply</button>
-          <button class="btn btn-ghost btn-sm" onclick="markMessageSeen(${m.uid}, false, ${isCreatorTab}, ${creatorId || 'null'})">Mark as Unread</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteEmailMessage(${m.uid}, ${isCreatorTab}, ${creatorId || 'null'})">Delete</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+  // Render skeleton immediately — bodies fill in progressively below
+  const renderAll = () => {
+    const c = document.getElementById('email-body-container');
+    if (!c) return;
+    c.innerHTML = ordered.map((m, idx) => _threadMsgHtml(m, idx, lastIdx, threadKey, isCreatorTab, creatorId)).join('');
+  };
+  const loadedCount = () => ordered.filter(m => m.bodyHtml || m.bodyText || m.error).length;
 
   pane.innerHTML = `
     <div class="inbox-email-header">
       <div style="font-size:16px;font-weight:600;color:var(--gray-900);margin-bottom:6px">${subjectLine}</div>
-      <div style="font-size:11px;color:var(--gray-400)">${fullMessages.length} message${fullMessages.length>1?'s':''} • ${thread.participants.join(', ')}</div>
+      <div style="font-size:11px;color:var(--gray-400)">${ordered.length} message${ordered.length>1?'s':''} • ${thread.participants.join(', ')}</div>
+      <div id="thread-progress-wrap" style="margin-top:8px;display:${ordered.some(m => !(m.bodyHtml||m.bodyText)) ? 'block' : 'none'}">
+        <div style="height:4px;background:var(--gray-100);border-radius:4px;overflow:hidden">
+          <div id="thread-progress-bar" style="height:100%;width:0%;background:var(--blue);transition:width .2s"></div>
+        </div>
+        <div id="thread-progress-text" style="font-size:10px;color:var(--gray-400);margin-top:3px"></div>
+      </div>
     </div>
-    <div class="inbox-email-body" id="email-body-container" style="padding-top:0">
-      ${messagesHtml}
-    </div>`;
+    <div class="inbox-email-body" id="email-body-container" style="padding-top:0"></div>`;
+  renderAll();
 
-  // If any messages failed to load, quietly retry them once after a short delay.
-  const anyFailed = fullMessages.some(m => m && m.error);
-  if (anyFailed && !_autoRetriedThreads.has(threadKey)) {
-    _autoRetriedThreads.add(threadKey);
-    setTimeout(() => {
-      if (_activeThreadKey === threadKey) openEmailThread(threadKey, isCreatorTab, creatorId);
-    }, 1500);
-  } else if (!anyFailed) {
-    _autoRetriedThreads.delete(threadKey); // reset so future failures can auto-retry
-  }
+  const updateProgress = () => {
+    const done = loadedCount(), total = ordered.length;
+    const bar = document.getElementById('thread-progress-bar');
+    const txt = document.getElementById('thread-progress-text');
+    const wrap = document.getElementById('thread-progress-wrap');
+    if (bar) bar.style.width = total ? Math.round(done/total*100) + '%' : '0%';
+    if (txt) txt.textContent = `Loading messages… ${done}/${total}`;
+    if (wrap && done >= total) setTimeout(() => { if (wrap) wrap.style.display = 'none'; }, 400);
+  };
+  updateProgress();
 
-  // Jump to the latest message (expanded) so you land on the newest reply, not
-  // the top of a long thread. Rayyan: "it's never at the top, I have to scroll".
-  setTimeout(() => {
-    const container = document.getElementById('email-body-container');
-    if (!container) return;
-    const msgs = container.querySelectorAll('.thread-msg');
-    const last = msgs[msgs.length - 1];
-    if (last && last.scrollIntoView) last.scrollIntoView({ block: 'start', behavior: 'auto' });
-  }, 60);
+  // Fetch bodies ONE AT A TIME (tiny requests), updating each row as it lands.
+  const toLoad = ordered.filter(m => !(m.bodyHtml || m.bodyText));
+  (async () => {
+    for (const stub of toLoad) {
+      if (_activeThreadKey !== threadKey) return; // user switched away
+      const folder = stub._folder || 'INBOX';
+      const idx = ordered.indexOf(stub);
+      try {
+        const full = await _fetchMessageCached(_currentInbox.mailbox, folder, stub.uid);
+        Object.assign(stub, full, { _folder: folder });
+        _threadMsgCache[String(stub.uid)] = stub;
+      } catch (e) {
+        stub.error = e.message || 'Failed to fetch';
+      }
+      if (_activeThreadKey !== threadKey) return;
+      // Re-render just this one row in place
+      const container = document.getElementById('email-body-container');
+      const row = container && container.querySelectorAll('.thread-msg')[idx];
+      if (row) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = _threadMsgHtml(stub, idx, lastIdx, threadKey, isCreatorTab, creatorId);
+        row.replaceWith(tmp.firstElementChild);
+      }
+      updateProgress();
+    }
+    // Once done, jump to the newest message
+    if (_activeThreadKey === threadKey) {
+      const container = document.getElementById('email-body-container');
+      const msgs = container ? container.querySelectorAll('.thread-msg') : [];
+      const last = msgs[msgs.length - 1];
+      if (last && last.scrollIntoView) last.scrollIntoView({ block: 'start', behavior: 'auto' });
+    }
+  })();
+  return;
 }
 // Tracks threads we've already auto-retried this view, so we don't loop forever
 // if a message is genuinely unfetchable.
 const _autoRetriedThreads = new Set();
+
+/** Retry loading one failed message in a thread (re-fetches just that one). */
+async function _retryOneThreadMsg(threadKey, folder, uid) {
+  const body = document.getElementById('thread-body-' + uid);
+  if (body) body.innerHTML = '<div style="padding:14px;color:var(--gray-400);font-size:12px">↻ Retrying…</div>';
+  // Clear any cached error and re-open the thread (cache-first for the rest)
+  const ck = _msgCacheKey(_currentInbox.mailbox, folder, uid);
+  delete _msgBodyCache[ck];
+  openEmailThread(threadKey, _lastThreadWasCreatorTab, _lastThreadCreatorId);
+}
 
 function toggleThreadMsg(uid) {
   const el = document.getElementById('thread-body-' + uid);
