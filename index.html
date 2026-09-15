@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ag (inbox: resolve Sent folder name (INBOX.Sent) in thread fetch so Sent-tab threads load; merge INBOX into Sent tab so threads are complete both ways) -->
+<!-- blustu panel build 2026-07-15-ah (fix: Sent tab list now shows only threads youve sent in, not all inbox threads; opening still shows both sides) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -21176,6 +21176,7 @@ function _renderInboxList(listElId, messages, mailbox, isCreatorTab, creatorId, 
   }
 
   const viewingInbox = (folder || 'INBOX').toLowerCase() === 'inbox';
+  const viewingSent  = (folder || '').toLowerCase() === 'sent';
   const loadMoreHtml = _loadMoreFooterHtml();
 
   if (!filteredMsgs.length) {
@@ -21189,13 +21190,21 @@ function _renderInboxList(listElId, messages, mailbox, isCreatorTab, creatorId, 
   if (_emailThreadMode) {
     let threads = _groupIntoThreads(filteredMsgs);
     if (viewingInbox) {
+      // Inbox list: only threads that have a received message (hide send-only)
       threads = threads.filter(t => t.messages.some(m => (m._folder || 'INBOX').toLowerCase() !== 'sent'));
+    } else if (viewingSent) {
+      // Sent list: only threads you've actually sent in. The merged INBOX
+      // messages are kept inside each thread (so opening shows both sides), but
+      // a thread with NO sent message shouldn't appear in the Sent list.
+      threads = threads.filter(t => t.messages.some(m => (m._folder || '').toLowerCase() === 'sent'));
     }
     listEl.innerHTML = threads.map(t => _renderThreadRow(t, isCreatorTab, creatorId, folder)).join('') + loadMoreHtml;
   } else {
-    const shown = viewingInbox
-      ? filteredMsgs.filter(m => (m._folder || 'INBOX').toLowerCase() !== 'sent')
-      : filteredMsgs;
+    // Flat (non-threaded) view: each row is a single message, so just show the
+    // messages that actually belong to the folder being viewed.
+    let shown = filteredMsgs;
+    if (viewingInbox)     shown = filteredMsgs.filter(m => (m._folder || 'INBOX').toLowerCase() !== 'sent');
+    else if (viewingSent) shown = filteredMsgs.filter(m => (m._folder || '').toLowerCase() === 'sent');
     listEl.innerHTML = shown.map(m => _renderMessageRow(m, isCreatorTab, creatorId, folder)).join('') + loadMoreHtml;
   }
   _updateInboxSearchCount(filteredMsgs.length, messages.length);
