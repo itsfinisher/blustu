@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ai (fix: thread messages keyed by folder+uid not uid alone — cross-folder UID collisions were making merged INBOX+Sent threads fail to fetch) -->
+<!-- blustu panel build 2026-07-15-aj (inbox: load ENTIRE thread server-side by subject search across INBOX+Sent so old threads of any age load fully, not just whats in the window) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -21647,46 +21647,75 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
   // the user switched threads doesn't overwrite the newer view.
   _activeThreadKey = threadKey;
 
-  // Fetch all the thread's message bodies in ONE worker call (single IMAP
-  // connection, folders selected once). This replaces firing a separate request
-  // per message, which opened dozens of connections and made received messages
-  // fail with "Failed to fetch" once MXroute's connection limit was hit.
-  // Cache-first: messages already loaded resolve instantly and aren't re-fetched.
+  // Load the COMPLETE thread from the server by subject search — this pulls
+  // every message in the conversation regardless of age, so old threads that
+  // fell outside the panel's loaded window still load in full. We merge these
+  // with the window messages (by folder+uid) and fetch any bodies still missing.
   let fullMessages;
   try {
-    const need = [];        // messages not in cache — fetch these
-    for (const m of thread.messages) {
+    const fkey = (folder, uid) => (folder || 'INBOX').toLowerCase() + '|' + uid;
+    const byKey = {};   // folder|uid -> message (full if we have it, else stub)
+
+    // Seed with the window's known messages (gives us folder+uid+date+headers)
+    thread.messages.forEach(m => {
+      const folder = m._folder || _currentInbox.folder;
+      byKey[fkey(folder, m.uid)] = { ...m, _folder: folder };
+    });
+
+    // Server-side full-thread search (age-independent). Adds any messages the
+    // window didn't have, and gives us full bodies for everything it returns.
+    let searchWorked = false;
+    try {
+      const sr = await emailApi('/thread-search', {
+        mailbox: _currentInbox.mailbox,
+        subject: thread.subject || '',
+      });
+      if (sr && Array.isArray(sr.messages)) {
+        searchWorked = true;
+        sr.messages.forEach(r => {
+          if (r && r.uid != null && !r.error) {
+            const msg = { ...r, _folder: r.folder || 'INBOX' };
+            _msgBodyCache[_msgCacheKey(_currentInbox.mailbox, msg._folder, r.uid)] = msg;
+            byKey[fkey(msg._folder, r.uid)] = msg;
+          }
+        });
+      }
+    } catch(e) { /* fall back to window fetch below */ }
+
+    // Whatever we still don't have a full body for, fetch by folder+uid.
+    const need = [];
+    Object.values(byKey).forEach(m => {
       const folder = m._folder || _currentInbox.folder;
       const ck = _msgCacheKey(_currentInbox.mailbox, folder, m.uid);
-      if (!_msgBodyCache[ck]) need.push({ uid: m.uid, folder });
-    }
-
-    let fetched = {};
-    const fkey = (folder, uid) => (folder || 'INBOX').toLowerCase() + '|' + uid;
+      const haveBody = _msgBodyCache[ck] || m.bodyHtml || m.bodyText;
+      if (!haveBody) need.push({ uid: m.uid, folder });
+    });
     if (need.length) {
       const res = await _fetchThreadBatch(_currentInbox.mailbox, need);
       (res || []).forEach(r => {
         if (r && r.uid != null && !r.error) {
           const msg = { ...r, _folder: r.folder || 'INBOX' };
           _msgBodyCache[_msgCacheKey(_currentInbox.mailbox, msg._folder, r.uid)] = msg;
-          fetched[fkey(r.folder, r.uid)] = msg;
+          byKey[fkey(msg._folder, r.uid)] = msg;
         } else if (r && r.uid != null) {
-          fetched[fkey(r.folder, r.uid)] = { uid: r.uid, error: r.error || 'Failed to fetch' };
+          const k = fkey(r.folder, r.uid);
+          if (byKey[k] && !(byKey[k].bodyHtml || byKey[k].bodyText)) byKey[k] = { ...byKey[k], error: r.error || 'Failed to fetch' };
         }
       });
     }
 
-    // Assemble in original thread order. Key by FOLDER+UID because a UID is only
-    // unique within its folder — an INBOX msg and a Sent msg can share a UID, so
-    // keying by uid alone made them collide and show as "Failed to fetch".
-    fullMessages = thread.messages.map(m => {
+    // Assemble, sorted oldest->newest for a natural back-and-forth.
+    fullMessages = Object.values(byKey).map(m => {
       const folder = m._folder || _currentInbox.folder;
       const ck = _msgCacheKey(_currentInbox.mailbox, folder, m.uid);
       if (_msgBodyCache[ck]) return _msgBodyCache[ck];
-      const hit = fetched[fkey(folder, m.uid)];
-      if (hit && !hit.error) return hit;
-      // Failed — keep list metadata so we can still show sender/date on the row
-      return { ...m, uid: m.uid, error: (hit && hit.error) || 'Failed to fetch' };
+      if (m.bodyHtml || m.bodyText) return m;
+      return { ...m, error: m.error || 'Failed to fetch' };
+    }).sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      if (da !== db) return da - db;
+      return (Number(a.uid)||0) - (Number(b.uid)||0);
     });
   } catch(e) {
     pane.innerHTML = `<div style="padding:32px;text-align:center;color:var(--red)">❌ ${e.message}</div>`;
