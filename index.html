@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-al (thread view: newest-first, loads recent 8 then Load older button in batches of 10) -->
+<!-- blustu panel build 2026-07-15-am (thread fix: fetch bodies in groups of 5 (1 IMAP login per group, not per message) so MXroute stops throttling; filter subject-search by participant to stop thread bloat) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -21731,18 +21731,34 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
     byKey[fkey(folder, m.uid)] = { ...m, _folder: folder };
   });
 
-  // Server-side full-thread header search (age-independent) to catch old messages
+  // Server-side full-thread header search (age-independent) to catch old messages.
+  // IMPORTANT: a subject search can match unrelated emails (e.g. similar campaign
+  // subjects), which was inflating threads. Only accept results that share a
+  // participant with this thread.
   try {
+    const selfAddr = (_currentInbox.mailbox || '') + '@blustu.agency';
+    const addrsOf = (m) => {
+      const s = [(m.from||''), (m.to||''), (m.cc||'')].join(' ').toLowerCase();
+      return (s.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || []).filter(a => a !== selfAddr.toLowerCase());
+    };
+    // The thread's known external participants
+    const known = new Set();
+    thread.messages.forEach(m => addrsOf(m).forEach(a => known.add(a)));
+
     const sr = await emailApi('/thread-search', { mailbox: _currentInbox.mailbox, subject: thread.subject || '' });
     if (sr && Array.isArray(sr.messages)) {
       sr.messages.forEach(r => {
-        if (r && r.uid != null && !r.error) {
-          const folder = r.folder || 'INBOX';
-          const k = fkey(folder, r.uid);
-          // Keep a cached full body if we already have one; else store the header
-          const ck = _msgCacheKey(_currentInbox.mailbox, folder, r.uid);
-          byKey[k] = _msgBodyCache[ck] || { ...r, _folder: folder };
+        if (!r || r.uid == null || r.error) return;
+        // Must share at least one external participant with the thread (unless we
+        // somehow have no known participants, in which case accept).
+        if (known.size) {
+          const mine = addrsOf(r);
+          if (!mine.some(a => known.has(a))) return;   // unrelated email — skip
         }
+        const folder = r.folder || 'INBOX';
+        const k = fkey(folder, r.uid);
+        const ck = _msgCacheKey(_currentInbox.mailbox, folder, r.uid);
+        byKey[k] = _msgBodyCache[ck] || { ...r, _folder: folder };
       });
     }
   } catch(e) { /* search unavailable — proceed with window messages */ }
@@ -21820,35 +21836,67 @@ async function openEmailThread(threadKey, isCreatorTab, creatorId) {
   return;
 }
 
-// Loads bodies for all currently-shown (not-yet-loaded) messages, newest first,
-// one request each, updating rows live. Shared by initial open + "load older".
+// Loads bodies for the currently-shown messages, newest first, updating rows live.
+// CRITICAL: fetches in GROUPS of 5 via /thread (one IMAP login per group) rather
+// than one request per message. Each /message call opens a fresh IMAP connection,
+// so one-per-message meant 40+ logins in seconds, which MXroute throttles — the
+// requests then die at network level ("Failed to fetch"). Groups of 5 keep each
+// request small (no worker timeout) AND the login count low.
 async function _loadShownThreadBodies() {
   const st = _threadLoadState;
   if (!st) return;
   const { threadKey, ordered, isCreatorTab, creatorId } = st;
   st.updateProgress();
   const toLoad = ordered.slice(0, st.shown).filter(m => !(m.bodyHtml || m.bodyText || m.error));
-  for (const stub of toLoad) {
-    if (_activeThreadKey !== threadKey) return;
-    const folder = stub._folder || 'INBOX';
+
+  const GROUP = 5;
+  const renderRow = (stub) => {
     const idx = ordered.indexOf(stub);
-    try {
-      const full = await _fetchMessageCached(_currentInbox.mailbox, folder, stub.uid);
-      Object.assign(stub, full, { _folder: folder });
-      _threadMsgCache[String(stub.uid)] = stub;
-    } catch (e) {
-      stub.error = e.message || 'Failed to fetch';
-    }
-    if (_activeThreadKey !== threadKey) return;
     const container = document.getElementById('email-body-container');
     const row = container && container.querySelectorAll('.thread-msg')[idx];
     if (row) {
       const tmp = document.createElement('div');
-      // Only the very newest (idx 0) is expanded by default
       tmp.innerHTML = _threadMsgHtml(stub, idx, 0, threadKey, isCreatorTab, creatorId);
       row.replaceWith(tmp.firstElementChild);
     }
+  };
+
+  for (let i = 0; i < toLoad.length; i += GROUP) {
+    if (_activeThreadKey !== threadKey) return;
+    const group = toLoad.slice(i, i + GROUP);
+    const items = group.map(m => ({ uid: m.uid, folder: m._folder || 'INBOX' }));
+    let results = [];
+    try {
+      const r = await emailApi('/thread', { mailbox: _currentInbox.mailbox, items });
+      results = (r && Array.isArray(r.messages)) ? r.messages : [];
+    } catch (e) {
+      // Whole group request failed — mark these with the real error
+      group.forEach(stub => { stub.error = e.message || 'Failed to fetch'; });
+      if (_activeThreadKey !== threadKey) return;
+      group.forEach(renderRow);
+      st.updateProgress();
+      continue;
+    }
+    // Match results back by folder+uid (UIDs are only unique within a folder)
+    const rkey = (f, u) => (f || 'INBOX').toLowerCase() + '|' + u;
+    const map = {};
+    results.forEach(r => { if (r && r.uid != null) map[rkey(r.folder, r.uid)] = r; });
+    group.forEach(stub => {
+      const folder = stub._folder || 'INBOX';
+      const r = map[rkey(folder, stub.uid)];
+      if (r && !r.error) {
+        Object.assign(stub, r, { _folder: folder });
+        _msgBodyCache[_msgCacheKey(_currentInbox.mailbox, folder, stub.uid)] = stub;
+        _threadMsgCache[String(stub.uid)] = stub;
+      } else {
+        stub.error = (r && r.error) || 'Failed to fetch';
+      }
+    });
+    if (_activeThreadKey !== threadKey) return;
+    group.forEach(renderRow);
     st.updateProgress();
+    // Small pause between groups so we never hammer the mail server
+    if (i + GROUP < toLoad.length) await new Promise(r => setTimeout(r, 250));
   }
 }
 
