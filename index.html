@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-am (thread fix: fetch bodies in groups of 5 (1 IMAP login per group, not per message) so MXroute stops throttling; filter subject-search by participant to stop thread bloat) -->
+<!-- blustu panel build 2026-07-15-an (DEFINITIVE thread fix: partial IMAP fetch caps message size so huge attachments cant kill the request; group failure falls back to per-message; response size capped) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -21637,6 +21637,7 @@ function _threadMsgHtml(m, idx, lastIdx, threadKey, isCreatorTab, creatorId) {
       bodyHtml = escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--blue)">$1</a>');
     }
     bodyInner = `<div class="inbox-email-body" style="border-top:1px solid var(--gray-100);padding-top:12px;margin-top:8px">${bodyHtml}</div>
+      ${m.truncated ? '<div style="font-size:11px;color:var(--amber);padding:6px 0">⚠ This email was very large, so only the first part is shown. Attachments are still listed below.</div>' : ''}
       ${_renderAttachmentsBlock(m, m._folder || _currentInbox.folder)}
       <div class="inbox-email-actions" style="border-top:1px solid var(--gray-100);margin-top:12px;padding-top:12px">
         <button class="btn btn-primary btn-sm" onclick="replyToCachedMessage('${m.uid}')">↩ Reply</button>
@@ -21849,7 +21850,7 @@ async function _loadShownThreadBodies() {
   st.updateProgress();
   const toLoad = ordered.slice(0, st.shown).filter(m => !(m.bodyHtml || m.bodyText || m.error));
 
-  const GROUP = 5;
+  const GROUP = 3;
   const renderRow = (stub) => {
     const idx = ordered.indexOf(stub);
     const container = document.getElementById('email-body-container');
@@ -21866,17 +21867,35 @@ async function _loadShownThreadBodies() {
     const group = toLoad.slice(i, i + GROUP);
     const items = group.map(m => ({ uid: m.uid, folder: m._folder || 'INBOX' }));
     let results = [];
+    let groupFailed = false;
     try {
       const r = await emailApi('/thread', { mailbox: _currentInbox.mailbox, items });
       results = (r && Array.isArray(r.messages)) ? r.messages : [];
     } catch (e) {
-      // Whole group request failed — mark these with the real error
-      group.forEach(stub => { stub.error = e.message || 'Failed to fetch'; });
-      if (_activeThreadKey !== threadKey) return;
-      group.forEach(renderRow);
-      st.updateProgress();
+      groupFailed = true;
+    }
+
+    // If the whole group request died (often one oversized message taking the
+    // response down), fall back to fetching each of them individually so the
+    // healthy ones still load and only the genuine problem message errors.
+    if (groupFailed) {
+      for (const stub of group) {
+        if (_activeThreadKey !== threadKey) return;
+        const folder = stub._folder || 'INBOX';
+        try {
+          const full = await _fetchMessageCached(_currentInbox.mailbox, folder, stub.uid);
+          Object.assign(stub, full, { _folder: folder });
+          _threadMsgCache[String(stub.uid)] = stub;
+        } catch (err) {
+          stub.error = err.message || 'Failed to fetch';
+        }
+        renderRow(stub);
+        st.updateProgress();
+        await new Promise(r => setTimeout(r, 200));
+      }
       continue;
     }
+
     // Match results back by folder+uid (UIDs are only unique within a folder)
     const rkey = (f, u) => (f || 'INBOX').toLowerCase() + '|' + u;
     const map = {};
