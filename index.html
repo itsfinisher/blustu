@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-an (DEFINITIVE thread fix: partial IMAP fetch caps message size so huge attachments cant kill the request; group failure falls back to per-message; response size capped) -->
+<!-- blustu panel build 2026-07-15-ao (inbox: fix intermittent load failures + replied-status reverting — sticky merge cache, no post-send cache wipe, single gentle refresh, auto retry pass) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -20764,6 +20764,13 @@ function _prettyFolderName(f) {
  * Returns { primary, sent, total } — primary/sent are already tagged; total is
  * the primary folder's own count (so pagination knows when to stop).
  */
+// Remembers the last GOOD merged (Sent/INBOX) message set per mailbox+folder.
+// If a merge fetch fails or comes back empty (mail server throttling us), we
+// reuse this instead of dropping to nothing — otherwise every thread silently
+// loses its sent messages, which makes replied threads revert to "needs reply"
+// and makes the other side of a conversation vanish.
+const _mergeCache = {};
+
 async function _fetchFolderWithSentMerge(mailbox, folder, offset = 0, limit = 50) {
   const isInbox = (folder || 'INBOX').toLowerCase() === 'inbox';
   const isSent  = (folder || '').toLowerCase() === 'sent';
@@ -20773,14 +20780,38 @@ async function _fetchFolderWithSentMerge(mailbox, folder, offset = 0, limit = 50
   // too (otherwise a thread opened from Sent looks one-sided). Only at offset 0.
   let mergeReq = Promise.resolve(null);
   let mergeFolder = null;
+  // One retry — a single transient failure shouldn't cost us the whole set.
+  const fetchMerge = async (f) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await emailApi('/inbox', { mailbox, folder: f, limit: 400, offset: 0 });
+        if (r && Array.isArray(r.messages)) return r;
+      } catch (e) { /* retry once */ }
+      if (attempt === 0) await new Promise(res => setTimeout(res, 600));
+    }
+    return null;   // null (not empty) so we can tell "failed" from "genuinely none"
+  };
   if (offset === 0) {
-    if (isInbox)      { mergeFolder = 'Sent';  mergeReq = emailApi('/inbox', { mailbox, folder: 'Sent',  limit: 400, offset: 0 }).catch(() => ({ messages: [] })); }
-    else if (isSent)  { mergeFolder = 'INBOX'; mergeReq = emailApi('/inbox', { mailbox, folder: 'INBOX', limit: 400, offset: 0 }).catch(() => ({ messages: [] })); }
+    if (isInbox)      { mergeFolder = 'Sent';  mergeReq = fetchMerge('Sent'); }
+    else if (isSent)  { mergeFolder = 'INBOX'; mergeReq = fetchMerge('INBOX'); }
   }
 
   const [primary, merged] = await Promise.all([primaryReq, mergeReq]);
   const primaryMsgs = (primary.messages || []).map(m => ({ ...m, _folder: folder }));
-  const mergedMsgs  = merged ? (merged.messages || []).map(m => ({ ...m, _folder: mergeFolder })) : [];
+
+  const cacheKey = mailbox + '|' + (folder || 'INBOX');
+  let mergedMsgs;
+  if (merged && Array.isArray(merged.messages) && merged.messages.length) {
+    mergedMsgs = merged.messages.map(m => ({ ...m, _folder: mergeFolder }));
+    _mergeCache[cacheKey] = mergedMsgs;           // remember this good set
+  } else if (mergeFolder) {
+    // Fetch failed (or returned nothing) — fall back to the last good set so
+    // sent messages and reply status don't flicker away.
+    mergedMsgs = _mergeCache[cacheKey] || [];
+  } else {
+    mergedMsgs = [];                              // paging — no merge expected
+  }
+
   // Dedupe: a message could appear in both windows (rare) — keep by uid+folder
   const seen = new Set(primaryMsgs.map(m => (m._folder||'') + '|' + m.uid));
   const extraMsgs = mergedMsgs.filter(m => !seen.has((m._folder||'') + '|' + m.uid));
@@ -21917,6 +21948,27 @@ async function _loadShownThreadBodies() {
     // Small pause between groups so we never hammer the mail server
     if (i + GROUP < toLoad.length) await new Promise(r => setTimeout(r, 250));
   }
+
+  // Retry pass: anything still failed gets one more individual attempt after a
+  // short breather. Most failures here are the mail server briefly throttling
+  // us, which clears within a second or two — this is why loads looked random.
+  const stillFailed = ordered.slice(0, st.shown).filter(m => m.error && !(m.bodyHtml || m.bodyText));
+  if (stillFailed.length) {
+    await new Promise(r => setTimeout(r, 1200));
+    for (const stub of stillFailed) {
+      if (_activeThreadKey !== threadKey) return;
+      const folder = stub._folder || 'INBOX';
+      try {
+        const full = await _fetchMessageCached(_currentInbox.mailbox, folder, stub.uid);
+        delete stub.error;
+        Object.assign(stub, full, { _folder: folder });
+        _threadMsgCache[String(stub.uid)] = stub;
+        renderRow(stub);
+        st.updateProgress();
+      } catch (e) { /* leave the Retry button for this one */ }
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
 }
 
 let _threadLoadState = null;
@@ -22595,31 +22647,29 @@ async function sendComposedEmail() {
     _markFollowUpSent(to);
     _markBrandSnipeSentByEmail(to);
 
-    // Refresh the inbox so the new message shows. The mail server can take a
-    // moment to index a just-saved Sent message, so we refresh the message list
-    // now AND again after a short delay, and if we were reading a thread we
-    // re-open it both times so it doesn't collapse back to the list.
+    // Refresh so the new message shows. IMPORTANT: keep this gentle. Previously
+    // this double-refreshed AND wiped every cached message body for the mailbox,
+    // which forced a full re-fetch of the whole thread right after the send's own
+    // IMAP login. That burst gets throttled by the mail server, which is why the
+    // original message would intermittently fail to load and sent messages would
+    // vanish (making replied threads revert to "needs reply").
     const wasThreadKey = _replyingFromThreadKey;
     _replyingFromThreadKey = null;
     const reopenThread = () => {
       if (!wasThreadKey) return;
-      // The threadKey may have shifted if the root changed, so also try to find
-      // the thread that now contains our reply's participants/subject.
       try { openEmailThread(wasThreadKey, _lastThreadWasCreatorTab, _lastThreadCreatorId); } catch(e) {}
     };
-    const doRefresh = (thenReopen) => {
+    // One refresh, after a short pause so the server has indexed the Sent copy.
+    // Cached bodies are kept, so already-loaded messages just redisplay.
+    setTimeout(() => {
       if (_currentInbox.isCreatorTab && _currentInbox.creatorId) {
-        renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder).then?.(() => { if (thenReopen) reopenThread(); });
-        if (thenReopen) setTimeout(reopenThread, 300);
+        const p = renderCreatorEmail(_currentInbox.creatorId, _currentInbox.folder);
+        (p && p.then) ? p.then(reopenThread) : setTimeout(reopenThread, 400);
       } else if (_currentInbox.mailbox) {
         const p = loadTeamInbox(_currentInbox.mailbox, _currentInbox.folder);
-        if (thenReopen) { (p && p.then) ? p.then(reopenThread) : setTimeout(reopenThread, 300); }
+        (p && p.then) ? p.then(reopenThread) : setTimeout(reopenThread, 400);
       }
-    };
-    // Immediate refresh (may not yet have the Sent message on the server)…
-    doRefresh(true);
-    // …then again once the server has had time to index the saved Sent message.
-    setTimeout(() => { _clearInboxCacheFor(_currentInbox.mailbox); doRefresh(true); }, 2500);
+    }, 1800);
   } catch(e) {
     btn.disabled = false; btn.textContent = 'Send →';
     const msg = e.message || 'unknown error';
