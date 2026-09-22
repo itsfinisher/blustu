@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ap (NEW: Feedback Packs page — fortnightly creator feedback, per-video notes, AI-written pack with review step, BluStu PDF rebuilt from stored JSON, history + progress tracking) -->
+<!-- blustu panel build 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -18970,9 +18970,11 @@ function _fpPdfHtml(pack, c, autoPrint) {
     body{font-family:'DM Sans',sans-serif;color:#1e293b;background:#eef1f6;font-size:12.5px;line-height:1.6;}
     .doc{background:#fff;width:210mm;margin:0 auto;padding:16mm 17mm;}
     @media screen{.doc{margin:20px auto;box-shadow:0 4px 24px rgba(0,0,0,.1);min-height:297mm;}}
-    @page{size:A4 portrait;margin:14mm 0;}
-    @page:first{margin-top:0;}
-    @media print{body{background:#fff;} .doc{width:210mm;padding:0 17mm;box-shadow:none;margin:0;} .fp-top{padding-top:14mm;}}
+    @page{size:A4 portrait;margin:0;}
+    .fp-wrap{width:100%;border-collapse:collapse;}
+    .fp-wrap td{padding:0;vertical-align:top;}
+    .fp-sp{height:0;}
+    @media print{body{background:#fff;} .doc{width:210mm;padding:0 17mm;box-shadow:none;margin:0;} .fp-sp{height:14mm;}}
     .fp-top{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:2px solid var(--a);}
     .fp-kicker{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--a);}
     .fp-logo{max-height:34px;max-width:140px;object-fit:contain;}
@@ -19020,7 +19022,10 @@ function _fpPdfHtml(pack, c, autoPrint) {
     ? `<div class="fp-sec"><h2>One More Thing, The Market Right Now</h2><div class="fp-note"><p>${esc(FP_MARKET_NOTE)}</p></div></div>` : '';
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>
-  <div class="doc">
+  <div class="doc"><table class="fp-wrap">
+    <thead><tr><td><div class="fp-sp"></div></td></tr></thead>
+    <tfoot><tr><td><div class="fp-sp"></div></td></tr></tfoot>
+    <tbody><tr><td>
     <div class="fp-top"><div class="fp-kicker">Content &amp; Page Direction Feedback</div>${logo}</div>
     <div class="fp-hero">${avatar}<div>
       <div class="fp-name">${esc(c.name)}${_fpHandle(c) ? ` <span>(${esc(_fpHandle(c))})</span>` : ''}</div>
@@ -19045,7 +19050,8 @@ function _fpPdfHtml(pack, c, autoPrint) {
       <div class="fp-sign">${esc(staffFirst)}, BluStu</div>
       ${nextDue ? `<div class="fp-next">Your next feedback pack: ${esc(nextDue.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}</div>` : ''}
     </div>
-  </div>
+    </td></tr></tbody>
+  </table></div>
   ${autoPrint ? _mediaKitPrintScript() : ''}
   </body></html>`;
 }
