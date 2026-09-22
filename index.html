@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-as (feedback packs: open with general Overview by default; Welcome to BluStu only when newly-signed is ticked) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -18383,6 +18383,7 @@ async function openFeedbackWorkspace(creatorId, packId) {
   if (!Array.isArray(inputs.videos) || !inputs.videos.length) inputs.videos = _fpSeedVideos(c);
   ['general', 'trajectory', 'ideas', 'last_progress'].forEach(k => { if (typeof inputs[k] !== 'string') inputs[k] = ''; });
   if (typeof inputs.include_market_note !== 'boolean') inputs.include_market_note = true;
+  if (typeof inputs.welcome !== 'boolean') inputs.welcome = false;   // opt-in welcome for brand new signings only
 
   _fpWork = {
     creatorId: c.id, packId: pack ? pack.id : null, status: pack ? pack.status : 'draft',
@@ -18622,6 +18623,9 @@ function _fpNotesHtml(c) {
     <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:10px;cursor:pointer">
       <input type="checkbox" ${i.include_market_note ? 'checked' : ''} onchange="_fpIn('include_market_note',this.checked)"> Include the standard “The Market Right Now” note
     </label>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:6px;cursor:pointer">
+      <input type="checkbox" ${i.welcome ? 'checked' : ''} onchange="_fpIn('welcome',this.checked)"> Newly signed creator, open with “Welcome to BluStu” <span style="color:var(--gray-400)">(otherwise it opens with a general Overview)</span>
+    </label>
   </div>`;
   const footer = `<div class="fp-w-card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;position:sticky;bottom:0;z-index:5;box-shadow:0 -4px 16px rgba(0,0,0,.05)">
     <div style="font-size:12px;color:var(--gray-500)">Notes autosave as you type. Generating writes the full pack in BluStu's voice for you to review.</div>
@@ -18677,7 +18681,7 @@ function _fpBuildPrompt(c) {
   const s = _fpStatsNow(c);
   const atPrev = w.prev && w.prev.stats_snapshot ? w.prev.stats_snapshot : null;
   const d30 = _fpStatsAt(w.hist, 30);
-  const first = _fpIsFirstPack();
+  const first = !!i.welcome;   // welcome only if staff ticked 'newly signed'
   const d = c.mediakit_audience || {};
   const collabs = Array.isArray(d.past_collabs) ? d.past_collabs.join(', ') : (d.past_collabs || '');
   const bio = (c.pitch_bio && c.pitch_bio.trim()) || (c.onboarding && c.onboarding.bio) || '';
@@ -18693,7 +18697,7 @@ function _fpBuildPrompt(c) {
   if (c.tiktok_avg_likes != null) lines.push(`Average likes: ${n(c.tiktok_avg_likes)} | comments: ${n(c.tiktok_avg_comments)} | shares: ${n(c.tiktok_avg_shares)}`);
   if (c.tiktok_posts_week != null) lines.push(`Posting frequency: ${c.tiktok_posts_week} posts per week`);
   if (collabs) lines.push(`Past brand collaborations: ${collabs}`);
-  lines.push(`First feedback pack from BluStu: ${first ? 'YES' : 'NO'}`);
+  lines.push(`Newly signed to BluStu: ${first ? 'YES, welcome them' : 'NO, they have been with BluStu for a while. Do not welcome them or imply they are new.'}`);
   if (w.prev && w.prev.report) {
     lines.push('');
     lines.push(`PREVIOUS PACK (${_fpFmtDate(w.prev.generated_at)}) ACTION ITEMS:`);
@@ -18738,7 +18742,7 @@ ${i.include_market_note ? '- Do not write about the wider creator market or rate
 OUTPUT: raw JSON only, exactly this shape:
 {
   "intro_title": "${first ? 'Welcome to BluStu' : 'Overview'}",
-  "intro": "opening paragraph${first ? ' welcoming them to BluStu and summarising their strengths with the real numbers' : ' summarising where they are at'}",
+  "intro": "opening paragraph${first ? ' welcoming them to BluStu and summarising their strengths with the real numbers' : ' as a general message from the BluStu team: this is their latest content and page direction pack, what it covers, and a quick specific summary of where their page is at right now using the real numbers. Never welcome them to BluStu or suggest they are new'}",
   "progress": "paragraph on how they got on with the previous pack's action items, or empty string if there was no previous pack or no staff note",
   "trajectory": "paragraph on the stats trajectory using ONLY the numbers given, or empty string if there is no staff trajectory comment and no earlier numbers",
   "videos": [{"title": "short descriptive title of the video", "summary": "2 to 3 sentence overall take", "went_well": ["..."], "even_better_if": ["..."]}],
@@ -18772,7 +18776,9 @@ function _fpNormaliseReport(r) {
   const arr = x => Array.isArray(x) ? x.filter(s => typeof s === 'string' && s.trim()).map(s => s.trim()) : [];
   const vids = _fpWork.inputs.videos || [];
   return {
-    intro_title: str(r.intro_title) || (_fpIsFirstPack() ? 'Welcome to BluStu' : 'Overview'),
+    intro_title: _fpWork.inputs.welcome
+      ? (str(r.intro_title) || 'Welcome to BluStu')
+      : ((/welcome/i.test(str(r.intro_title)) || !str(r.intro_title)) ? 'Overview' : str(r.intro_title)),
     intro: str(r.intro), progress: str(r.progress), trajectory: str(r.trajectory),
     videos: vids.map((v, k) => {
       const a = (Array.isArray(r.videos) ? r.videos[k] : null) || {};
