@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -18961,7 +18961,10 @@ function _fpPdfHtml(pack, c, autoPrint) {
   }).join('');
   const acts = (r.action_items || []).map((a, k) => `<div class="fp-act"><span class="num">${k + 1}</span><span>${txt(a)}</span></div>`).join('');
   const nextDue = pack.generated_at ? new Date(genAt.getTime() + FP_CADENCE_DAYS * 86400000) : null;
-  const title = `${first}_content_feedback_${genAt.toLocaleDateString('en-GB', { month: 'short' }).toLowerCase()}${genAt.getFullYear()}_blustu`;
+  // Browser uses <title> as the default PDF filename. Slashes/colons stripped
+  // so the name is always a valid filename.
+  const title = `${c.name || first} - BluStu Feedback Pack ${genAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+    .replace(/[\\/:*?"<>|]/g, '');
 
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap');
