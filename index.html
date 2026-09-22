@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ao (inbox: fix intermittent load failures + replied-status reverting — sticky merge cache, no post-send cache wipe, single gentle refresh, auto retry pass) -->
+<!-- blustu panel build 2026-07-15-ap (NEW: Feedback Packs page — fortnightly creator feedback, per-video notes, AI-written pack with review step, BluStu PDF rebuilt from stored JSON, history + progress tracking) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -79,6 +79,13 @@
 .welcome-todo { display:flex; align-items:center; gap:10px; padding:7px 0; font-size:13px; color:var(--gray-700); border-bottom:1px solid var(--gray-50); }
 .welcome-todo:last-child { border-bottom:none; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.fp-w-card{background:var(--white);border:1px solid var(--gray-100);border-radius:14px;padding:16px 18px;margin-bottom:14px;}
+.fp-w-h{font-size:14px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.fp-w-lbl{font-size:11px;font-weight:600;color:var(--gray-500);margin:8px 0 4px;display:block;}
+.fp-w-grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
+.fp-pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;}
+.fp-row{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--gray-50);}
+.fp-row:last-child{border-bottom:none;}
 [data-theme="dark"] .snipe-row-followup-due { background:rgba(245,158,11,.16); box-shadow:inset 3px 0 0 var(--amber); }
 
 /* Searchable niche dropdown */
@@ -1182,6 +1189,11 @@ html, body { overflow-x: hidden; }
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
       Snipes
       <span class="nav-badge" id="snipesBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" onclick="showPage('feedbackpacks',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
+      Feedback Packs
+      <span class="nav-badge" id="fpBadge" style="display:none">0</span>
     </button>
     <div class="nav-section-label">Brand Deals</div>
     <button class="nav-item" onclick="showPage('campaigns',this)">
@@ -2806,6 +2818,16 @@ html, body { overflow-x: hidden; }
     </div>
 
     <!-- ══ TEAM CALENDAR PAGE ══ -->
+    <div class="page" id="page-feedbackpacks">
+      <div class="page-header">
+        <div>
+          <h1>Feedback Packs</h1>
+          <p>Fortnightly content feedback for every creator. Pick a creator, review their latest videos, and generate a polished pack to send.</p>
+        </div>
+      </div>
+      <div id="fp-root"><div style="padding:32px;text-align:center;color:var(--gray-400)">Loading…</div></div>
+    </div>
+
     <div class="page" id="page-calendar">
       <div class="page-header">
         <div><h1>Team Calendar</h1><p>Meetings, bookings and team events</p></div>
@@ -4622,6 +4644,7 @@ async function syncAllFromDB() {
     loadSnipes(),
     loadEmailTemplates(),
     loadStaffProgress(),
+    loadFeedbackPacks().catch(() => {}),
   ]).then(() => {
     try { updateDashStats(); } catch(e) { /* dashboard not on screen */ }
     try { _renderDashboardTargets(); } catch(e) {}
@@ -5033,7 +5056,7 @@ function closeModal(id) {
 
 const pageTitles = {
   dashboard:'Dashboard', crm:'Creator CRM', creatorprofile:'Creator Profile',
-  onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit', snipes:'Snipes',
+  onboarding:'Creator Onboarding', mediakit:'Media Kits', ratekit:'Rate Kit', snipes:'Snipes', feedbackpacks:'Feedback Packs',
   campaigns:'Campaigns', campaigndetail:'Campaign', pitchdecks:'Pitch Decks', pipeline:'Deal Pipeline',
   brandsnipes:'Brand Snipes', brandtemplates:'Brand Templates',
   inbox:'Team Inbox', users:'Users & Access', reports:'Campaign Reports', invoice:'Invoice Generator',
@@ -5107,6 +5130,7 @@ function showPage(id, btn) {
   if (id === 'staffpayouts') { loadStaffPayouts(); }
   if (id === 'invoices')   { loadInvoices(); }
   if (id === 'snipes')     { loadSnipes(); }
+  if (id === 'feedbackpacks') { renderFeedbackPacksPage(); }
   if (id === 'calendar')   { loadCalEvents(); }
   if (id === 'managers')   { renderManagersPage(); }
 }
@@ -17821,8 +17845,14 @@ function _renderFeedbackDue() {
 
 // Patch notes — newest first. Bump PATCH_NOTES_VERSION when you add an entry;
 // staff see unseen notes once, then it's marked read for them.
-const PATCH_NOTES_VERSION = '2026-08-07';
+const PATCH_NOTES_VERSION = '2026-09-22';
 const PATCH_NOTES = [
+  { date: '22 Sept 2026', items: [
+    'Feedback Packs: new page under Talent. Every creator is due a pack every 2 weeks, overdue ones show first.',
+    'Comment on each creator\'s 3 latest videos (what went well, even better if), add general notes and ideas, then AI writes the full pack in BluStu\'s voice for you to review.',
+    'Download the finished pack as a BluStu-branded PDF. Every pack is saved so you can track progress over time.',
+    'Inbox threads now load newest first with reliable loading on long and older conversations.',
+  ]},
   { date: '07 Aug 2026', items: [
     'Weekly targets — owner sets per-staff minimums; dashboard shows what you have left this week.',
     'Monthly creator feedback tracking — log feedback and it counts toward your target.',
@@ -17919,6 +17949,12 @@ function _welcomeTodos() {
       const due = _feedbackDueList();
       if (due.length) todos.push({ icon: '💬', text: `<strong>${due.length}</strong> creator${due.length!==1?'s':''} still need feedback this month`, action: "closeModal('welcomeModal');showPage('dashboard')", actionLabel: 'View' });
     }
+  } catch(e) {}
+
+  // Feedback packs due (fortnightly cadence)
+  try {
+    const n = _fpMyOverdueCount();
+    if (n) todos.push({ icon: '📝', text: `<strong>${n}</strong> creator${n!==1?'s':''} due a feedback pack`, action: "closeModal('welcomeModal');showPage('feedbackpacks')", actionLabel: 'Go' });
   } catch(e) {}
 
   // Snipes due for follow-up
@@ -18044,6 +18080,976 @@ function _htmlToText(html) {
   tmp.innerHTML = html;
   return (tmp.textContent || tmp.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// FEEDBACK PACKS — fortnightly creator feedback with AI-polished PDF reports
+// Reports are stored as structured JSON (feedback_packs table) and the PDF is
+// rebuilt on demand, so nothing heavy is ever stored as a file.
+// ═══════════════════════════════════════════════════════════════════
+const FP_CADENCE_DAYS = 14;
+let feedbackPacks = [];        // lightweight summary rows (no inputs/report)
+let _fpScope = null;           // 'mine' | 'all' (null = role default)
+let _fpTab = 'due';            // 'due' | 'history'
+let _fpSearch = '';
+let _fpWork = null;            // the open workspace
+let _fpAutosaveTimer = null;
+let _fpSaving = false;
+
+// Standard agency note used in packs. Added as a fixed block (not AI-written)
+// so the wording stays consistent every time.
+const FP_MARKET_NOTE = "A note that applies to all of us right now: we're in a period where a lot of micro-creators are flooding the scene, and brands are genuinely happy to work with them because they heavily undercut the usual rates. That's the landscape. So don't stop what you're doing, stay consistent, and always come back to your Ideal Viewer Persona. The question to keep asking yourself is this: what unique messaging do YOU provide that a brand will die to work with you for? That's what makes you uncuttable, no matter how crowded the market gets.";
+
+function _fpAttr(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function _fpIsOwner() { return currentUser?.systemRole === 'owner'; }
+function _fpScopeNow() { return _fpScope || (_fpIsOwner() ? 'all' : 'mine'); }
+function _fpFirstName(n) { return String(n || '').trim().split(/\s+/)[0] || 'BluStu'; }
+function _fpFmtDate(d) { return d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; }
+function _fpStaffName(email) { const s = STAFF.find(x => x.email === email); return s ? s.name : (email || ''); }
+function _fpCreator(id) { return creators.find(x => Number(x.id) === Number(id)); }
+function _fpNiche(c) { return NICHE_CATALOG[_resolveNicheKey(c.niche)]?.label || c.niche || ''; }
+function _fpSubNiches(c) {
+  const main = _fpNiche(c);
+  return (Array.isArray(c.sub_niches) ? c.sub_niches : [])
+    .map(k => NICHE_CATALOG[_resolveNicheKey(k)]?.label || k).filter(t => t && t !== main);
+}
+function _fpHandle(c) { const h = String(c.tiktok_handle || '').trim().replace(/^@/, ''); return h ? '@' + h : ''; }
+function _fpStatsNow(c) {
+  return { followers: c.tiktok_followers ?? null, engagement: c.tiktok_engagement ?? null,
+           avg_views: c.tiktok_avg_views ?? null, at: c.tiktok_updated_at || null };
+}
+
+// ── Data ──
+async function loadFeedbackPacks() {
+  const rows = await DB.select('feedback_packs',
+    '?select=id,creator_id,creator_name,staff_email,staff_name,status,created_at,updated_at,generated_at,stats_snapshot&order=updated_at.desc&limit=3000');
+  if (Array.isArray(rows)) feedbackPacks = rows;
+  _fpUpdateBadge();
+  return feedbackPacks;
+}
+function _fpSummaryUpsert(row) {
+  if (!row || row.id == null) return;
+  const slim = { id: row.id, creator_id: row.creator_id, creator_name: row.creator_name, staff_email: row.staff_email,
+    staff_name: row.staff_name, status: row.status, created_at: row.created_at, updated_at: row.updated_at,
+    generated_at: row.generated_at, stats_snapshot: row.stats_snapshot };
+  const i = feedbackPacks.findIndex(p => Number(p.id) === Number(row.id));
+  if (i >= 0) feedbackPacks[i] = slim; else feedbackPacks.unshift(slim);
+}
+function _fpGeneratedFor(creatorId) {
+  return feedbackPacks.filter(p => Number(p.creator_id) === Number(creatorId) && p.status === 'generated' && p.generated_at)
+    .sort((a, b) => new Date(b.generated_at) - new Date(a.generated_at));
+}
+function _fpDraftFor(creatorId) {
+  return feedbackPacks.filter(p => Number(p.creator_id) === Number(creatorId) && p.status === 'draft')
+    .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0] || null;
+}
+function _fpDueInfo(c) {
+  const gens = _fpGeneratedFor(c.id);
+  const last = gens[0] || null;
+  if (!last) return { last: null, count: 0, dueAt: null, days: 0, overdue: true, never: true };
+  const dueAt = new Date(new Date(last.generated_at).getTime() + FP_CADENCE_DAYS * 86400000);
+  const days = Math.ceil((dueAt.getTime() - Date.now()) / 86400000);
+  return { last, count: gens.length, dueAt, days, overdue: days <= 0, never: false };
+}
+function _fpRoster() { return (typeof activeCreators === 'function' ? activeCreators() : creators); }
+function _fpCreatorsInScope() {
+  const me = currentUser?.email;
+  return _fpScopeNow() === 'mine' ? _fpRoster().filter(c => creatorPrimaryStaffEmail(c) === me) : _fpRoster();
+}
+function _fpMyOverdueCount() {
+  const me = currentUser?.email;
+  return _fpRoster().filter(c => creatorPrimaryStaffEmail(c) === me && _fpDueInfo(c).overdue).length;
+}
+function _fpUpdateBadge() {
+  const b = document.getElementById('fpBadge');
+  if (!b) return;
+  const n = _fpMyOverdueCount();
+  b.textContent = n; b.style.display = n ? '' : 'none';
+}
+function _fpPrevSnapshot(creatorId, beforeIso) {
+  const t = beforeIso ? new Date(beforeIso).getTime() : Date.now() + 1;
+  const g = _fpGeneratedFor(creatorId).filter(p => new Date(p.generated_at).getTime() < t);
+  return g[0] ? { snap: g[0].stats_snapshot || null, at: g[0].generated_at } : null;
+}
+function _fpStatsAt(hist, daysAgo) {
+  const target = Date.now() - daysAgo * 86400000;
+  let best = null;
+  (hist || []).forEach(h => { if (new Date(h.captured_at).getTime() <= target) best = h; });
+  return best;
+}
+function _fpDelta(now, then, kind) {
+  if (now == null || then == null) return '';
+  const d = Number(now) - Number(then);
+  if (!isFinite(d)) return '';
+  if (d === 0) return kind === 'eng' ? 'no change' : 'no change';
+  const sign = d > 0 ? '+' : '-';
+  return kind === 'eng' ? `${sign}${Math.abs(d).toFixed(2)}pp` : `${sign}${_fmtCompact(Math.abs(d))}`;
+}
+
+// ── Page ──
+async function renderFeedbackPacksPage(reload) {
+  const root = document.getElementById('fp-root');
+  if (!root) return;
+  if (reload !== false) await loadFeedbackPacks();
+  if (_fpWork) _fpRenderWorkspace(); else _fpRenderList();
+}
+function _fpSetTab(t) { _fpTab = t; _fpRenderList(); }
+function _fpSetScope(s) { _fpScope = s; _fpRenderList(); }
+function _fpSetSearch(v) { _fpSearch = v || ''; _fpRenderListBody(); }
+
+function _fpAvatar(c, size) {
+  size = size || 36;
+  const pic = profilePics[c.id] || c.profile_image_url;
+  return pic
+    ? `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#fff url('${pic}') center/cover;flex-shrink:0;border:1px solid var(--gray-100)"></div>`
+    : `<div style="width:${size}px;height:${size}px;border-radius:50%;background:var(--blue-light);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(size*0.38)}px;flex-shrink:0">${escapeHtml((c.name || '?')[0].toUpperCase())}</div>`;
+}
+
+function _fpRenderList() {
+  const root = document.getElementById('fp-root');
+  if (!root) return;
+  const list = _fpCreatorsInScope();
+  const infos = list.map(c => ({ c, due: _fpDueInfo(c) }));
+  const overdue = infos.filter(x => x.due.overdue).length;
+  const soon = infos.filter(x => !x.due.overdue && x.due.days <= 7).length;
+  const drafts = list.filter(c => _fpDraftFor(c.id)).length;
+  const ids = new Set(list.map(c => Number(c.id)));
+  const cutoff = Date.now() - FP_CADENCE_DAYS * 86400000;
+  const sent = feedbackPacks.filter(p => p.status === 'generated' && p.generated_at && ids.has(Number(p.creator_id)) && new Date(p.generated_at).getTime() >= cutoff).length;
+  const scope = _fpScopeNow();
+  const stat = (label, val, sub, color) => `<div class="stat-card"><div class="stat-label">${label}</div><div class="stat-value" style="${color ? 'color:' + color : ''}">${val}</div><div class="stat-change neutral">${sub}</div></div>`;
+  root.innerHTML = `
+    <div class="stats-grid" style="margin-bottom:16px">
+      ${stat('Overdue', overdue, 'Need a pack now', overdue ? 'var(--red)' : '')}
+      ${stat('Due this week', soon, 'Within 7 days', soon ? 'var(--amber)' : '')}
+      ${stat('Drafts', drafts, 'Started, not sent')}
+      ${stat('Sent (14 days)', sent, 'Packs generated', 'var(--green)')}
+    </div>
+    <div class="card" style="padding:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--gray-100)">
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm ${_fpTab === 'due' ? 'btn-primary' : 'btn-ghost'}" onclick="_fpSetTab('due')">📋 Due &amp; upcoming</button>
+          <button class="btn btn-sm ${_fpTab === 'history' ? 'btn-primary' : 'btn-ghost'}" onclick="_fpSetTab('history')">🗂 History</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div style="display:flex;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden">
+            <button class="btn btn-sm" style="border-radius:0;${scope === 'mine' ? 'background:var(--blue);color:#fff' : 'background:transparent'}" onclick="_fpSetScope('mine')">My creators</button>
+            <button class="btn btn-sm" style="border-radius:0;${scope === 'all' ? 'background:var(--blue);color:#fff' : 'background:transparent'}" onclick="_fpSetScope('all')">Everyone</button>
+          </div>
+          <input class="form-input" style="width:200px;font-size:12px;padding:6px 10px" placeholder="Search creator or staff…" value="${_fpAttr(_fpSearch)}" oninput="_fpSetSearch(this.value)">
+        </div>
+      </div>
+      <div id="fp-list-body" style="padding:4px 16px 12px"></div>
+    </div>`;
+  _fpRenderListBody();
+}
+
+function _fpRenderListBody() {
+  const body = document.getElementById('fp-list-body');
+  if (!body) return;
+  const q = _fpSearch.trim().toLowerCase();
+  if (_fpTab === 'history') { body.innerHTML = _fpHistoryHtml(q); return; }
+  let rows = _fpCreatorsInScope().map(c => ({ c, due: _fpDueInfo(c), draft: _fpDraftFor(c.id) }));
+  if (q) rows = rows.filter(x => (x.c.name || '').toLowerCase().includes(q) || _fpStaffName(creatorPrimaryStaffEmail(x.c)).toLowerCase().includes(q));
+  rows.sort((a, b) => {
+    if (a.due.never !== b.due.never) return a.due.never ? -1 : 1;
+    return a.due.days - b.due.days;
+  });
+  if (!rows.length) {
+    body.innerHTML = `<div style="padding:28px;text-align:center;color:var(--gray-400);font-size:13px">${q ? 'No creators match.' : (_fpScopeNow() === 'mine' ? 'No creators are assigned to you. Switch to Everyone to see the full roster.' : 'No active creators.')}</div>`;
+    return;
+  }
+  body.innerHTML = rows.map(_fpDueRowHtml).join('');
+}
+
+function _fpDueRowHtml({ c, due, draft }) {
+  const pill = (txt, bg, fg) => `<span class="fp-pill" style="background:${bg};color:${fg}">${txt}</span>`;
+  let status;
+  if (due.never) status = pill('No feedback yet', '#fee2e2', '#b91c1c');
+  else if (due.overdue) status = pill(due.days === 0 ? 'Due today' : `Overdue ${Math.abs(due.days)}d`, '#fee2e2', '#b91c1c');
+  else if (due.days <= 3) status = pill(`Due in ${due.days}d`, '#fef3c7', '#92400e');
+  else status = pill(`Due ${_fpFmtDate(due.dueAt)}`, '#dcfce7', '#166534');
+  const meta = [_fpHandle(c), _fpNiche(c), 'Managed by ' + _fpFirstName(_fpStaffName(creatorPrimaryStaffEmail(c)))].filter(Boolean).join(' · ');
+  const last = due.last
+    ? `Last pack ${_fpFmtDate(due.last.generated_at)} by ${escapeHtml(_fpFirstName(due.last.staff_name))} · ${due.count} sent`
+    : 'No packs sent yet';
+  const draftTag = draft ? ` · <span style="color:var(--blue);font-weight:600">Draft in progress</span>` : '';
+  const mainBtn = draft
+    ? `<button class="btn btn-primary btn-sm" onclick="openFeedbackWorkspace(${c.id})">✎ Continue draft</button>`
+    : `<button class="btn ${due.overdue ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="openFeedbackWorkspace(${c.id})">${due.overdue ? '+ Start pack' : '+ New pack'}</button>`;
+  const histBtn = due.count ? `<button class="btn btn-ghost btn-sm" onclick="_fpShowHistoryFor(${c.id})" title="Previous packs">🗂 ${due.count}</button>` : '';
+  return `<div class="fp-row">
+    ${_fpAvatar(c, 38)}
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:700;font-size:14px">${escapeHtml(c.name)}</span>${status}</div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(meta)}</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${last}${draftTag}</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0">${histBtn}${mainBtn}</div>
+  </div>`;
+}
+
+function _fpShowHistoryFor(creatorId) {
+  const c = _fpCreator(creatorId);
+  _fpTab = 'history';
+  _fpSearch = c ? c.name : '';
+  _fpRenderList();
+}
+
+function _fpHistoryHtml(q) {
+  const me = currentUser?.email;
+  let gens = feedbackPacks.filter(p => p.status === 'generated' && p.generated_at);
+  if (_fpScopeNow() === 'mine') {
+    gens = gens.filter(p => {
+      const c = _fpCreator(p.creator_id);
+      return p.staff_email === me || (c && creatorPrimaryStaffEmail(c) === me);
+    });
+  }
+  if (q) gens = gens.filter(p => (p.creator_name || '').toLowerCase().includes(q) || (p.staff_name || '').toLowerCase().includes(q));
+  gens.sort((a, b) => new Date(b.generated_at) - new Date(a.generated_at));
+  if (!gens.length) return `<div style="padding:28px;text-align:center;color:var(--gray-400);font-size:13px">No feedback packs yet${q ? ' matching that search' : ''}.</div>`;
+  return gens.map(p => {
+    const c = _fpCreator(p.creator_id);
+    const s = p.stats_snapshot || {};
+    const prev = _fpPrevSnapshot(p.creator_id, p.generated_at);
+    const ps = prev && prev.snap ? prev.snap : null;
+    const dF = ps ? _fpDelta(s.followers, ps.followers) : '';
+    const dE = ps ? _fpDelta(s.engagement, ps.engagement, 'eng') : '';
+    const dV = ps ? _fpDelta(s.avg_views, ps.avg_views) : '';
+    const deltaCol = d => d && d.startsWith('+') ? 'var(--green)' : (d && d.startsWith('-') ? 'var(--red)' : 'var(--gray-400)');
+    const chip = (label, val, d) => val == null ? '' :
+      `<span style="font-size:11px;color:var(--gray-600);margin-right:12px"><strong>${val}</strong> ${label}${d ? ` <span style="color:${deltaCol(d)}">${d}</span>` : ''}</span>`;
+    const canDel = _fpIsOwner() || p.staff_email === me;
+    return `<div class="fp-row">
+      ${c ? _fpAvatar(c, 34) : '<div style="width:34px"></div>'}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px">${escapeHtml(p.creator_name || (c && c.name) || 'Creator')} <span style="font-weight:400;color:var(--gray-400);font-size:12px">· ${_fpFmtDate(p.generated_at)} · by ${escapeHtml(p.staff_name || _fpStaffName(p.staff_email))}</span></div>
+        <div style="margin-top:3px">${chip('followers', s.followers != null ? _fmtCompact(s.followers) : null, dF)}${chip('eng', s.engagement != null ? s.engagement + '%' : null, dE)}${chip('avg views', s.avg_views != null ? _fmtCompact(s.avg_views) : null, dV)}${!ps ? '<span style="font-size:11px;color:var(--gray-400)">First pack</span>' : ''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-primary btn-sm" onclick="_fpOpenPdfById(${p.id})">📄 PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="openFeedbackWorkspace(${p.creator_id}, ${p.id})" title="View or edit this pack">✎</button>
+        ${canDel ? `<button class="btn btn-ghost btn-sm" onclick="_fpDeletePack(${p.id})" title="Delete pack">🗑</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _fpDeletePack(id) {
+  showConfirm('Delete feedback pack?', 'This permanently removes the pack and its report. The creator\'s next due date will be recalculated.', async () => {
+    const r = await DB._req('DELETE', 'feedback_packs', null, '?id=eq.' + id);
+    if (r === null) return;
+    feedbackPacks = feedbackPacks.filter(p => Number(p.id) !== Number(id));
+    if (_fpWork && Number(_fpWork.packId) === Number(id)) _fpWork = null;
+    _fpUpdateBadge();
+    showToast('Pack deleted');
+    renderFeedbackPacksPage(false);
+  });
+}
+
+// ── Workspace ──
+async function openFeedbackWorkspace(creatorId, packId) {
+  const c = _fpCreator(creatorId);
+  if (!c) { showToast('Creator not found'); return; }
+  // Make sure we're on the page (e.g. when opened from the welcome popup)
+  const pageEl = document.getElementById('page-feedbackpacks');
+  if (pageEl && !pageEl.classList.contains('active')) {
+    const nav = document.querySelector(`.nav-item[onclick*="'feedbackpacks'"]`);
+    showPage('feedbackpacks', nav);
+  }
+  const root = document.getElementById('fp-root');
+  if (root) root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--gray-400)">Loading workspace…</div>';
+
+  let pack = null;
+  const targetId = packId || (_fpDraftFor(creatorId) || {}).id;
+  if (targetId) {
+    const rows = await DB.select('feedback_packs', '?id=eq.' + targetId);
+    pack = Array.isArray(rows) ? rows[0] || null : null;
+  }
+  // Previous generated pack (before this one) for reference + progress
+  const gens = _fpGeneratedFor(creatorId).filter(p => !pack || Number(p.id) !== Number(pack.id))
+    .filter(p => !pack || !pack.generated_at || new Date(p.generated_at) < new Date(pack.generated_at));
+  let prev = null;
+  if (gens[0]) {
+    const r = await DB.select('feedback_packs', '?id=eq.' + gens[0].id);
+    prev = Array.isArray(r) ? r[0] || null : null;
+  }
+  let hist = [];
+  try {
+    const r = await DB.select('creator_stats_history', `?creator_id=eq.${creatorId}&order=captured_at.asc&limit=300`);
+    if (Array.isArray(r)) hist = r;
+  } catch (e) {}
+
+  const inputs = (pack && pack.inputs) ? JSON.parse(JSON.stringify(pack.inputs)) : {};
+  if (!Array.isArray(inputs.videos) || !inputs.videos.length) inputs.videos = _fpSeedVideos(c);
+  ['general', 'trajectory', 'ideas', 'last_progress'].forEach(k => { if (typeof inputs[k] !== 'string') inputs[k] = ''; });
+  if (typeof inputs.include_market_note !== 'boolean') inputs.include_market_note = true;
+
+  _fpWork = {
+    creatorId: c.id, packId: pack ? pack.id : null, status: pack ? pack.status : 'draft',
+    generated_at: pack ? pack.generated_at : null, staff_name: pack ? pack.staff_name : null,
+    stats_snapshot: pack ? pack.stats_snapshot || null : null,
+    inputs, report: pack && pack.report ? pack.report : null, prev, hist, dirty: false,
+    view: (pack && pack.report) ? 'review' : 'notes',
+  };
+  _fpRenderWorkspace();
+}
+
+function _fpSeedVideos(c) {
+  const posts = Array.isArray(c.tiktok_recent_posts) ? c.tiktok_recent_posts.slice(0, 3) : [];
+  return posts.map(p => ({ id: p.id || null, url: p.url || '', caption: p.caption || '', views: p.views ?? null,
+    likes: p.likes ?? null, comments: p.comments ?? null, shares: p.shares ?? null, created: p.created || null,
+    cover: p.cover || null, thought: '', well: '', better: '' }));
+}
+
+async function _fpCloseWorkspace() {
+  if (_fpWork && _fpWork.dirty) await _fpSave();
+  clearTimeout(_fpAutosaveTimer);
+  _fpWork = null;
+  renderFeedbackPacksPage(false);
+}
+
+function _fpIn(key, val) { if (!_fpWork) return; _fpWork.inputs[key] = val; _fpMarkDirty(); }
+function _fpVid(i, key, val) { if (!_fpWork || !_fpWork.inputs.videos[i]) return; _fpWork.inputs.videos[i][key] = val; _fpMarkDirty(); }
+function _fpAddVideo() {
+  if (!_fpWork) return;
+  if (_fpWork.inputs.videos.length >= 5) { showToast('Up to 5 videos per pack'); return; }
+  _fpWork.inputs.videos.push({ id: null, url: '', caption: '', views: null, likes: null, comments: null, shares: null, created: null, cover: null, thought: '', well: '', better: '' });
+  _fpMarkDirty(); _fpRenderWorkspace();
+}
+function _fpRemoveVideo(i) {
+  if (!_fpWork) return;
+  _fpWork.inputs.videos.splice(i, 1);
+  _fpMarkDirty(); _fpRenderWorkspace();
+}
+
+async function _fpRefreshVideos() {
+  const w = _fpWork; if (!w) return;
+  const c = _fpCreator(w.creatorId);
+  if (!c || !c.tiktok_handle) { showToast('Add a TikTok handle to this creator first'); return; }
+  const btn = document.getElementById('fp-refresh-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Pulling latest…'; }
+  await refreshTikTokStats(c.id);
+  // Re-seed from the fresh posts, keeping any notes already written for the same video
+  const byId = {};
+  (w.inputs.videos || []).forEach(v => { if (v.id) byId[v.id] = v; });
+  const manual = (w.inputs.videos || []).filter(v => !v.id);
+  const fresh = _fpSeedVideos(c).map(v => {
+    const o = byId[v.id];
+    return o ? { ...v, thought: o.thought || '', well: o.well || '', better: o.better || '' } : v;
+  });
+  const dropped = (w.inputs.videos || []).filter(v => v.id && !fresh.some(f => f.id === v.id) && (v.thought || v.well || v.better));
+  w.inputs.videos = fresh.concat(manual).slice(0, 5);
+  try {
+    const r = await DB.select('creator_stats_history', `?creator_id=eq.${c.id}&order=captured_at.asc&limit=300`);
+    if (Array.isArray(r)) w.hist = r;
+  } catch (e) {}
+  if (dropped.length) showToast(`⚠ ${dropped.length} video${dropped.length > 1 ? 's' : ''} with notes dropped out of the latest 3`);
+  _fpMarkDirty(); _fpRenderWorkspace();
+}
+
+function _fpMarkDirty() {
+  if (!_fpWork) return;
+  _fpWork.dirty = true;
+  const s = document.getElementById('fp-save-state');
+  if (s) s.textContent = 'Unsaved changes…';
+  clearTimeout(_fpAutosaveTimer);
+  _fpAutosaveTimer = setTimeout(() => { _fpSave(); }, 4000);
+}
+
+/** Save the open pack. opts.markGenerated finalises it (sets the due clock). */
+async function _fpSave(opts) {
+  opts = opts || {};
+  const w = _fpWork; if (!w) return false;
+  if (_fpSaving) { await new Promise(r => setTimeout(r, 400)); if (_fpSaving) return false; }
+  const c = _fpCreator(w.creatorId); if (!c) return false;
+  _fpSaving = true;
+  clearTimeout(_fpAutosaveTimer);
+  const now = new Date().toISOString();
+  const row = { creator_id: c.id, creator_name: c.name, inputs: w.inputs, updated_at: now };
+  if (w.report) row.report = w.report;
+  if (!w.packId) {
+    row.staff_email = currentUser?.email || null;
+    row.staff_name = currentUser?.name || null;
+    row.status = 'draft';
+    row.created_at = now;
+  }
+  w._justGenerated = false;
+  if (opts.markGenerated) {
+    row.status = 'generated';
+    if (!w.generated_at) {
+      // First time this pack is finalised: start the 14-day clock, snapshot the
+      // stats (for progress tracking) and credit the staff member who did it.
+      row.generated_at = now;
+      row.stats_snapshot = _fpStatsNow(c);
+      row.staff_email = currentUser?.email || null;
+      row.staff_name = currentUser?.name || null;
+      w._justGenerated = true;
+    }
+  }
+  let res;
+  if (w.packId) res = await DB._req('PATCH', 'feedback_packs', row, '?id=eq.' + w.packId);
+  else res = await DB._req('POST', 'feedback_packs', [row], '');
+  _fpSaving = false;
+  const st = document.getElementById('fp-save-state');
+  if (res === null) { if (st) st.textContent = '⚠ Not saved, run feedback-packs.sql?'; return false; }
+  const saved = Array.isArray(res) ? res[0] : null;
+  if (saved) {
+    w.packId = saved.id; w.status = saved.status; w.generated_at = saved.generated_at || w.generated_at;
+    w.staff_name = saved.staff_name || w.staff_name;
+    w.stats_snapshot = saved.stats_snapshot || w.stats_snapshot;
+    _fpSummaryUpsert(saved);
+  }
+  w.dirty = false;
+  if (st) st.textContent = 'Saved ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  if (w._justGenerated) {
+    // Count it toward the staff member's feedback targets
+    const fb = { creator_id: c.id, creator_name: c.name, staff_email: currentUser?.email, given_on: now.slice(0, 10),
+      note: 'Feedback pack', created_at: now };
+    try { if (Array.isArray(creatorFeedbackLog)) creatorFeedbackLog.unshift(fb); } catch (e) {}
+    DB._req('POST', 'creator_feedback', [fb], '').catch(() => {});
+    try { _renderDashboardTargets(); _renderFeedbackDue(); } catch (e) {}
+  }
+  _fpUpdateBadge();
+  return true;
+}
+
+async function _fpDiscardDraft() {
+  const w = _fpWork; if (!w) return;
+  if (!w.packId || w.status === 'generated') { _fpWork = null; renderFeedbackPacksPage(false); return; }
+  showConfirm('Discard this draft?', 'Your notes for this pack will be deleted.', async () => {
+    await DB._req('DELETE', 'feedback_packs', null, '?id=eq.' + w.packId);
+    feedbackPacks = feedbackPacks.filter(p => Number(p.id) !== Number(w.packId));
+    _fpWork = null;
+    showToast('Draft discarded');
+    renderFeedbackPacksPage(false);
+  }, { danger: true, okLabel: 'Discard' });
+}
+
+function _fpSetView(v) { if (!_fpWork) return; _fpWork.view = v; _fpRenderWorkspace(); }
+
+function _fpRenderWorkspace() {
+  const root = document.getElementById('fp-root');
+  const w = _fpWork;
+  if (!root || !w) return;
+  const c = _fpCreator(w.creatorId);
+  if (!c) { _fpWork = null; _fpRenderList(); return; }
+  const due = _fpDueInfo(c);
+  const s = _fpStatsNow(c);
+  const statBox = (label, val) => `<div style="flex:1;min-width:90px;background:var(--gray-50);border-radius:10px;padding:10px 12px"><div style="font-size:18px;font-weight:800">${val}</div><div style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--gray-400);font-weight:700">${label}</div></div>`;
+  const dueLine = due.never ? 'No feedback pack sent yet'
+    : `Last pack ${_fpFmtDate(due.last.generated_at)} by ${escapeHtml(_fpFirstName(due.last.staff_name))} · next due ${_fpFmtDate(due.dueAt)}${due.overdue ? ` <span style="color:var(--red);font-weight:700">(${due.days === 0 ? 'today' : 'overdue ' + Math.abs(due.days) + 'd'})</span>` : ''}`;
+  const editingSent = w.status === 'generated';
+  const header = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="_fpCloseWorkspace()">← Back to feedback packs</button>
+      <div style="font-size:11px;color:var(--gray-400)" id="fp-save-state">${w.dirty ? 'Unsaved changes…' : (w.packId ? 'Saved' : 'Not saved yet')}</div>
+    </div>
+    <div class="fp-w-card">
+      <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+        ${_fpAvatar(c, 56)}
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:19px;font-weight:800">${escapeHtml(c.name)} <span style="font-size:13px;font-weight:500;color:var(--gray-400)">${escapeHtml(_fpHandle(c))}</span>${editingSent ? ' <span class="fp-pill" style="background:#dcfce7;color:#166534">Sent pack</span>' : ' <span class="fp-pill" style="background:var(--blue-light);color:var(--blue)">Draft</span>'}</div>
+          <div style="font-size:12px;color:var(--gray-500);margin-top:2px">${escapeHtml([_fpNiche(c)].concat(_fpSubNiches(c)).filter(Boolean).join(' | '))}</div>
+          <div style="font-size:12px;color:var(--gray-500);margin-top:4px">${dueLine}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="fp-refresh-btn" onclick="_fpRefreshVideos()" title="Pull live stats and the latest videos from TikTok">↻ Refresh stats &amp; videos</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        ${statBox('Followers', s.followers != null ? _fmtCompact(s.followers) : '—')}
+        ${statBox('Engagement', s.engagement != null ? s.engagement + '%' : '—')}
+        ${statBox('Avg views', s.avg_views != null ? _fmtCompact(s.avg_views) : '—')}
+        ${statBox('Posts / week', c.tiktok_posts_week != null ? c.tiktok_posts_week : '—')}
+      </div>
+      ${s.at ? `<div style="font-size:10px;color:var(--gray-400);margin-top:6px">Stats updated ${_timeAgo(new Date(s.at).getTime())}</div>` : ''}
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <button class="btn btn-sm ${w.view === 'notes' ? 'btn-primary' : 'btn-ghost'}" onclick="_fpSetView('notes')">1 · Staff notes</button>
+      <button class="btn btn-sm ${w.view === 'review' ? 'btn-primary' : 'btn-ghost'}" onclick="${w.report ? "_fpSetView('review')" : "showToast('Generate the report first')"}" ${w.report ? '' : 'style="opacity:.5"'}>2 · Review report</button>
+    </div>`;
+  root.innerHTML = header + (w.view === 'review' && w.report ? _fpReviewHtml(c) : _fpNotesHtml(c));
+}
+
+function _fpTa(value, oninput, placeholder, rows) {
+  return `<textarea class="form-textarea" rows="${rows || 3}" style="width:100%;font-size:13px" placeholder="${_fpAttr(placeholder)}" oninput="${oninput}">${escapeHtml(value || '')}</textarea>`;
+}
+
+function _fpNotesHtml(c) {
+  const w = _fpWork, i = w.inputs;
+  // Previous pack reference
+  let prevHtml = '';
+  if (w.prev && w.prev.report) {
+    const acts = (w.prev.report.action_items || []);
+    prevHtml = `<div class="fp-w-card">
+      <div class="fp-w-h">↩ Last pack, ${_fpFmtDate(w.prev.generated_at)} by ${escapeHtml(_fpFirstName(w.prev.staff_name))}
+        <button class="btn btn-ghost btn-sm" onclick="_fpOpenPdfById(${w.prev.id})">📄 View last pack</button></div>
+      ${acts.length ? `<div style="font-size:12px;color:var(--gray-500);margin-bottom:6px">Action items they were given:</div>
+      <ol style="margin:0 0 8px 18px;font-size:12.5px;color:var(--gray-700);line-height:1.6">${acts.map(a => `<li>${escapeHtml(String(a).replace(/\*\*/g, ''))}</li>`).join('')}</ol>` : ''}
+      <label class="fp-w-lbl">How did they get on with these? (optional)</label>
+      ${_fpTa(i.last_progress, "_fpIn('last_progress',this.value)", 'e.g. Started the gym series, 2 episodes out. Still leaning on trend sounds…', 2)}
+    </div>`;
+  }
+  // Trajectory table
+  const s = _fpStatsNow(c);
+  const atPrev = w.prev && w.prev.stats_snapshot ? w.prev.stats_snapshot : null;
+  const d30 = _fpStatsAt(w.hist, 30);
+  const col = (snap) => snap ? [snap.followers != null ? _fmtCompact(snap.followers) : '—', snap.engagement != null ? snap.engagement + '%' : '—', snap.avg_views != null ? _fmtCompact(snap.avg_views) : '—'] : ['—', '—', '—'];
+  const nowC = col(s), prevC = col(atPrev), d30C = col(d30 ? { followers: d30.followers, engagement: d30.engagement, avg_views: d30.avg_views } : null);
+  const dcol = d => d && d.startsWith('+') ? 'var(--green)' : (d && d.startsWith('-') ? 'var(--red)' : 'var(--gray-400)');
+  const dl = (k, kind) => atPrev ? _fpDelta(s[k], atPrev[k], kind) : '';
+  const rowsDef = [['Followers', 0, 'followers'], ['Engagement', 1, 'engagement', 'eng'], ['Avg views', 2, 'avg_views']];
+  const trajHtml = `<div class="fp-w-card">
+    <div class="fp-w-h">📈 Stats trajectory</div>
+    <div style="overflow-x:auto"><table style="width:100%;font-size:12.5px;border-collapse:collapse">
+      <tr style="color:var(--gray-400);font-size:11px;text-align:left"><th style="padding:4px 6px"></th><th style="padding:4px 6px">Now</th><th style="padding:4px 6px">At last pack${atPrev ? ' (' + _fpFmtDate(w.prev.generated_at) + ')' : ''}</th><th style="padding:4px 6px">30 days ago</th><th style="padding:4px 6px">Change since last pack</th></tr>
+      ${rowsDef.map(([label, idx, k, kind]) => { const d = dl(k, kind); return `<tr style="border-top:1px solid var(--gray-50)"><td style="padding:6px;font-weight:600">${label}</td><td style="padding:6px">${nowC[idx]}</td><td style="padding:6px">${prevC[idx]}</td><td style="padding:6px">${d30C[idx]}</td><td style="padding:6px;color:${dcol(d)};font-weight:600">${d || '—'}</td></tr>`; }).join('')}
+    </table></div>
+    <label class="fp-w-lbl">Comment on their trajectory (optional)</label>
+    ${_fpTa(i.trajectory, "_fpIn('trajectory',this.value)", 'e.g. Followers up nicely since the last pack but views have dipped, likely the slower edits…', 2)}
+  </div>`;
+  // Videos
+  const vids = i.videos || [];
+  const vidsHtml = `<div class="fp-w-card">
+    <div class="fp-w-h">🎬 Recent videos <span style="font-size:11px;font-weight:400;color:var(--gray-400)">3 most recent (pinned posts excluded)</span>
+      <button class="btn btn-ghost btn-sm" onclick="_fpAddVideo()">+ Add video by link</button></div>
+    ${vids.length ? `<div class="fp-w-grid3">${vids.map((v, idx) => _fpVidCardHtml(v, idx)).join('')}</div>`
+      : `<div style="font-size:13px;color:var(--gray-400);padding:10px 0">No recent videos loaded. Hit <strong>↻ Refresh stats &amp; videos</strong> above, or add videos by link.</div>`}
+  </div>`;
+  const general = `<div class="fp-w-card">
+    <div class="fp-w-h">💬 General comments</div>
+    ${_fpTa(i.general, "_fpIn('general',this.value)", 'The big picture: what is holding the page back, what to lean into, username/branding, pacing, context, series ideas…', 5)}
+    <label class="fp-w-lbl">Ideas &amp; opportunities from the agency (optional)</label>
+    ${_fpTa(i.ideas, "_fpIn('ideas',this.value)", 'Formats or series to try, creators to study (with handles), collabs, events, UGC portfolio, anything we can help them pursue…', 4)}
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:10px;cursor:pointer">
+      <input type="checkbox" ${i.include_market_note ? 'checked' : ''} onchange="_fpIn('include_market_note',this.checked)"> Include the standard “The Market Right Now” note
+    </label>
+  </div>`;
+  const footer = `<div class="fp-w-card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;position:sticky;bottom:0;z-index:5;box-shadow:0 -4px 16px rgba(0,0,0,.05)">
+    <div style="font-size:12px;color:var(--gray-500)">Notes autosave as you type. Generating writes the full pack in BluStu's voice for you to review.</div>
+    <div style="display:flex;gap:8px">
+      ${w.status !== 'generated' && w.packId ? '<button class="btn btn-ghost btn-sm" onclick="_fpDiscardDraft()">Discard draft</button>' : ''}
+      <button class="btn btn-ghost btn-sm" onclick="_fpSave().then(ok=>ok&&showToast(\'💾 Draft saved\'))">💾 Save draft</button>
+      <button class="btn btn-sm" id="fp-gen-btn" onclick="_fpGenerate()" style="background:linear-gradient(135deg,#7c3aed,#2198ED);color:#fff">✨ ${w.report ? 'Regenerate report' : 'Generate report'}</button>
+    </div>
+  </div>`;
+  return prevHtml + trajHtml + vidsHtml + general + footer;
+}
+
+function _fpVidCardHtml(v, idx) {
+  const date = v.created ? _fpFmtDate(v.created * 1000) : '';
+  const stats = [v.views != null ? _fmtCompact(v.views) + ' views' : '', v.likes != null ? _fmtCompact(v.likes) + ' likes' : '',
+    v.comments != null ? _fmtCompact(v.comments) + ' comments' : '', v.shares != null ? _fmtCompact(v.shares) + ' shares' : ''].filter(Boolean).join(' · ');
+  const manual = !v.id;
+  const thumb = v.cover ? `<img src="${_fpAttr(v.cover)}" onerror="this.remove()" style="width:46px;height:62px;object-fit:cover;border-radius:6px;flex-shrink:0">` : '';
+  const top = manual
+    ? `<input class="form-input" style="font-size:12px;padding:5px 8px;margin-bottom:6px" placeholder="Video link (TikTok/Instagram)" value="${_fpAttr(v.url)}" oninput="_fpVid(${idx},'url',this.value)">
+       <input class="form-input" style="font-size:12px;padding:5px 8px" placeholder="What's the video about? (optional)" value="${_fpAttr(v.caption)}" oninput="_fpVid(${idx},'caption',this.value)">`
+    : `<div style="display:flex;gap:10px">${thumb}<div style="min-width:0;flex:1">
+         <div style="font-size:12px;color:var(--gray-700);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(v.caption || '(no caption)')}</div>
+         <div style="font-size:11px;color:var(--gray-400);margin-top:4px">${stats}</div>
+       </div></div>`;
+  return `<div style="border:1px solid var(--gray-100);border-radius:12px;padding:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-weight:700;font-size:13px">Video ${idx + 1} <span style="font-weight:400;color:var(--gray-400);font-size:11px">${date}</span></div>
+      <div style="display:flex;gap:4px">
+        ${v.url ? `<a class="btn btn-ghost btn-sm" href="${_fpAttr(v.url)}" target="_blank" rel="noopener" style="padding:2px 8px;font-size:11px">▶ Watch</a>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="_fpRemoveVideo(${idx})" style="padding:2px 7px;font-size:11px" title="Remove">✕</button>
+      </div>
+    </div>
+    ${top}
+    <label class="fp-w-lbl">General thought</label>
+    ${_fpTa(v.thought, `_fpVid(${idx},'thought',this.value)`, 'Overall take on this video…', 2)}
+    <label class="fp-w-lbl">✅ What went well</label>
+    ${_fpTa(v.well, `_fpVid(${idx},'well',this.value)`, 'Hook, energy, shots, idea…', 2)}
+    <label class="fp-w-lbl">🚀 Even better if</label>
+    ${_fpTa(v.better, `_fpVid(${idx},'better',this.value)`, 'Captions, pacing, context, B-roll…', 2)}
+  </div>`;
+}
+
+// ── AI generation ──
+function _fpIsFirstPack() {
+  const w = _fpWork;
+  return !_fpGeneratedFor(w.creatorId).some(p => Number(p.id) !== Number(w.packId));
+}
+
+function _fpBuildPrompt(c) {
+  const w = _fpWork, i = w.inputs;
+  const n = v => v == null ? 'unknown' : Number(v).toLocaleString('en-GB');
+  const s = _fpStatsNow(c);
+  const atPrev = w.prev && w.prev.stats_snapshot ? w.prev.stats_snapshot : null;
+  const d30 = _fpStatsAt(w.hist, 30);
+  const first = _fpIsFirstPack();
+  const d = c.mediakit_audience || {};
+  const collabs = Array.isArray(d.past_collabs) ? d.past_collabs.join(', ') : (d.past_collabs || '');
+  const bio = (c.pitch_bio && c.pitch_bio.trim()) || (c.onboarding && c.onboarding.bio) || '';
+  const location = c.location || (c.onboarding && c.onboarding.location) || '';
+  const lines = [];
+  lines.push('CREATOR');
+  lines.push(`Name: ${c.name}`);
+  if (_fpHandle(c)) lines.push(`TikTok: ${_fpHandle(c)}`);
+  lines.push(`Niche: ${[_fpNiche(c)].concat(_fpSubNiches(c)).filter(Boolean).join(', ') || 'unknown'}`);
+  if (location) lines.push(`Location: ${location}`);
+  if (bio) lines.push(`Bio: ${bio.slice(0, 400)}`);
+  lines.push(`Followers: ${n(s.followers)} | Engagement rate: ${s.engagement != null ? s.engagement + '%' : 'unknown'} | Average views: ${n(s.avg_views)}`);
+  if (c.tiktok_avg_likes != null) lines.push(`Average likes: ${n(c.tiktok_avg_likes)} | comments: ${n(c.tiktok_avg_comments)} | shares: ${n(c.tiktok_avg_shares)}`);
+  if (c.tiktok_posts_week != null) lines.push(`Posting frequency: ${c.tiktok_posts_week} posts per week`);
+  if (collabs) lines.push(`Past brand collaborations: ${collabs}`);
+  lines.push(`First feedback pack from BluStu: ${first ? 'YES' : 'NO'}`);
+  if (w.prev && w.prev.report) {
+    lines.push('');
+    lines.push(`PREVIOUS PACK (${_fpFmtDate(w.prev.generated_at)}) ACTION ITEMS:`);
+    (w.prev.report.action_items || []).forEach((a, k) => lines.push(`${k + 1}. ${String(a).replace(/\*\*/g, '')}`));
+    if (i.last_progress.trim()) lines.push(`Staff note on how they got on: ${i.last_progress.trim()}`);
+  }
+  lines.push('');
+  lines.push('STATS TRAJECTORY (use these exact numbers only)');
+  lines.push(`Now: ${n(s.followers)} followers, ${s.engagement ?? 'unknown'}% engagement, ${n(s.avg_views)} avg views`);
+  if (atPrev) lines.push(`At last pack: ${n(atPrev.followers)} followers, ${atPrev.engagement ?? 'unknown'}% engagement, ${n(atPrev.avg_views)} avg views`);
+  if (d30) lines.push(`30 days ago: ${n(d30.followers)} followers, ${d30.engagement ?? 'unknown'}% engagement, ${n(d30.avg_views)} avg views`);
+  if (i.trajectory.trim()) lines.push(`Staff comment on trajectory: ${i.trajectory.trim()}`);
+  lines.push('');
+  lines.push('RECENT VIDEOS');
+  (i.videos || []).forEach((v, k) => {
+    const meta = [v.created ? 'posted ' + _fpFmtDate(v.created * 1000) : '', v.views != null ? n(v.views) + ' views' : '',
+      v.likes != null ? n(v.likes) + ' likes' : '', v.comments != null ? n(v.comments) + ' comments' : '',
+      v.shares != null ? n(v.shares) + ' shares' : ''].filter(Boolean).join(', ');
+    lines.push(`Video ${k + 1}${meta ? ' (' + meta + ')' : ''}: "${(v.caption || v.url || 'no caption').slice(0, 300)}"`);
+    lines.push(`  Staff general thought: ${v.thought.trim() || '(none)'}`);
+    lines.push(`  Staff, what went well: ${v.well.trim() || '(none)'}`);
+    lines.push(`  Staff, even better if: ${v.better.trim() || '(none)'}`);
+  });
+  lines.push('');
+  lines.push(`GENERAL COMMENTS FROM STAFF: ${i.general.trim() || '(none)'}`);
+  lines.push(`IDEAS AND OPPORTUNITIES FROM STAFF: ${i.ideas.trim() || '(none)'}`);
+  lines.push(`Written by: ${_fpFirstName(currentUser?.name)} at BluStu`);
+
+  return `You are writing a "Content & Page Direction Feedback" pack from BluStu, a UK creator talent agency, to one of its creators. The staff notes below are the substance. Your job is to turn rough notes into a clear, polished, personal pack that explains each point properly: what it is, why it matters, and how to do it.
+
+VOICE (match closely): direct, honest and warm, like a manager who genuinely backs the creator. Talk to them as "you" and use their first name. British English, plain and conversational, confident. Phrases like "Straight up", "I'll be real with you" and "Let's go" capture the energy, use them sparingly and naturally. Praise specifically, critique honestly but constructively, and always explain the why.
+
+STRICT RULES:
+- Never use em dashes or en dashes anywhere. Use commas, full stops or "and" instead. For ranges write "25 to 35".
+- Section headings follow the pattern "Topic, Short Punchline", for example "The Honest Truth, You Blend In" or "Show, Don't Tell".
+- Use ONLY facts from the data below. Do not invent statistics, dates, brands, other creators, links, prices or rates. Only mention another creator or account if the staff notes mention it. Only mention rates or money if the staff notes do.
+- Cover every point in the staff notes. Expand thin notes into a clear explanation, but do not add unrelated advice.
+- If a staff field is "(none)", leave that part out (empty string or empty array). Never invent notes for it.
+- Use **double asterisks** to bold a short lead-in at the start of a bullet where it helps, for example "**Captions:** Add them for retention, loads of people watch on mute."
+- Paragraphs 2 to 4 sentences. Bullets one or two sentences.
+${i.include_market_note ? '- Do not write about the wider creator market or rates landscape, a standard note about that is added separately.\n' : ''}
+OUTPUT: raw JSON only, exactly this shape:
+{
+  "intro_title": "${first ? 'Welcome to BluStu' : 'Overview'}",
+  "intro": "opening paragraph${first ? ' welcoming them to BluStu and summarising their strengths with the real numbers' : ' summarising where they are at'}",
+  "progress": "paragraph on how they got on with the previous pack's action items, or empty string if there was no previous pack or no staff note",
+  "trajectory": "paragraph on the stats trajectory using ONLY the numbers given, or empty string if there is no staff trajectory comment and no earlier numbers",
+  "videos": [{"title": "short descriptive title of the video", "summary": "2 to 3 sentence overall take", "went_well": ["..."], "even_better_if": ["..."]}],
+  "sections": [{"heading": "Topic, Short Punchline", "paragraph": "...", "bullets": ["..."]}],
+  "ideas": {"heading": "Topic, Short Punchline", "paragraph": "...", "bullets": ["..."]},
+  "action_items": ["5 concrete, specific action items for the next two weeks, drawn from the notes"],
+  "closing": "encouraging sign-off paragraph addressed to them, without the sender's name"
+}
+"videos" must have exactly ${(i.videos || []).length} entries in the same order as given. "sections" should be 1 to 4 themed sections built from the general comments (empty array if none). "ideas" uses empty strings and an empty array if there are no ideas notes.
+
+DATA:
+${lines.join('\n')}`;
+}
+
+function _fpParseReport(text) {
+  if (!text) return null;
+  let t = String(text).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a < 0 || b < 0) return null;
+  try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }
+}
+function _fpClean(v) {
+  if (typeof v === 'string') return _stripDashes(v.replace(/(\d)\s*[–—]\s*(\d)/g, '$1 to $2'));
+  if (Array.isArray(v)) return v.map(_fpClean);
+  if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = _fpClean(v[k]); return o; }
+  return v;
+}
+function _fpNormaliseReport(r) {
+  r = _fpClean(r || {});
+  const str = x => typeof x === 'string' ? x.trim() : '';
+  const arr = x => Array.isArray(x) ? x.filter(s => typeof s === 'string' && s.trim()).map(s => s.trim()) : [];
+  const vids = _fpWork.inputs.videos || [];
+  return {
+    intro_title: str(r.intro_title) || (_fpIsFirstPack() ? 'Welcome to BluStu' : 'Overview'),
+    intro: str(r.intro), progress: str(r.progress), trajectory: str(r.trajectory),
+    videos: vids.map((v, k) => {
+      const a = (Array.isArray(r.videos) ? r.videos[k] : null) || {};
+      return { title: str(a.title), summary: str(a.summary), went_well: arr(a.went_well), even_better_if: arr(a.even_better_if) };
+    }),
+    sections: (Array.isArray(r.sections) ? r.sections : []).map(x => ({ heading: str(x && x.heading), paragraph: str(x && x.paragraph), bullets: arr(x && x.bullets) }))
+      .filter(x => x.heading || x.paragraph || x.bullets.length),
+    ideas: { heading: str(r.ideas && r.ideas.heading), paragraph: str(r.ideas && r.ideas.paragraph), bullets: arr(r.ideas && r.ideas.bullets) },
+    action_items: arr(r.action_items).slice(0, 8),
+    closing: str(r.closing),
+  };
+}
+
+async function _fpGenerate() {
+  const w = _fpWork; if (!w) return;
+  const c = _fpCreator(w.creatorId); if (!c) return;
+  const i = w.inputs;
+  const hasNotes = (i.videos || []).some(v => (v.thought || v.well || v.better || '').trim()) || i.general.trim() || i.ideas.trim();
+  if (!hasNotes) { showToast('Add some notes first, at least one video comment or a general comment'); return; }
+  if (w.report && !confirm('Regenerate the report? Any edits you made to the current report will be replaced.')) return;
+  const saved = await _fpSave();
+  if (!saved) { showToast('Could not save the draft, has feedback-packs.sql been run?'); return; }
+  const btn = document.getElementById('fp-gen-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '✨ Writing the pack… (20 to 40s)'; }
+  try {
+    const res = await emailApi('/ai/generate', { prompt: _fpBuildPrompt(c), maxTokens: 8192, json: true });
+    const parsed = _fpParseReport(res && res.text);
+    if (!parsed) throw new Error('the AI reply could not be read, please try again');
+    w.report = _fpNormaliseReport(parsed);
+    w.view = 'review';
+    await _fpSave();
+    _fpRenderWorkspace();
+    showToast('✨ Report ready, review and edit before sending');
+  } catch (e) {
+    showToast('AI failed: ' + (e.message || 'unknown'));
+    if (btn) { btn.disabled = false; btn.textContent = '✨ ' + (w.report ? 'Regenerate report' : 'Generate report'); }
+  }
+}
+
+// ── Review / edit the generated report ──
+function _fpRSet(path, value, isList) {
+  if (!_fpWork || !_fpWork.report) return;
+  const parts = path.split('.');
+  let o = _fpWork.report;
+  for (let k = 0; k < parts.length - 1; k++) { o = o[parts[k]]; if (o == null) return; }
+  o[parts[parts.length - 1]] = isList ? String(value).split('\n').map(x => x.trim()).filter(Boolean) : value;
+  _fpMarkDirty();
+}
+function _fpAddSection() { if (!_fpWork || !_fpWork.report) return; _fpWork.report.sections.push({ heading: '', paragraph: '', bullets: [] }); _fpMarkDirty(); _fpRenderWorkspace(); }
+function _fpRemoveSection(k) { if (!_fpWork || !_fpWork.report) return; _fpWork.report.sections.splice(k, 1); _fpMarkDirty(); _fpRenderWorkspace(); }
+
+function _fpReviewHtml(c) {
+  const r = _fpWork.report;
+  const inp = (val, path, ph) => `<input class="form-input" style="font-size:13px;padding:6px 10px;font-weight:700" value="${_fpAttr(val)}" placeholder="${_fpAttr(ph || '')}" oninput="_fpRSet('${path}',this.value)">`;
+  const ta = (val, path, rows, ph) => `<textarea class="form-textarea" rows="${rows || 3}" style="width:100%;font-size:13px" placeholder="${_fpAttr(ph || '')}" oninput="_fpRSet('${path}',this.value)">${escapeHtml(val || '')}</textarea>`;
+  const list = (arr, path, rows, ph) => `<textarea class="form-textarea" rows="${rows || 3}" style="width:100%;font-size:13px" placeholder="${_fpAttr(ph || 'One per line')}" oninput="_fpRSet('${path}',this.value,true)">${escapeHtml((arr || []).join('\n'))}</textarea>`;
+  const vids = _fpWork.inputs.videos || [];
+  const sent = _fpWork.status === 'generated';
+  return `
+    <div class="fp-w-card" style="background:var(--blue-light);border-color:transparent">
+      <div style="font-size:12.5px;color:var(--gray-700)">✍️ This is the AI draft of the pack. Read it through and edit anything, it autosaves. Bullets are one per line, and <strong>**double asterisks**</strong> make bold lead-ins. When you're happy, save it and download the PDF.</div>
+    </div>
+    <div class="fp-w-card">
+      <div class="fp-w-h">Opening</div>
+      ${inp(r.intro_title, 'intro_title', 'Welcome to BluStu / Overview')}
+      <div style="height:8px"></div>${ta(r.intro, 'intro', 4)}
+      <label class="fp-w-lbl">Since the last pack (optional)</label>${ta(r.progress, 'progress', 3)}
+      <label class="fp-w-lbl">Stats trajectory (optional)</label>${ta(r.trajectory, 'trajectory', 3)}
+    </div>
+    <div class="fp-w-card">
+      <div class="fp-w-h">Video breakdowns</div>
+      ${r.videos.map((v, k) => `<div style="border:1px solid var(--gray-100);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">Video ${k + 1}${vids[k] && vids[k].caption ? ' · ' + escapeHtml(vids[k].caption.slice(0, 70)) : ''}</div>
+        ${inp(v.title, `videos.${k}.title`, 'Video title')}
+        <div style="height:6px"></div>${ta(v.summary, `videos.${k}.summary`, 2)}
+        <div class="fp-w-grid3" style="grid-template-columns:1fr 1fr">
+          <div><label class="fp-w-lbl">✅ What went well</label>${list(v.went_well, `videos.${k}.went_well`, 3)}</div>
+          <div><label class="fp-w-lbl">🚀 Even better if</label>${list(v.even_better_if, `videos.${k}.even_better_if`, 3)}</div>
+        </div></div>`).join('')}
+    </div>
+    <div class="fp-w-card">
+      <div class="fp-w-h">Sections <button class="btn btn-ghost btn-sm" onclick="_fpAddSection()">+ Add section</button></div>
+      ${r.sections.map((s, k) => `<div style="border:1px solid var(--gray-100);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+        <div style="display:flex;gap:6px">${inp(s.heading, `sections.${k}.heading`, 'Topic, Short Punchline')}<button class="btn btn-ghost btn-sm" onclick="_fpRemoveSection(${k})" title="Remove section">✕</button></div>
+        <div style="height:6px"></div>${ta(s.paragraph, `sections.${k}.paragraph`, 3)}
+        <label class="fp-w-lbl">Bullets</label>${list(s.bullets, `sections.${k}.bullets`, 3)}</div>`).join('') || '<div style="font-size:12px;color:var(--gray-400)">No extra sections.</div>'}
+    </div>
+    <div class="fp-w-card">
+      <div class="fp-w-h">Ideas to try</div>
+      ${inp(r.ideas.heading, 'ideas.heading', 'Heading (leave blank to hide)')}
+      <div style="height:6px"></div>${ta(r.ideas.paragraph, 'ideas.paragraph', 2)}
+      <label class="fp-w-lbl">Bullets</label>${list(r.ideas.bullets, 'ideas.bullets', 3)}
+    </div>
+    <div class="fp-w-card">
+      <div class="fp-w-h">Action items, next two weeks</div>
+      ${list(r.action_items, 'action_items', 5, 'One action per line')}
+      <label class="fp-w-lbl">Closing</label>${ta(r.closing, 'closing', 3)}
+    </div>
+    <div class="fp-w-card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;position:sticky;bottom:0;z-index:5;box-shadow:0 -4px 16px rgba(0,0,0,.05)">
+      <div style="font-size:12px;color:var(--gray-500)">${sent ? 'This pack has been sent. Edits update the saved copy, the due date stays the same.' : 'Saving marks the pack as given and sets the next due date to 14 days from today.'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="_fpPreviewPdf()">👁 Preview</button>
+        <button class="btn btn-sm" id="fp-gen-btn" onclick="_fpSetView('notes');setTimeout(_fpGenerate,50)" style="background:linear-gradient(135deg,#7c3aed,#2198ED);color:#fff">↻ Regenerate</button>
+        <button class="btn btn-ghost btn-sm" onclick="_fpFinalise(false)">💾 ${sent ? 'Save changes' : 'Save pack'}</button>
+        <button class="btn btn-primary btn-sm" onclick="_fpFinalise(true)">📄 Save &amp; download PDF</button>
+      </div>
+    </div>`;
+}
+
+async function _fpFinalise(download) {
+  const w = _fpWork; if (!w || !w.report) return;
+  const wasSent = w.status === 'generated';
+  const ok = await _fpSave({ markGenerated: true });
+  if (!ok) { showToast('Could not save, has feedback-packs.sql been run?'); return; }
+  const next = new Date(new Date(w.generated_at).getTime() + FP_CADENCE_DAYS * 86400000);
+  showToast(wasSent ? '💾 Pack updated' : `✅ Pack saved · next due ${_fpFmtDate(next)}`);
+  if (download) _fpOpenPdfWindow(_fpPackFromWork(), true);
+  _fpRenderWorkspace();
+}
+
+function _fpPackFromWork() {
+  const w = _fpWork;
+  return { id: w.packId, creator_id: w.creatorId, report: w.report, inputs: w.inputs,
+    staff_name: w.staff_name || currentUser?.name, generated_at: w.generated_at || new Date().toISOString(),
+    stats_snapshot: w.stats_snapshot || _fpStatsNow(_fpCreator(w.creatorId)) };
+}
+function _fpPreviewPdf() { if (_fpWork && _fpWork.report) _fpOpenPdfWindow(_fpPackFromWork(), false); }
+
+async function _fpOpenPdfById(id) {
+  const rows = await DB.select('feedback_packs', '?id=eq.' + id);
+  const p = Array.isArray(rows) ? rows[0] : null;
+  if (!p || !p.report) { showToast('That pack has no report yet'); return; }
+  _fpOpenPdfWindow(p, true);
+}
+
+// ── PDF (rebuilt from stored JSON — same output every time) ──
+function _fpOpenPdfWindow(pack, autoPrint) {
+  const c = _fpCreator(pack.creator_id) || { id: pack.creator_id, name: pack.creator_name || 'Creator' };
+  const html = _fpPdfHtml(pack, c, autoPrint);
+  const w = window.open('', '_blank');
+  if (!w) { showToast('Allow pop-ups to open the PDF'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+function _fpPdfHtml(pack, c, autoPrint) {
+  const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const txt = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*\*/g, '');
+  const r = pack.report || {};
+  const inputs = pack.inputs || {};
+  const vids = inputs.videos || [];
+  const genAt = pack.generated_at ? new Date(pack.generated_at) : new Date();
+  const monthYear = genAt.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const staffFull = pack.staff_name || _fpStaffName(pack.staff_email) || 'BluStu';
+  const staffFirst = _fpFirstName(staffFull);
+  const first = _fpFirstName(c.name);
+  // Stats: the snapshot taken when the pack was given (live stats for a preview)
+  const s = pack.stats_snapshot || _fpStatsNow(c);
+  const prev = _fpPrevSnapshot(c.id, pack.generated_at);
+  const ps = prev && prev.snap ? prev.snap : null;
+  const statBox = (val, label, delta) => `<div class="fp-stat"><div class="v">${val}</div><div class="l">${label}</div>${delta ? `<div class="d ${delta.startsWith('-') ? 'neg' : (delta.startsWith('+') ? 'pos' : 'neu')}">${esc(delta)} since last pack</div>` : ''}</div>`;
+  const pic = profilePics[c.id] || c.profile_image_url;
+  const avatar = pic ? `<div class="fp-avatar mk-avatar" style="background-image:url('${pic}')"></div>`
+    : `<div class="fp-avatar fp-avatar-l">${esc((c.name || '?')[0].toUpperCase())}</div>`;
+  const logo = blustuLogo ? `<img src="${blustuLogo}" class="fp-logo" alt="BluStu">` : `<div class="fp-logo-t">BluStu</div>`;
+  const niches = [_fpNiche(c)].concat(_fpSubNiches(c)).filter(Boolean).join(' | ');
+  const bullets = arr => (arr && arr.length) ? `<ul>${arr.map(b => `<li>${txt(b)}</li>`).join('')}</ul>` : '';
+  const sec = (h, p, b) => (h || p || (b && b.length)) ? `<div class="fp-sec">${h ? `<h2>${esc(h)}</h2>` : ''}${p ? `<p>${txt(p)}</p>` : ''}${bullets(b)}</div>` : '';
+  const vidHtml = (r.videos || []).map((v, k) => {
+    const src = vids[k] || {};
+    const st = [src.views != null ? _fmtCompact(src.views) + ' views' : '', src.likes != null ? _fmtCompact(src.likes) + ' likes' : '',
+      src.comments != null ? _fmtCompact(src.comments) + ' comments' : '', src.shares != null ? _fmtCompact(src.shares) + ' shares' : ''].filter(Boolean).join('  ·  ');
+    const when = src.created ? new Date(src.created * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+    if (!v.title && !v.summary && !(v.went_well || []).length && !(v.even_better_if || []).length) return '';
+    return `<div class="fp-vid">
+      <div class="fp-vid-top"><div><div class="fp-vid-n">Video ${k + 1}${when ? ' · ' + esc(when) : ''}</div><div class="fp-vid-t">${esc(v.title || 'Recent video')}</div></div>
+        ${st ? `<div class="fp-vid-st">${esc(st)}</div>` : ''}</div>
+      ${src.caption ? `<div class="fp-vid-cap">“${esc(src.caption.slice(0, 160))}${src.caption.length > 160 ? '…' : ''}”</div>` : ''}
+      ${v.summary ? `<p>${txt(v.summary)}</p>` : ''}
+      <div class="fp-2col">
+        ${(v.went_well || []).length ? `<div class="fp-col"><div class="fp-col-h">What went well</div>${bullets(v.went_well)}</div>` : ''}
+        ${(v.even_better_if || []).length ? `<div class="fp-col ebi"><div class="fp-col-h">Even better if</div>${bullets(v.even_better_if)}</div>` : ''}
+      </div>
+      ${src.url ? `<a class="fp-vid-link" href="${esc(src.url)}">${esc(src.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>` : ''}
+    </div>`;
+  }).join('');
+  const acts = (r.action_items || []).map((a, k) => `<div class="fp-act"><span class="num">${k + 1}</span><span>${txt(a)}</span></div>`).join('');
+  const nextDue = pack.generated_at ? new Date(genAt.getTime() + FP_CADENCE_DAYS * 86400000) : null;
+  const title = `${first}_content_feedback_${genAt.toLocaleDateString('en-GB', { month: 'short' }).toLowerCase()}${genAt.getFullYear()}_blustu`;
+
+  const css = `
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap');
+    :root{--a:#2198ED;--dark:#0f172a;--gray:#64748b;--line:#e5e9f0;--tint:#eef6fe;}
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    body{font-family:'DM Sans',sans-serif;color:#1e293b;background:#eef1f6;font-size:12.5px;line-height:1.6;}
+    .doc{background:#fff;width:210mm;margin:0 auto;padding:16mm 17mm;}
+    @media screen{.doc{margin:20px auto;box-shadow:0 4px 24px rgba(0,0,0,.1);min-height:297mm;}}
+    @page{size:A4 portrait;margin:14mm 0;}
+    @page:first{margin-top:0;}
+    @media print{body{background:#fff;} .doc{width:210mm;padding:0 17mm;box-shadow:none;margin:0;} .fp-top{padding-top:14mm;}}
+    .fp-top{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:2px solid var(--a);}
+    .fp-kicker{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--a);}
+    .fp-logo{max-height:34px;max-width:140px;object-fit:contain;}
+    .fp-logo-t{font-family:'DM Serif Display',serif;font-size:22px;color:var(--a);font-weight:800;}
+    .fp-hero{display:flex;gap:16px;align-items:center;margin-top:18px;}
+    .fp-avatar{width:64px;height:64px;border-radius:50%;background-size:cover;background-position:center;flex-shrink:0;border:2px solid var(--line);}
+    .fp-avatar-l{background:var(--a);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-family:'DM Serif Display',serif;}
+    .fp-name{font-family:'DM Serif Display',serif;font-size:28px;line-height:1.1;color:var(--dark);}
+    .fp-name span{font-family:'DM Sans',sans-serif;font-size:14px;color:var(--gray);font-weight:600;}
+    .fp-niche{font-size:12px;color:var(--gray);margin-top:3px;}
+    .fp-prep{font-size:11px;color:var(--a);font-weight:600;margin-top:3px;}
+    .fp-stats{display:flex;gap:12px;margin:18px 0 6px;}
+    .fp-stat{flex:1;background:var(--tint);border-radius:12px;padding:12px 14px;text-align:center;break-inside:avoid;}
+    .fp-stat .v{font-family:'DM Serif Display',serif;font-size:26px;color:var(--a);line-height:1.1;}
+    .fp-stat .l{font-size:9.5px;font-weight:800;letter-spacing:1.2px;color:var(--gray);text-transform:uppercase;margin-top:2px;}
+    .fp-stat .d{font-size:10px;font-weight:700;margin-top:3px;}
+    .fp-stat .d.pos{color:#16a34a;} .fp-stat .d.neg{color:#dc2626;} .fp-stat .d.neu{color:var(--gray);}
+    .fp-sec{margin-top:18px;}
+    h2{font-family:'DM Serif Display',serif;font-weight:400;font-size:18px;color:var(--dark);margin-bottom:6px;padding-left:10px;border-left:3px solid var(--a);break-after:avoid;}
+    p{margin:6px 0;}
+    ul{margin:6px 0 4px 0;padding-left:0;list-style:none;}
+    li{position:relative;padding-left:16px;margin:4px 0;break-inside:avoid;}
+    li:before{content:'';position:absolute;left:2px;top:8px;width:6px;height:6px;border-radius:50%;background:var(--a);}
+    strong{color:var(--dark);}
+    .fp-vid{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:10px;break-inside:avoid;}
+    .fp-vid-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;}
+    .fp-vid-n{font-size:9.5px;font-weight:800;letter-spacing:1px;color:var(--a);text-transform:uppercase;}
+    .fp-vid-t{font-weight:800;font-size:14px;color:var(--dark);}
+    .fp-vid-st{font-size:10.5px;color:var(--gray);white-space:nowrap;}
+    .fp-vid-cap{font-size:11px;color:var(--gray);font-style:italic;margin-top:4px;}
+    .fp-2col{display:flex;gap:12px;margin-top:6px;}
+    .fp-col{flex:1;background:var(--tint);border-radius:10px;padding:8px 12px;}
+    .fp-col.ebi{background:#f8fafc;border:1px solid var(--line);}
+    .fp-col-h{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--a);}
+    .fp-col.ebi .fp-col-h{color:var(--dark);}
+    .fp-vid-link{display:block;font-size:10px;color:var(--a);margin-top:6px;text-decoration:none;}
+    .fp-note{background:var(--tint);border-radius:12px;padding:12px 16px;}
+    .fp-act{display:flex;gap:10px;align-items:flex-start;margin:7px 0;break-inside:avoid;}
+    .fp-act .num{width:22px;height:22px;border-radius:50%;background:var(--a);color:#fff;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+    .fp-close{margin-top:18px;}
+    .fp-sign{margin-top:12px;font-family:'DM Serif Display',serif;font-size:17px;color:var(--dark);}
+    .fp-next{font-size:10.5px;color:var(--gray);margin-top:4px;}`;
+
+  const market = inputs.include_market_note
+    ? `<div class="fp-sec"><h2>One More Thing, The Market Right Now</h2><div class="fp-note"><p>${esc(FP_MARKET_NOTE)}</p></div></div>` : '';
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>
+  <div class="doc">
+    <div class="fp-top"><div class="fp-kicker">Content &amp; Page Direction Feedback</div>${logo}</div>
+    <div class="fp-hero">${avatar}<div>
+      <div class="fp-name">${esc(c.name)}${_fpHandle(c) ? ` <span>(${esc(_fpHandle(c))})</span>` : ''}</div>
+      ${niches ? `<div class="fp-niche">${esc(niches)}</div>` : ''}
+      <div class="fp-prep">Prepared by ${esc(staffFull)}, BluStu · ${esc(monthYear)}</div>
+    </div></div>
+    <div class="fp-stats">
+      ${statBox(s.followers != null ? _fmtCompact(s.followers) : '—', 'Followers', ps ? _fpDelta(s.followers, ps.followers) : '')}
+      ${statBox(s.engagement != null ? s.engagement + '%' : '—', 'Engagement', ps ? _fpDelta(s.engagement, ps.engagement, 'eng') : '')}
+      ${statBox(s.avg_views != null ? _fmtCompact(s.avg_views) : '—', 'Avg Views', ps ? _fpDelta(s.avg_views, ps.avg_views) : '')}
+    </div>
+    ${sec(r.intro_title, r.intro)}
+    ${r.progress ? sec('Since Your Last Pack, How You Got On', r.progress) : ''}
+    ${r.trajectory ? sec('Your Numbers, The Trajectory', r.trajectory) : ''}
+    ${vidHtml ? `<div class="fp-sec"><h2>Your Recent Videos, The Breakdown</h2>${vidHtml}</div>` : ''}
+    ${(r.sections || []).map(x => sec(x.heading, x.paragraph, x.bullets)).join('')}
+    ${market}
+    ${r.ideas && (r.ideas.heading || r.ideas.paragraph || (r.ideas.bullets || []).length) ? sec(r.ideas.heading || 'Ideas To Try, Where We Can Help', r.ideas.paragraph, r.ideas.bullets) : ''}
+    ${acts ? `<div class="fp-sec"><h2>Your Action Items, Next Two Weeks</h2>${acts}</div>` : ''}
+    <div class="fp-close">
+      ${r.closing ? `<p>${txt(r.closing)}</p>` : ''}
+      <div class="fp-sign">${esc(staffFirst)}, BluStu</div>
+      ${nextDue ? `<div class="fp-next">Your next feedback pack: ${esc(nextDue.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}</div>` : ''}
+    </div>
+  </div>
+  ${autoPrint ? _mediaKitPrintScript() : ''}
+  </body></html>`;
+}
+
 
 function _populateComposeTemplates(creatorName, mode) {
   const sel = document.getElementById('compose-template');
