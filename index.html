@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-au (AI snipe: refine opener loop with presets + free-text; refinement remarks saved to snipe notes for follow-ups) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-aw (scan no longer changes the niche/template — stays on General unless the user picks another) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2736,13 +2736,17 @@ html, body { overflow-x: hidden; }
 
       <!-- Quick-add inline row -->
       <div class="card" style="margin-bottom:12px;padding:10px 14px;background:var(--blue-light);border:1px solid #bfdbfe">
-        <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:8px">⚡ Quick add — fill what you have, hit Enter</div>
+        <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:8px">⚡ Quick add — paste their TikTok link and hit Scan, or fill it in yourself</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <input class="form-input" id="qs-link" placeholder="Paste TikTok profile link…" style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter'){event.preventDefault();scanSnipeProfile();}">
+          <button class="btn btn-sm" id="qs-scan-btn" onclick="scanSnipeProfile()" style="white-space:nowrap;background:linear-gradient(135deg,#7c3aed,#2198ED);color:#fff" title="Pull their followers, email, name and niche from TikTok">🔍 Scan profile</button>
+        </div>
+        <div id="qs-scan-status" style="display:none;font-size:11.5px;margin-bottom:8px;line-height:1.5"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <input class="form-input" id="qs-name" placeholder="Name *" style="flex:1;min-width:110px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
           <input class="form-input" id="qs-followers" placeholder="Followers" style="width:90px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
           <input class="form-input" id="qs-location" placeholder="Location" style="width:110px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
           <input class="form-input" id="qs-email" placeholder="Email" style="flex:1;min-width:130px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
-          <input class="form-input" id="qs-link" placeholder="Profile link" style="flex:1;min-width:130px" onkeydown="if(event.key==='Enter')quickAddSnipe()">
           <select class="form-select" id="qs-contact" style="width:110px">
             <option value="dm">DM</option>
             <option value="email">Email</option>
@@ -3699,6 +3703,7 @@ html, body { overflow-x: hidden; }
     <div class="modal-body">
       <p style="font-size:13px;color:var(--gray-600);margin:0 0 4px">Describe <strong id="ai-snipe-name">this creator</strong>'s content in a few words — what they post, their vibe, anything you noticed.</p>
       <p style="font-size:12px;color:var(--gray-400);margin:0 0 12px">AI adds a natural opening paragraph to your template so the outreach reads like a real scout who watched their content.</p>
+      <div id="ai-snipe-scanhint" style="display:none;font-size:11.5px;color:var(--blue);margin-bottom:6px"></div>
       <textarea class="form-textarea" id="ai-snipe-desc" rows="4" placeholder="e.g. Funny London day-in-the-life vlogs, great editing, loads of comments asking where her outfits are from, really consistent posting…" style="width:100%;font-size:13px"></textarea>
       <div id="ai-snipe-error" style="display:none;color:var(--red);font-size:12px;margin-top:8px"></div>
     </div>
@@ -17142,6 +17147,146 @@ function _sendSnipeEmail(snipeId) {
 }
 
 // ── AI-personalised snipe outreach ──
+// ═══════════════════════════════════════════════════════════════════
+// SCAN PROFILE — paste a TikTok link, pull everything we can
+// Uses the existing TikHub call (bio, nickname, region, followers, recent
+// captions), then asks AI to work out the creator's real first name, their
+// location, and a starting description of what they post. Fills the quick-add
+// row so a snipe is: paste link, add your comments, send.
+// ═══════════════════════════════════════════════════════════════════
+let _scanResult = null;   // last scan, used to prefill the AI description
+
+/** Pull a TikTok handle out of a pasted URL or raw @handle. */
+function _handleFromLink(input) {
+  const v = String(input || '').trim();
+  if (!v) return '';
+  const m = v.match(/tiktok\.com\/@([A-Za-z0-9._-]+)/i);
+  if (m) return m[1];
+  if (/^@?[A-Za-z0-9._-]+$/.test(v)) return v.replace(/^@/, '');
+  return '';
+}
+
+/** Find a contact email in bio text. */
+function _emailFromText(text) {
+  const m = String(text || '').match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+  return m ? m[0] : '';
+}
+
+async function scanSnipeProfile() {
+  const linkEl = document.getElementById('qs-link');
+  const handle = _handleFromLink(linkEl?.value);
+  if (!handle) {
+    showToast('Paste their TikTok profile link first');
+    linkEl?.focus();
+    return;
+  }
+  const btn = document.getElementById('qs-scan-btn');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Scanning…'; }
+  const status = (msg, colour) => {
+    const el = document.getElementById('qs-scan-status');
+    if (!el) return;
+    el.style.display = msg ? 'block' : 'none';
+    el.style.color = colour || 'var(--gray-500)';
+    el.innerHTML = msg;
+  };
+  status('Fetching their profile from TikTok…');
+
+  let d = null;
+  try {
+    const res = await fetch(EMAIL_API + '/tiktok/stats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Staff-Token': _emailAuthToken() },
+      body: JSON.stringify({ handle }),
+    });
+    d = await res.json();
+    if (!res.ok || d.error) throw new Error(d.error || ('HTTP ' + res.status));
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    status('⚠️ Could not scan: ' + (e.message || 'unknown') + '. Fill the fields in manually.', 'var(--red)');
+    return;
+  }
+
+  // Normalise the link to the canonical profile URL
+  if (linkEl) linkEl.value = 'https://www.tiktok.com/@' + handle;
+
+  const bio = d.bio || '';
+  const bioEmail = _emailFromText(bio);
+  const captions = (d.recent_posts || []).map(p => p.caption).filter(Boolean).slice(0, 6);
+
+  // Followers + email we can fill straight away
+  const fEl = document.getElementById('qs-followers');
+  if (fEl && d.follower_count) fEl.value = _fmtCompact(d.follower_count);
+  const eEl = document.getElementById('qs-email');
+  if (eEl && bioEmail && !eEl.value.trim()) eEl.value = bioEmail;
+  // Email found means email outreach is possible
+  const cEl = document.getElementById('qs-contact');
+  if (cEl && bioEmail) cEl.value = 'email';
+
+  status('Working out their name and what they post…');
+
+  // Ask AI for the real name, location and a content summary. Display names are
+  // often handles, emoji or stylised, so the email and bio help infer a real name.
+  const prompt = `You are helping a talent scout log a TikTok creator. Work out who they are from the profile data below.
+
+Profile data:
+- TikTok handle: @${handle}
+- Display name: ${d.nickname || '(none)'}
+- Bio: ${bio || '(empty)'}
+- Contact email found in bio: ${bioEmail || '(none)'}
+- Region code from TikTok: ${d.region || '(none)'}
+- Followers: ${d.follower_count || 'unknown'}
+- Recent video captions: ${captions.length ? captions.map(c => '"' + c.slice(0, 120) + '"').join(' | ') : '(none)'}
+
+Work out:
+1. first_name: the real first name to greet them by in an email. Use the display name if it is clearly a real name. If it is a handle, stylised, emoji or a nickname, infer the real name from the email address (e.g. "abdullah.khan@gmail.com" means "Abdullah") or from the bio. Capitalise it properly. If you genuinely cannot tell, use "" and nothing else.
+2. name_confidence: "high" if it is clearly their real name, "medium" if inferred from an email or bio, "low" if it is a guess or a handle.
+3. location: their city or country if the bio, captions or region code show it, otherwise "". Write it in plain English (e.g. "London, UK"), never a bare country code.
+4. posts_summary: 1 to 2 sentences, in plain English, describing what they actually post, based on the captions and bio. Write it as a scout's note, e.g. "Funny London day in the life vlogs, strong editing, lots of food spots." If there are no captions, base it on the bio, and if there is nothing to go on use "".
+
+Do NOT use em dashes or en dashes. Reply with raw JSON only, no code fences:
+{"first_name":"","name_confidence":"","location":"","posts_summary":""}`;
+
+  let ai = {};
+  try {
+    const r = await emailApi('/ai/generate', { prompt, maxTokens: 2048, json: true });
+    let t = String((r && r.text) || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b >= 0) ai = JSON.parse(t.slice(a, b + 1));
+  } catch (e) { ai = {}; }
+
+  // Fill name + location, never overwriting something already typed
+  const nEl = document.getElementById('qs-name');
+  const aiName = _stripDashes(String(ai.first_name || '').trim());
+  if (nEl && !nEl.value.trim()) nEl.value = aiName || d.nickname || '@' + handle;
+  const lEl = document.getElementById('qs-location');
+  const aiLoc = _stripDashes(String(ai.location || '').trim());
+  if (lEl && aiLoc && !lEl.value.trim()) lEl.value = aiLoc;
+  // Remember for the AI description box
+  _scanResult = {
+    handle, followers: d.follower_count || null, bio, bioEmail,
+    nickname: d.nickname || '', region: d.region || '',
+    captions, posts_summary: _stripDashes(String(ai.posts_summary || '').trim()),
+    name_confidence: String(ai.name_confidence || '').toLowerCase(),
+  };
+
+  if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+
+  // Tell them exactly what was found and what still needs a human
+  const bits = [];
+  bits.push(d.follower_count ? `<strong>${_fmtCompact(d.follower_count)}</strong> followers` : 'followers not found');
+  bits.push(bioEmail ? `email <strong>${escapeHtml(bioEmail)}</strong>` : '<span style="color:var(--amber)">no email in bio</span>');
+  if (aiLoc) bits.push(escapeHtml(aiLoc));
+  let warn = '';
+  if (_scanResult.name_confidence === 'low' || !aiName) {
+    warn = ' <span style="color:var(--amber)">Double-check the name before sending.</span>';
+  }
+  const noEmail = !bioEmail && !(eEl && eEl.value.trim());
+  status('✅ Scanned: ' + bits.join(' · ') + '.' + warn +
+    (noEmail ? ' <span style="color:var(--amber)">Add an email to send outreach, or check their linktree.</span>' : ''),
+    noEmail ? 'var(--gray-600)' : 'var(--green)');
+}
+
 // ── Refine the AI opener from inside the compose window ──
 // Holds the context from the AI snipe so the personalised paragraph can be
 // rewritten (less glazey, different angle, mention something else) without
@@ -17286,7 +17431,17 @@ async function quickAddSnipeAndEmailAI() {
     link:      document.getElementById('qs-link').value.trim(),
   };
   document.getElementById('ai-snipe-name').textContent = name;
-  document.getElementById('ai-snipe-desc').value = '';
+  // If we scanned this profile, start them off with what it found so they only
+  // have to add their own take rather than typing from scratch.
+  const scanned = (_scanResult && _scanResult.posts_summary && _handleFromLink(_aiSnipeCtx.link) === _scanResult.handle)
+    ? _scanResult.posts_summary : '';
+  const descEl = document.getElementById('ai-snipe-desc');
+  descEl.value = scanned;
+  const hint = document.getElementById('ai-snipe-scanhint');
+  if (hint) {
+    hint.style.display = scanned ? 'block' : 'none';
+    hint.innerHTML = scanned ? '✨ Pre-filled from their profile scan. Add your own take, or rewrite it.' : '';
+  }
   document.getElementById('ai-snipe-error').style.display = 'none';
   openModal('aiSnipeModal');
   setTimeout(() => document.getElementById('ai-snipe-desc')?.focus(), 100);
@@ -18056,6 +18211,7 @@ function _renderFeedbackDue() {
 const PATCH_NOTES_VERSION = '2026-10-25';
 const PATCH_NOTES = [
   { date: '25 Oct 2026', items: [
+    'Snipes: paste a TikTok link and hit \U0001F50D Scan profile. It pulls followers, the email from their bio and their location, and works out their real first name. Your template choice is left alone.',
     'AI snipes: after the opener is generated, hit \u2728 Refine opener in the email window to rewrite it, less glazey, shorter, different angle, or tell it what to mention.',
     'Notes you add while refining are saved against the snipe, so follow-up emails use them too.',
     'Snipe templates are now properly per-person. Your outreach uses YOUR template, not someone else\'s.',
