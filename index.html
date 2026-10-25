@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-at (per-staff snipe templates: claim unowned templates, {your_role} placeholder + job title, owner staff-template manager, inherited-template warning) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-au (AI snipe: refine opener loop with presets + free-text; refinement remarks saved to snipe notes for follow-ups) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3539,6 +3539,7 @@ html, body { overflow-x: hidden; }
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
           <label class="form-label" style="margin:0">Message *</label>
           <div style="display:flex;gap:6px;align-items:center">
+            <button type="button" class="btn btn-sm" id="compose-ai-refine-btn" onclick="openAiRefine()" style="display:none;font-size:11px;background:linear-gradient(135deg,#7c3aed,#2198ED);color:#fff;padding:4px 10px" title="Rewrite the AI personalised opener">✨ Refine opener</button>
             <button type="button" class="btn btn-sm" id="compose-ai-reply-btn" onclick="_aiDraftReply()" style="display:none;font-size:11px;background:linear-gradient(135deg,#7c3aed,#2198ED);color:#fff;padding:4px 10px" title="Let AI draft a reply based on their message">✨ AI draft reply</button>
             <select class="form-select" id="compose-template" onchange="applyComposeTemplate(this.value)" style="font-size:11px;padding:4px 8px;width:auto">
               <option value="">Insert template…</option>
@@ -3659,6 +3660,31 @@ html, body { overflow-x: hidden; }
     <div class="modal-body" id="st-body" style="max-height:60vh;overflow-y:auto"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('staffTemplatesModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ AI REFINE OPENER ══ -->
+<div class="modal-overlay" id="aiRefineModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">✨ Refine the opener</div>
+      <button class="modal-close" onclick="closeModal('aiRefineModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:11px;font-weight:600;color:var(--gray-500);margin-bottom:4px">CURRENT OPENER</div>
+      <div id="ai-refine-current" style="background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--gray-700);line-height:1.6;max-height:120px;overflow-y:auto;margin-bottom:12px"></div>
+      <div id="ai-refine-warn" style="display:none;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400e;margin-bottom:12px">⚠️ You've edited the opener in the email. The rewrite will be placed after the greeting instead of swapped in.</div>
+      <div style="font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:6px">Quick adjustments (pick any)</div>
+      <div id="ai-refine-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <label class="form-label" style="font-size:12px">Anything else to change or mention?</label>
+      <textarea class="form-textarea" id="ai-refine-notes" rows="3" placeholder="e.g. talk about their Vegas vlogs instead of the gym stuff, and don't mention follower count" style="width:100%;font-size:13px"></textarea>
+      <div class="form-hint">Notes you add here get saved against the snipe, so follow-up emails use them too.</div>
+      <div id="ai-refine-error" style="display:none;color:var(--red);font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('aiRefineModal')">Cancel</button>
+      <button class="btn btn-primary" id="ai-refine-go" onclick="_runAiRefine()" style="background:linear-gradient(135deg,#7c3aed,#2198ED)">✨ Rewrite opener</button>
     </div>
   </div>
 </div>
@@ -17116,6 +17142,132 @@ function _sendSnipeEmail(snipeId) {
 }
 
 // ── AI-personalised snipe outreach ──
+// ── Refine the AI opener from inside the compose window ──
+// Holds the context from the AI snipe so the personalised paragraph can be
+// rewritten (less glazey, different angle, mention something else) without
+// starting over. Remarks added while refining are saved onto the snipe, so
+// follow-up emails later draw on them too.
+let _aiRefine = null;
+
+const AI_REFINE_PRESETS = [
+  { key: 'less-glaze', label: '😐 Less glazey',  hint: 'Tone the praise right down. Keep it genuine and understated, no gushing, no flattery stacking. Say what you noticed plainly.' },
+  { key: 'specific',   label: '🔍 More specific', hint: 'Be more concrete about their actual content. Reference the real details rather than general compliments.' },
+  { key: 'shorter',    label: '✂️ Shorter',       hint: 'Tighten it to 2 sentences. Cut anything that is not doing work.' },
+  { key: 'casual',     label: '💬 More casual',   hint: 'Make it more relaxed and conversational, like a quick message from a person, not a pitch.' },
+  { key: 'angle',      label: '🔄 Different angle', hint: 'Take a noticeably different angle to the current version. Lead on a different aspect of their content.' },
+];
+let _aiRefinePicked = new Set();
+
+/** Show/hide the Refine button whenever the compose window opens. */
+function _syncAiRefineBtn(active) {
+  const b = document.getElementById('compose-ai-refine-btn');
+  if (b) b.style.display = active ? '' : 'none';
+}
+
+function openAiRefine() {
+  if (!_aiRefine) { showToast('No AI opener to refine'); return; }
+  _aiRefinePicked = new Set();
+  const body = document.getElementById('compose-body');
+  // If the paragraph is no longer in the body the user has rewritten it; warn.
+  const present = body && body.value.includes(_aiRefine.paragraph);
+  document.getElementById('ai-refine-current').textContent = _aiRefine.paragraph;
+  document.getElementById('ai-refine-warn').style.display = present ? 'none' : 'block';
+  document.getElementById('ai-refine-notes').value = '';
+  document.getElementById('ai-refine-error').style.display = 'none';
+  _renderAiRefineChips();
+  openModal('aiRefineModal');
+  setTimeout(() => document.getElementById('ai-refine-notes')?.focus(), 100);
+}
+
+function _renderAiRefineChips() {
+  const wrap = document.getElementById('ai-refine-chips');
+  if (!wrap) return;
+  wrap.innerHTML = AI_REFINE_PRESETS.map(p => {
+    const on = _aiRefinePicked.has(p.key);
+    return `<button type="button" onclick="_toggleAiRefine('${p.key}')" style="cursor:pointer;font-size:12px;padding:6px 12px;border-radius:999px;border:1px solid ${on ? 'var(--blue)' : 'var(--gray-200)'};background:${on ? 'var(--blue)' : 'var(--white)'};color:${on ? '#fff' : 'var(--gray-700)'};font-weight:${on ? '700' : '500'}">${p.label}</button>`;
+  }).join('');
+}
+function _toggleAiRefine(key) {
+  if (_aiRefinePicked.has(key)) _aiRefinePicked.delete(key); else _aiRefinePicked.add(key);
+  _renderAiRefineChips();
+}
+
+async function _runAiRefine() {
+  const r = _aiRefine;
+  if (!r) return;
+  const notes = (document.getElementById('ai-refine-notes')?.value || '').trim();
+  const errEl = document.getElementById('ai-refine-error');
+  const btn = document.getElementById('ai-refine-go');
+  if (!_aiRefinePicked.size && !notes) {
+    errEl.textContent = 'Pick an adjustment or type what you want changed.';
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = '✨ Rewriting…';
+
+  const picked = AI_REFINE_PRESETS.filter(p => _aiRefinePicked.has(p.key));
+  const scoutName = currentUser?.name || 'our scout';
+  const prompt = `You are ${scoutName}, a talent scout at the creator agency BluStu. You wrote this opening paragraph of an outreach email to a creator named ${r.name}, and now you want to rewrite it.
+
+The paragraph as it stands:
+"""
+${r.paragraph}
+"""
+
+What the scout originally noticed about ${r.name}'s content:
+"${r.desc}"
+${r.followers ? `\nThey have around ${r.followers} followers.` : ''}${r.location ? `\nThey're based in ${r.location}.` : ''}
+
+Rewrite it with these changes:
+${picked.map(p => '- ' + p.hint).join('\n')}${notes ? `\n- ${notes}` : ''}
+
+Rules:
+- This paragraph sits right after "Hi ${r.name}," and before the agency's pitch, so no greeting, no introducing the agency, no pitching representation.
+- Keep it a single paragraph that still reads like a real person who actually watched their content.
+- Unless told to shorten it, keep it around 3 to 4 sentences.
+- Do not invent facts about them that are not in the notes above.
+- Do NOT use em dashes (—) or en dashes (–). Use commas, full stops, or "and".
+Output ONLY the rewritten paragraph, with no preamble or quotes.`;
+
+  let fresh = '';
+  try {
+    const res = await emailApi('/ai/generate', { prompt, maxTokens: 2048 });
+    fresh = _stripDashes((res && res.text || '').trim());
+    if (!fresh) throw new Error('AI returned nothing');
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '✨ Rewrite opener';
+    errEl.textContent = 'AI failed: ' + (e.message || 'unknown') + '. The current opener is unchanged.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  // Swap the old paragraph for the new one, leaving the rest of the email alone
+  const body = document.getElementById('compose-body');
+  if (body) {
+    if (body.value.includes(r.paragraph)) {
+      body.value = body.value.replace(r.paragraph, fresh);
+    } else {
+      // They edited it themselves, so inject after the greeting instead
+      body.value = _injectAiParagraph(body.value, fresh, r.name);
+      showToast('Opener had been edited, so the rewrite was placed after the greeting');
+    }
+  }
+  r.paragraph = fresh;
+
+  // Any extra remarks are real observations about the creator, so fold them
+  // into the saved notes for this snipe. Follow-up emails personalise from these.
+  if (notes && r.snipeId) {
+    const merged = (r.desc + '. ' + notes).replace(/\.\s*\./g, '.').trim();
+    r.desc = merged;
+    await _setSnipePostsDesc(r.snipeId, merged);
+    try { renderSnipes(); } catch (e) {}
+  }
+
+  btn.disabled = false; btn.textContent = '✨ Rewrite opener';
+  closeModal('aiRefineModal');
+  showToast('✨ Opener rewritten' + (notes ? ' · remarks saved for follow-ups' : ''));
+}
+
 let _aiSnipeCtx = null;
 
 /** Validate the quick-add row, then open the "describe the creator" modal. */
@@ -17189,13 +17341,16 @@ Output ONLY the 3-4 sentence paragraph itself, with no preamble, quotes, or sign
     sent: 'no', reply_status: 'waiting', notes: _buildSnipeNotes(c.niche, desc),
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   };
-  await DB._req('POST', 'snipes', [row], '').catch(()=>{});
+  const ins = await DB._req('POST', 'snipes', [row], '').catch(()=>null);
+  const snipeId = (Array.isArray(ins) && ins[0]) ? ins[0].id : null;
   ['qs-name','qs-followers','qs-location','qs-email','qs-link'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   await loadSnipes();
 
   btn.disabled = false; btn.textContent = '✨ Generate & open email';
   closeModal('aiSnipeModal');
   _aiSnipeCtx = null;
+  // Keep the context so the opener can be refined from inside the compose window
+  _aiRefine = { snipeId, name: c.name, desc, followers: c.followers, location: c.location, paragraph: para };
   await openSnipeCompose({ creatorName: c.name, to: c.email, niche: c.niche, aiParagraph: para });
 }
 
@@ -17248,6 +17403,7 @@ async function openSnipeCompose({ creatorName, to, niche, aiParagraph }) {
       _cErr.textContent = '';
     }
   }
+  _syncAiRefineBtn(!!aiParagraph);
   document.getElementById('composeModalTitle').textContent = aiParagraph ? '✨ AI Snipe Outreach' : '✉ Snipe Outreach';
   { const _ab = document.getElementById('compose-ai-reply-btn'); if (_ab) _ab.style.display = 'none'; }
   updateFromPreview();
@@ -17329,6 +17485,7 @@ async function openSnipeFollowUp(snipeId) {
   _followUpSnipeId = s.id;
 
   document.getElementById('composeModalTitle').textContent = '↪ Follow-up Outreach';
+  _syncAiRefineBtn(false);
   { const _ab = document.getElementById('compose-ai-reply-btn'); if (_ab) _ab.style.display = 'none'; }
   document.getElementById('compose-error').style.display = 'none';
   updateFromPreview();
@@ -17899,6 +18056,8 @@ function _renderFeedbackDue() {
 const PATCH_NOTES_VERSION = '2026-10-25';
 const PATCH_NOTES = [
   { date: '25 Oct 2026', items: [
+    'AI snipes: after the opener is generated, hit \u2728 Refine opener in the email window to rewrite it, less glazey, shorter, different angle, or tell it what to mention.',
+    'Notes you add while refining are saved against the snipe, so follow-up emails use them too.',
     'Snipe templates are now properly per-person. Your outreach uses YOUR template, not someone else\'s.',
     'Set your job title in Profile, then use {your_role} in a template so your emails state your real role.',
     'Email Templates warns you if you are still on the company starter set instead of your own.',
@@ -23548,6 +23707,7 @@ async function openCompose(presetMailbox) {
     if (el) el.value = '';
   });
   document.getElementById('composeModalTitle').textContent = '✉ New Email';
+  _syncAiRefineBtn(false);
   { const _ab = document.getElementById('compose-ai-reply-btn'); if (_ab) _ab.style.display = 'none'; }
   document.getElementById('compose-error').style.display = 'none';
   // Populate templates + reset signature toggle
@@ -23647,6 +23807,7 @@ async function openReply(meta) {
   if (sigBox) sigBox.checked = !!sig;
 
   document.getElementById('composeModalTitle').textContent = '↩ Reply';
+  _syncAiRefineBtn(false);
   document.getElementById('compose-error').style.display = 'none';
   // This is a reply — enable the AI draft-reply button
   const aiBtn = document.getElementById('compose-ai-reply-btn');
