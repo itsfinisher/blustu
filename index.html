@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-as (feedback packs: open with general Overview by default; Welcome to BluStu only when newly-signed is ticked) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-at (per-staff snipe templates: claim unowned templates, {your_role} placeholder + job title, owner staff-template manager, inherited-template warning) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2221,10 +2221,13 @@ html, body { overflow-x: hidden; }
       <div class="page-header">
         <div><h1>✉️ Email Templates</h1><p>Outreach templates for Snipe &amp; Email. Each snipe's niche picks the matching template automatically.</p></div>
         <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" id="staff-tpl-btn" onclick="openStaffTemplates()" style="display:none">👥 Staff templates</button>
           <button class="btn btn-ghost btn-sm" onclick="addTemplateRow()">＋ Add template</button>
           <button class="btn btn-primary" id="template-save-btn" onclick="saveAllTemplates()">💾 Save all</button>
         </div>
       </div>
+
+      <div id="tpl-owner-banner" style="display:none;margin-bottom:14px"></div>
 
       <!-- Placeholder reference -->
       <div class="card" style="padding:14px 18px;margin-bottom:16px">
@@ -2237,6 +2240,10 @@ html, body { overflow-x: hidden; }
           <div onclick="_copyPlaceholder('{your_name}')" style="cursor:pointer;background:var(--blue-light);border:1px solid #bfdbfe;padding:8px 14px;border-radius:8px;transition:transform .1s" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'" title="Click to copy">
             <code style="font-size:13px;color:var(--blue);font-weight:600">{your_name}</code>
             <div style="font-size:11px;color:var(--gray-500);margin-top:2px">Your own name (whoever is logged in)</div>
+          </div>
+          <div onclick="_copyPlaceholder('{your_role}')" style="cursor:pointer;background:var(--blue-light);border:1px solid #bfdbfe;padding:8px 14px;border-radius:8px;transition:transform .1s" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'" title="Click to copy">
+            <code style="font-size:13px;color:var(--blue);font-weight:600">{your_role}</code>
+            <div style="font-size:11px;color:var(--gray-500);margin-top:2px">Your job title, set it in Profile → Email Settings</div>
           </div>
         </div>
       </div>
@@ -3642,6 +3649,20 @@ html, body { overflow-x: hidden; }
   </div>
 </div>
 
+<!-- ══ STAFF TEMPLATES (owner) ══ -->
+<div class="modal-overlay" id="staffTemplatesModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title">👥 Staff outreach templates</div>
+      <button class="modal-close" onclick="closeModal('staffTemplatesModal')">✕</button>
+    </div>
+    <div class="modal-body" id="st-body" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('staffTemplatesModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ AI SNIPE DESCRIBE ══ -->
 <div class="modal-overlay" id="aiSnipeModal">
   <div class="modal" style="max-width:500px">
@@ -4192,6 +4213,11 @@ agency | Adidas | Tom Reed | Wavemaker | Account Director | Sportswear | tom@wav
       <!-- Email Settings -->
       <div style="border-top:1px solid var(--gray-100);margin-top:14px;padding-top:14px">
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">✉️ Email Settings</div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label" style="font-size:11px">Your job title</label>
+          <input class="form-input" id="profile-job-title" placeholder="e.g. Brand Outreach Lead">
+          <div class="form-hint">Used by the <code>{your_role}</code> placeholder in your templates, so your outreach says your real role.</div>
+        </div>
         <div class="form-group" style="margin-bottom:10px">
           <label class="form-label" style="font-size:11px">Send snipe emails from</label>
           <select class="form-select" id="profile-snipe-mailbox"><option value="">— Pick your BluStu mailbox —</option></select>
@@ -4966,6 +4992,8 @@ async function openProfileModal() {
       accounts.map(a => `<option value="${a.local}">${friendlyFromName(a.local)} (${a.email})</option>`).join('');
     sel.value = s.snipe_from_mailbox || '';
   }
+  const jt = document.getElementById('profile-job-title');
+  if (jt) jt.value = s.job_title || '';
   const sig = document.getElementById('profile-email-signature');
   if (sig) sig.value = s.email_signature || '';
   updateSignaturePreview();
@@ -4997,16 +5025,19 @@ async function saveProfile() {
   const mailbox = document.getElementById('profile-snipe-mailbox')?.value || null;
   const signature = document.getElementById('profile-email-signature')?.value || null;
   if (currentUser) {
+    const jobTitle = (document.getElementById('profile-job-title')?.value || '').trim();
     currentUser.snipe_from_mailbox = mailbox;
     currentUser.email_signature = signature;
+    currentUser.job_title = jobTitle;
     const s = STAFF.find(x => x.email === currentUser.email);
-    if (s) { s.snipe_from_mailbox = mailbox; s.email_signature = signature; }
+    if (s) { s.snipe_from_mailbox = mailbox; s.email_signature = signature; s.job_title = jobTitle; }
     Storage.set('staff', STAFF);
     // Persist to DB — surface the real error so problems don't silently rot
     const patch = {};
     if (n) patch.name = n;
     patch.snipe_from_mailbox = mailbox;
     patch.email_signature = signature;
+    patch.job_title = jobTitle;
     let saveOk = false;
     let saveErr = null;
     try {
@@ -17014,9 +17045,18 @@ async function loadEmailTemplates() {
 
 /** Fill {creator_name} / {your_name} placeholders. */
 function _fillTemplate(text, creatorName) {
+  const me = STAFF.find(x => x.email === currentUser?.email) || currentUser || {};
   return (text || '')
     .replace(/\{creator_name\}/g, creatorName || 'there')
-    .replace(/\{your_name\}/g, currentUser?.name || 'BluStu');
+    .replace(/\{your_name\}/g, currentUser?.name || 'BluStu')
+    .replace(/\{your_role\}/g, me.job_title || 'Talent Manager')
+    .replace(/\{your_email\}/g, currentUser?.email || '');
+}
+
+/** Templates this staff member personally owns (not inherited from anyone). */
+function _myOwnTemplates() {
+  const me = currentUser?.email || '';
+  return (emailTemplates || []).filter(t => t.owner_email === me && t.niche !== 'followup');
 }
 
 /** Get the logged-in user's saved signature, or empty string. */
@@ -17196,9 +17236,20 @@ async function openSnipeCompose({ creatorName, to, niche, aiParagraph }) {
   const tplSel = document.getElementById('compose-template');
   if (tplSel && tpl) tplSel.value = tpl.id;
 
+  // Warn if this body came from the company starter set rather than their own,
+  // so nobody sends another person's wording under their name.
+  const _cErr = document.getElementById('compose-error');
+  if (_cErr) {
+    if (_tplInherited()) {
+      _cErr.style.display = 'block';
+      _cErr.innerHTML = '⚠️ This is the <strong>company starter</strong> template, not yours. Check the wording describes <strong>your</strong> role before sending, and set up your own under Email Templates.';
+    } else {
+      _cErr.style.display = 'none';
+      _cErr.textContent = '';
+    }
+  }
   document.getElementById('composeModalTitle').textContent = aiParagraph ? '✨ AI Snipe Outreach' : '✉ Snipe Outreach';
   { const _ab = document.getElementById('compose-ai-reply-btn'); if (_ab) _ab.style.display = 'none'; }
-  document.getElementById('compose-error').style.display = 'none';
   updateFromPreview();
   openModal('composeEmailModal');
   setTimeout(() => document.getElementById('compose-body')?.focus(), 100);
@@ -17845,8 +17896,13 @@ function _renderFeedbackDue() {
 
 // Patch notes — newest first. Bump PATCH_NOTES_VERSION when you add an entry;
 // staff see unseen notes once, then it's marked read for them.
-const PATCH_NOTES_VERSION = '2026-09-22';
+const PATCH_NOTES_VERSION = '2026-10-25';
 const PATCH_NOTES = [
+  { date: '25 Oct 2026', items: [
+    'Snipe templates are now properly per-person. Your outreach uses YOUR template, not someone else\'s.',
+    'Set your job title in Profile, then use {your_role} in a template so your emails state your real role.',
+    'Email Templates warns you if you are still on the company starter set instead of your own.',
+  ]},
   { date: '22 Sept 2026', items: [
     'Feedback Packs: new page under Talent. Every creator is due a pack every 2 weeks, overdue ones show first.',
     'Comment on each creator\'s 3 latest videos (what went well, even better if), add general notes and ideas, then AI writes the full pack in BluStu\'s voice for you to review.',
@@ -19066,6 +19122,103 @@ function _fpPdfHtml(pack, c, autoPrint) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════════
+// PER-STAFF SNIPE TEMPLATES
+// Each staff member owns their own templates (email_templates.owner_email).
+// A template with owner_email = NULL is a company-wide starter that anyone
+// without their own set inherits — which is why unowned personal templates
+// used to leak one person's wording to the whole team.
+// ═══════════════════════════════════════════════════════════════════
+let _stTarget = null;   // staff email whose templates the owner is viewing
+
+/** True when the templates on screen are inherited, not personally owned. */
+function _tplInherited() {
+  const me = currentUser?.email || '';
+  const live = (emailTemplates || []).filter(t => t.niche !== 'followup');
+  return live.length > 0 && !live.some(t => t.owner_email === me);
+}
+
+/** Banner telling the user whose templates these actually are. */
+function _renderTemplateOwnerBanner() {
+  const el = document.getElementById('tpl-owner-banner');
+  if (!el) return;
+  const btn = document.getElementById('staff-tpl-btn');
+  if (btn) btn.style.display = currentUser?.systemRole === 'owner' ? '' : 'none';
+  const mine = _myOwnTemplates();
+  if (mine.length) {
+    el.style.display = 'block';
+    el.innerHTML = `<div style="background:#dcfce7;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#166534">
+      ✅ These are <strong>your own</strong> templates (${mine.length}). Only you use them, and your snipes send with your name and role.</div>`;
+    return;
+  }
+  el.style.display = 'block';
+  if (_tplInherited()) {
+    el.innerHTML = `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#92400e">
+      ⚠️ You don't have your own templates yet, so you're seeing the <strong>company starter</strong> set. Edit the wording below and hit <strong>Save all</strong> to make your own personal copy. Until you do, your outreach will not describe your real role.</div>`;
+  } else {
+    el.innerHTML = `<div style="background:var(--blue-light);border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--blue)">
+      👋 You haven't set up an outreach template yet. Click <strong>＋ Add template</strong>, write how you introduce yourself, and save. Use <code>{your_name}</code> and <code>{your_role}</code> so it always matches you.</div>`;
+  }
+}
+
+// ── Owner: view and seed each staff member's templates ──
+async function openStaffTemplates() {
+  if (currentUser?.systemRole !== 'owner') { showToast('Owner only'); return; }
+  _stTarget = null;
+  document.getElementById('st-body').innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400)">Loading…</div>';
+  openModal('staffTemplatesModal');
+  await _stRender();
+}
+
+async function _stRender() {
+  const body = document.getElementById('st-body');
+  if (!body) return;
+  const rows = await DB.select('email_templates', '?select=id,label,niche,owner_email&order=owner_email.asc');
+  const all = Array.isArray(rows) ? rows : [];
+  const staff = STAFF.filter(s => s.systemRole !== 'readonly');
+  const me = currentUser?.email;
+  const myCount = all.filter(t => t.owner_email === me && t.niche !== 'followup').length;
+  const shared = all.filter(t => !t.owner_email && t.niche !== 'followup').length;
+
+  body.innerHTML = `
+    <p style="font-size:12.5px;color:var(--gray-600);margin:0 0 6px">Every staff member has their own outreach templates, so a snipe always sounds like the person sending it.</p>
+    <p style="font-size:12px;color:var(--gray-400);margin:0 0 14px">Copying your set gives them a starting point they can then reword. It never overwrites templates they've already written.</p>
+    ${shared ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:12px">
+      ⚠️ ${shared} template${shared !== 1 ? 's are' : ' is'} unowned, so anyone without their own set inherits ${shared !== 1 ? 'them' : 'it'}. Run <strong>staff-templates.sql</strong> to assign ${shared !== 1 ? 'them' : 'it'} to you.</div>` : ''}
+    ${staff.map(s => {
+      const own = all.filter(t => t.owner_email === s.email && t.niche !== 'followup').length;
+      const isMe = s.email === me;
+      const tag = own
+        ? `<span class="fp-pill" style="background:#dcfce7;color:#166534">${own} own</span>`
+        : `<span class="fp-pill" style="background:#fee2e2;color:#b91c1c">No templates</span>`;
+      return `<div class="fp-row">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px">${escapeHtml(s.name)}${isMe ? ' <span style="font-size:10px;color:var(--blue)">you</span>' : ''} ${tag}</div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${escapeHtml(s.email)}${s.job_title ? ' · ' + escapeHtml(s.job_title) : ' · <span style="color:var(--amber)">no job title set</span>'}</div>
+        </div>
+        ${isMe ? '' : `<button class="btn btn-ghost btn-sm" onclick="_stCopyToStaff('${s.email}')" ${myCount ? '' : 'disabled title="You have no templates to copy"'}>${own ? '＋ Add my set' : '📋 Copy my set'}</button>`}
+      </div>`;
+    }).join('')}`;
+}
+
+/** Copy the owner's templates to a staff member as their own personal copies. */
+async function _stCopyToStaff(email) {
+  const target = STAFF.find(s => s.email === email);
+  const mine = _myOwnTemplates();
+  if (!mine.length) { showToast('You have no templates of your own to copy'); return; }
+  showConfirm(`Copy your templates to ${target ? target.name : email}?`,
+    `${mine.length} template${mine.length !== 1 ? 's' : ''} will be copied as their own, for them to reword. Anything they've already written stays untouched. Tip: templates using {your_name} and {your_role} adapt to them automatically.`,
+    async () => {
+      const payload = mine.map((t, i) => ({
+        label: t.label, niche: t.niche, body: t.body, sort_order: i, owner_email: email,
+      }));
+      const r = await DB._req('POST', 'email_templates', payload, '');
+      if (r === null) { showToast('⚠ Copy failed: ' + (DB._lastError || 'unknown')); return; }
+      showToast(`✅ Copied ${mine.length} template${mine.length !== 1 ? 's' : ''} to ${target ? target.name : email}`);
+      _stRender();
+    }, { okLabel: 'Copy templates' });
+}
+
 function _populateComposeTemplates(creatorName, mode) {
   const sel = document.getElementById('compose-template');
   if (!sel) return;
@@ -19135,6 +19288,7 @@ function _renderTemplateList() {
   }).join('');
   }
   _renderFollowUpTemplateList();
+  _renderTemplateOwnerBanner();
 }
 
 // ── FOLLOW-UP TEMPLATES (separate section) ──
