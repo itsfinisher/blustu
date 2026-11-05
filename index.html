@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-aw (scan no longer changes the niche/template — stays on General unless the user picks another) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-ax (network/ghost roster: Signed|Network|All CRM tabs, roster_type on creators, network included in pitches+media kits+deals, excluded from agency ops) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1380,14 +1380,19 @@ html, body { overflow-x: hidden; }
     <!-- ══ CRM ══ -->
     <div class="page" id="page-crm">
       <div class="page-header">
-        <div><h1>Creator CRM</h1><p>Full roster — <span id="crm-count">25</span> creators</p></div>
+        <div><h1 id="crm-title">Signed Creators</h1><p id="crm-subtitle"><span id="crm-count">25</span> creators</p></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="openPitchBuilder()" title="Generate a brand pitch document for selected creators">📄 Pitch Doc</button>
           <button class="btn btn-ghost btn-sm" id="crm-refresh-tt" onclick="refreshAllTikTokStats()" title="Pull live TikTok stats for all active creators with a handle set">🎵 Refresh all stats</button>
-          <button class="btn btn-primary" onclick="openModal('addCreatorModal')">+ Add Creator</button>
+          <button class="btn btn-primary" onclick="openAddCreator()">+ Add Creator</button>
         </div>
       </div>
       <div class="crm-toolbar">
+        <div style="display:inline-flex;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:8px;padding:2px" title="Which roster to show">
+          <button id="crm-type-signed"  class="btn btn-sm"       onclick="setCrmRosterType('signed')"  style="border-radius:6px">✍️ Signed</button>
+          <button id="crm-type-network" class="btn btn-ghost btn-sm" onclick="setCrmRosterType('network')" style="border-radius:6px">🌐 Network</button>
+          <button id="crm-type-all"     class="btn btn-ghost btn-sm" onclick="setCrmRosterType('all')"     style="border-radius:6px">All</button>
+        </div>
         <div style="display:inline-flex;background:var(--gray-50);border:1px solid var(--gray-100);border-radius:8px;padding:2px" title="Roster scope">
           <button id="crm-scope-active"   class="btn btn-sm"       onclick="setCrmRosterScope('active')"   style="border-radius:6px">Active</button>
           <button id="crm-scope-archived" class="btn btn-ghost btn-sm" onclick="setCrmRosterScope('archived')" style="border-radius:6px">Archived</button>
@@ -3073,6 +3078,7 @@ html, body { overflow-x: hidden; }
     <div class="modal-body">
       <div class="form-row"><div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="nc-name" placeholder="e.g. Alex or Kim"></div><div class="form-group"><label class="form-label">Email</label><input class="form-input" id="nc-email" placeholder="name@blustu.agency"></div></div>
       <div class="form-row"><div class="form-group"><label class="form-label">Niche</label><select class="form-select" id="nc-niche"></select></div><div class="form-group"><label class="form-label">Location</label><input class="form-input" id="nc-loc" placeholder="e.g. UK"></div></div>
+      <div class="form-row"><div class="form-group"><label class="form-label">Roster</label><select class="form-select" id="nc-roster"><option value="signed">✍️ Signed — managed by BluStu</option><option value="network">🌐 Network — not signed, pitchable</option></select><div class="form-hint">Network creators show in pitches and media kits, but stay out of onboarding, feedback packs and roster stats.</div></div><div class="form-group"><label class="form-label">How we know them <span style="color:var(--gray-400);font-weight:400">(network only)</span></label><input class="form-input" id="nc-network-source" placeholder="e.g. met at event, mutual, DM'd us"></div></div>
       <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="nc-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('addCreatorModal')">Cancel</button><button class="btn btn-primary" onclick="addCreator()">Add to Roster</button></div>
@@ -3171,6 +3177,7 @@ html, body { overflow-x: hidden; }
       <div class="form-row">
         <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="ec-role"><option>Creator</option><option>Creator / Manager</option><option>Creator / Owner</option><option>Meme Page</option></select></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="ec-status"><option>Active</option><option>Invited</option><option>Onboarded</option><option>Paused</option><option>Inactive</option></select></div>
+        <div class="form-group"><label class="form-label">Roster</label><select class="form-select" id="ec-roster"><option value="signed">✍️ Signed</option><option value="network">🌐 Network</option></select></div>
       </div>
       <!-- Staff Assignment section -->
       <div class="card" style="padding:14px 16px;margin-top:12px;background:var(--gray-50);border:1px solid var(--gray-100)">
@@ -5465,10 +5472,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Unified CRM filter state — all three filters compose together.
-let _crmFilters = { search: '', status: '', manager: '', rosterScope: 'active' };  // rosterScope: 'active' | 'archived' | 'all'
+let _crmFilters = { search: '', status: '', manager: '', rosterScope: 'active', rosterType: 'signed' };  // rosterScope: 'active'|'archived'|'all'; rosterType: 'signed'|'network'|'all'
 
 function _applyCrmFilters() {
   let list = creators;
+  // Roster type — signed (default), network (ghost roster), or all
+  const rtype = _crmFilters.rosterType || 'signed';
+  if (rtype === 'signed')       list = list.filter(c => !isNetworkCreator(c));
+  else if (rtype === 'network') list = list.filter(c => isNetworkCreator(c));
   // Roster scope — active (default), archived (inactive+kicked), or all
   const scope = _crmFilters.rosterScope || 'active';
   if (scope === 'active') {
@@ -5509,6 +5520,7 @@ function _applyCrmFilters() {
     });
   }
   _refreshRosterScopeUI();
+  _refreshRosterTypeUI();
   renderCRM(list);
 }
 
@@ -5530,6 +5542,38 @@ function _refreshRosterScopeUI() {
   }
   if (btnAll) {
     btnAll.className    = scope === 'all' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  }
+}
+
+/** Switch between the signed roster, the network (ghost) roster, or both. */
+function setCrmRosterType(t) {
+  _crmFilters.rosterType = t;
+  _applyCrmFilters();
+}
+
+/** Keep the roster tabs, page title and counts in step. */
+function _refreshRosterTypeUI() {
+  const t = _crmFilters.rosterType || 'signed';
+  const live = creators.filter(c => !c.roster_status || c.roster_status === 'active');
+  const nSigned  = live.filter(c => !isNetworkCreator(c)).length;
+  const nNetwork = live.filter(c =>  isNetworkCreator(c)).length;
+  const set = (id, on, html) => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.className = on ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+    b.innerHTML = html;
+  };
+  set('crm-type-signed',  t === 'signed',  `✍️ Signed <span style="opacity:.6;font-size:11px;margin-left:2px">${nSigned}</span>`);
+  set('crm-type-network', t === 'network', `🌐 Network <span style="opacity:.6;font-size:11px;margin-left:2px">${nNetwork}</span>`);
+  set('crm-type-all',     t === 'all',     `All <span style="opacity:.6;font-size:11px;margin-left:2px">${nSigned + nNetwork}</span>`);
+  const title = document.getElementById('crm-title');
+  const sub   = document.getElementById('crm-subtitle');
+  if (title) title.textContent = t === 'network' ? 'Network Creators' : (t === 'all' ? 'All Creators' : 'Signed Creators');
+  if (sub) {
+    const note = t === 'network'
+      ? 'Not signed to BluStu, but we can still pitch them to brands'
+      : (t === 'all' ? 'Signed and network creators together' : 'Signed to BluStu and managed by us');
+    sub.innerHTML = `<span id="crm-count">${document.getElementById('crm-count')?.textContent || 0}</span> creators · ${note}`;
   }
 }
 
@@ -5560,10 +5604,16 @@ function _canArchiveCreators() {
 
 /** Small inline badge next to a creator name, shown only when archived. */
 function _rosterStatusBadge(c) {
+  let out = '';
+  // Network (ghost roster) creators are flagged everywhere so they're never
+  // mistaken for someone we actually manage.
+  if (isNetworkCreator(c)) {
+    out += ` <span class="badge" style="font-size:9px;margin-left:6px;vertical-align:middle;background:#ede9fe;color:#6d28d9">🌐 NETWORK</span>`;
+  }
   const st = c && c.roster_status;
-  if (!st || st === 'active') return '';
+  if (!st || st === 'active') return out;
   const meta = ROSTER_STATUS_META[st] || ROSTER_STATUS_META.inactive;
-  return ` <span class="badge ${meta.badge}" style="font-size:9px;margin-left:6px;vertical-align:middle">${meta.label}</span>`;
+  return out + ` <span class="badge ${meta.badge}" style="font-size:9px;margin-left:6px;vertical-align:middle">${meta.label}</span>`;
 }
 
 /** Return whether a creator should be excluded from pickers (new campaigns, earnings, etc.). */
@@ -5572,8 +5622,29 @@ function isArchivedCreator(c) {
 }
 
 /** Filter helper — pass creators to any dropdown or picker to exclude archived by default. */
+// ══ ROSTER TYPES ══
+// 'signed'  = signed to BluStu (all agency operations)
+// 'network' = ghost roster: not signed, but we track stats, build media kits
+//             and pitch them to brands
+function isNetworkCreator(c) { return (c && c.roster_type) === 'network'; }
+function rosterTypeOf(c) { return isNetworkCreator(c) ? 'network' : 'signed'; }
+
+/** Signed creators only, excluding archived. This is what agency operations
+ *  use (onboarding, feedback packs, dashboard stats, targets), so network
+ *  creators never inflate roster numbers or appear as our responsibility. */
 function activeCreators() {
+  return creators.filter(c => !isArchivedCreator(c) && !isNetworkCreator(c));
+}
+
+/** Everyone we can take to a brand: signed AND network, excluding archived.
+ *  Used by pitch docs, media kits, deals and stats refresh. */
+function pitchableCreators() {
   return creators.filter(c => !isArchivedCreator(c));
+}
+
+/** Network (ghost roster) creators only, excluding archived. */
+function networkCreators() {
+  return creators.filter(c => !isArchivedCreator(c) && isNetworkCreator(c));
 }
 
 function openArchiveCreatorModal(id) {
@@ -5735,6 +5806,13 @@ async function deleteCreator(id) {
   showToast('Creator removed');
 }
 
+/** Open Add Creator, defaulting the roster to whichever tab you're viewing. */
+function openAddCreator() {
+  const sel = document.getElementById('nc-roster');
+  if (sel) sel.value = (_crmFilters.rosterType === 'network') ? 'network' : 'signed';
+  openModal('addCreatorModal');
+}
+
 async function addCreator(){
   const name=document.getElementById('nc-name').value.trim();
   if(!name){showToast('Please enter a name');return;}
@@ -5748,6 +5826,8 @@ async function addCreator(){
     location: document.getElementById('nc-loc').value.trim()||'—',
     niche: document.getElementById('nc-niche').value,
     status:'Active',
+    roster_type: (document.getElementById('nc-roster')?.value || 'signed'),
+    network_source: (document.getElementById('nc-network-source')?.value || '').trim() || null,
     notes:'',
     onboarding:null,
     profile_image_url: null
@@ -5993,6 +6073,7 @@ function openEditCreator(){
   _renderSubNicheTags();
   _setSelectIfPresent('ec-role',   c.role   || 'Creator');
   _setSelectIfPresent('ec-status', c.status || 'Active');
+  _setSelectIfPresent('ec-roster', rosterTypeOf(c));
 
   // Populate staff selects + pre-fill from assigned_staff (or legacy managerAssignments)
   populateStaffSelects(['ec-staff-primary', 'ec-staff-secondary', 'ec-staff-admin']);
@@ -6093,7 +6174,8 @@ async function saveCreatorEdit(){
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showErr('Email address looks invalid'); return; }
 
   // Build update — preserve all existing fields not in this form (notes, onboarding, profile_image_url, etc.)
-  const update = { ...orig, name, email, niche, sub_niches, location, role, status, assigned_staff, tiktok_handle: tiktokHandle, pitch_bio: pitchBio, gender, mediakit_audience };
+  const roster_type = document.getElementById('ec-roster')?.value || rosterTypeOf(orig || {});
+  const update = { ...orig, name, email, niche, sub_niches, location, role, status, roster_type, assigned_staff, tiktok_handle: tiktokHandle, pitch_bio: pitchBio, gender, mediakit_audience };
 
   const btn = document.getElementById('ec-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -8700,9 +8782,12 @@ function populateSelects(){
   const activeNames  = activeCreators().map(c=>c.name);
   // For EDIT records, include ALL names so old records referencing an archived creator still resolve.
   const allNames     = creators.map(c=>c.name);
-  const newRecordIds  = ['invite-creator-select','camp-creator','pitch-creator','deal-creator','kit-creator-select'];
+  // Commercial records can involve network (ghost roster) creators too
+  const pitchNames   = (typeof pitchableCreators === 'function' ? pitchableCreators() : creators).map(c=>c.name);
+  const newRecordIds  = ['camp-creator','pitch-creator','deal-creator','kit-creator-select'];
   const editRecordIds = ['edit-camp-creator','edit-pitch-creator','edit-deal-creator'];
-  newRecordIds.forEach(id => _fillCreatorSelect(id, activeNames));
+  _fillCreatorSelect('invite-creator-select', activeNames);   // onboarding = signed only
+  newRecordIds.forEach(id => _fillCreatorSelect(id, pitchNames));
   editRecordIds.forEach(id => _fillCreatorSelect(id, allNames));
 }
 function _fillCreatorSelect(id, names) {
@@ -10986,7 +11071,8 @@ function openPitchBuilder() {
 
 // Returns the list of creators matching the current filters
 function _pitchFilteredList() {
-  const base = (typeof activeCreators === 'function' ? activeCreators() : creators);
+  // Signed AND network — the ghost roster exists so we can pitch them too
+  const base = (typeof pitchableCreators === 'function' ? pitchableCreators() : creators);
   const f = _pitchFilters;
   return base.filter(c => {
     // Gender
@@ -11618,7 +11704,7 @@ async function refreshAllTikTokStats() {
   }
   const token = _emailAuthToken();
   if (!token) { showToast('Not logged in'); return; }
-  const targets = activeCreators().filter(c => (c.tiktok_handle || '').trim());
+  const targets = pitchableCreators().filter(c => (c.tiktok_handle || '').trim());
   if (!targets.length) { showToast('No active creators have a TikTok handle set'); return; }
   if (!confirm(`Refresh live TikTok stats for ${targets.length} creator${targets.length>1?'s':''}? This uses ~${targets.length*2} TikHub credits.`)) return;
 
@@ -12134,7 +12220,7 @@ function saveKitAdminData() {
 function _populateMediaKitDocDropdown() {
   const sel = document.getElementById('mkdoc-creator');
   if (!sel) return;
-  const list = (typeof activeCreators === 'function' ? activeCreators() : creators);
+  const list = (typeof pitchableCreators === 'function' ? pitchableCreators() : creators);
   sel.innerHTML = list.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
 }
 
@@ -12536,7 +12622,7 @@ function openMediaKitBuilder() {
 }
 
 function _mkFilteredList() {
-  const base = (typeof activeCreators === 'function' ? activeCreators() : creators);
+  const base = (typeof pitchableCreators === 'function' ? pitchableCreators() : creators);
   const f = _mkFilters;
   return base.filter(c => {
     if (f.gender && (c.gender || '') !== f.gender) return false;
@@ -18208,8 +18294,14 @@ function _renderFeedbackDue() {
 
 // Patch notes — newest first. Bump PATCH_NOTES_VERSION when you add an entry;
 // staff see unseen notes once, then it's marked read for them.
-const PATCH_NOTES_VERSION = '2026-10-25';
+const PATCH_NOTES_VERSION = '2026-11-05';
 const PATCH_NOTES = [
+  { date: '5 Nov 2026', items: [
+    'Creator CRM now has three tabs: \u270d\ufe0f Signed, \U0001F310 Network and All.',
+    'Network is the ghost roster: creators not signed to us, but we still track their stats, build their media kits and pitch them to brands.',
+    'Network creators appear in pitch docs, media kits and deals, and stay out of onboarding, feedback packs and roster stats.',
+    'Mark anyone as Signed or Network on their Edit Profile, or when adding them.',
+  ]},
   { date: '25 Oct 2026', items: [
     'Snipes: paste a TikTok link and hit \U0001F50D Scan profile. It pulls followers, the email from their bio and their location, and works out their real first name. Your template choice is left alone.',
     'AI snipes: after the opener is generated, hit \u2728 Refine opener in the email window to rewrite it, less glazey, shorter, different angle, or tell it what to mention.',
