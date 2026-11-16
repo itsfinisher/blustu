@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ba (profile pictures: success now judged on the creator row save, not the legacy shared profilePics row; real server error shown in the toast; cache-busted storage URLs. Needs profile-pictures-bucket.sql for the Storage route) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-bb (profile pictures root cause: the shared profilePics app_data row held every photo inline, failed to save, and was re-served on each load, clobbering the tidied local copy. Now: load merges instead of clobbering, creator photos live only on creators.profile_image_url, the shared row holds staff avatars only, and photos are migrated onto creator rows before anything is cleared. Needs profile-pictures-bucket.sql, then profile-pictures-reset.sql) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -4733,7 +4733,13 @@ async function syncAllFromDB() {
       DB.getAppData('weeklyTargets'),
       DB.getAppData('feedbackSchedule'),
     ]);
-    if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
+    // Merge, never clobber. The shared row is legacy and can still hold a huge
+    // stale blob; a creator's own row is the source of truth for their photo.
+    if (pp) {
+      Object.keys(pp).forEach(k => { if (!profilePics[k]) profilePics[k] = pp[k]; });
+      (creators || []).forEach(c => { if (c.profile_image_url) profilePics[c.id] = c.profile_image_url; });
+      Storage.set('profilePics', profilePics);
+    }
     // If photos stored inline have grown past what the server will accept, the
     // save silently fails on every change. Tidy them once, automatically, so the
     // roster starts syncing again without anyone having to notice.
@@ -10149,15 +10155,20 @@ async function saveProfilePics(quiet) {
     if (!quiet) showToast(`⚠ Photos too large to sync (${(size/1048576).toFixed(1)}MB). Re-upload the big ones.`);
     return false;
   }
-  // Only LINKS go in the shared row. Inline (base64) photos live on each
-  // creator's own row in profile_image_url, which scales; putting them all in
-  // one shared row is what blew past the size limit in the first place.
+  // The shared row now holds STAFF avatars only. Creator photos live on each
+  // creator's own row in profile_image_url, which scales. Putting every photo
+  // in one shared row is what bloated it past what the server would accept,
+  // and that bloated row was then re-served on every load, undoing each tidy.
   const forServer = {};
   Object.keys(profilePics).forEach(k => {
+    if (!String(k).startsWith('staff_')) return;        // creators are excluded by design
     const v = profilePics[k];
     if (typeof v === 'string' && !v.startsWith('data:')) forServer[k] = v;
   });
   const r = await DB.setAppData('profilePics', forServer, quiet);
+  if (r === null) console.error('[profilePics] shared row save failed. Payload was',
+    JSON.stringify(forServer).length, 'bytes across', Object.keys(forServer).length, 'staff entries.',
+    'If this keeps failing the old oversized row is still on the server — run profile-pictures-reset.sql.');
   return r !== null;
 }
 
@@ -10173,6 +10184,22 @@ function _hydrateProfilePicsFromCreators() {
   return added;
 }
 
+/** Make sure every creator photo we hold is on that creator's own row, so the
+ *  shared legacy row can be cleared without losing anything. */
+async function _pushProfilePicsToCreatorRows() {
+  let moved = 0;
+  for (const c of (creators || [])) {
+    const v = profilePics[c.id];
+    if (typeof v === 'string' && v && v !== c.profile_image_url) {
+      c.profile_image_url = v;
+      const ok = await DB.upsertOne('creators', c);
+      if (ok) moved++;
+    }
+  }
+  if (moved) { Storage.set('creators', creators); console.log(`[profilePics] moved ${moved} photo(s) onto their own creator row`); }
+  return moved;
+}
+
 /** Tidy oversized photos: shrink any inline (base64) avatars and write the
  *  smaller version back to the creator's own row, so the fix survives a reload.
  *  Safe to run repeatedly. */
@@ -10184,8 +10211,9 @@ async function repairProfilePics() {
     if (typeof v === 'string' && v.startsWith('data:') && v.length > BIG) targets.push({ c, v });
   });
   if (!targets.length) {
-    const okNow = await saveProfilePics();
-    showToast(okNow ? '\u2705 Photos are already tidy and synced' : '\u26a0 Nothing oversized, but the save still failed \u2014 check console');
+    const moved = await _pushProfilePicsToCreatorRows();
+    await saveProfilePics(true);                       // staff avatars only, best effort
+    showToast(moved ? `\u2705 Photos tidy \u2014 ${moved} synced to the server` : '\u2705 Photos are already tidy and synced');
     return;
   }
   showToast(`Tidying ${targets.length} large photo${targets.length !== 1 ? 's' : ''}\u2026`);
@@ -10201,12 +10229,15 @@ async function repairProfilePics() {
     } catch (e) { console.warn('[profilePics] could not shrink', t.c.id, e); failed++; }
   }
   Storage.set('creators', creators);
-  const okSave = await saveProfilePics();
+  await _pushProfilePicsToCreatorRows();
+  await saveProfilePics(true);                         // staff avatars only, best effort
   console.log(`[profilePics] ${(before/1048576).toFixed(2)}MB -> ${(after/1048576).toFixed(2)}MB across ${targets.length} photo(s)`);
   try { _applyCrmFilters(); renderMediaKitList(); } catch (e) {}
-  showToast(okSave
-    ? `\u2705 Tidied ${targets.length - failed} photo${(targets.length - failed) !== 1 ? 's' : ''} (${(before/1048576).toFixed(1)}MB \u2192 ${(after/1048576).toFixed(1)}MB)`
-    : '\u26a0 Tidied, but the server save still failed \u2014 check console');
+  // Each photo was saved to its own creator row above; that is what persists.
+  const done = targets.length - failed;
+  showToast(failed
+    ? `\u26a0 Tidied ${done} photo${done !== 1 ? 's' : ''}, ${failed} could not be read \u2014 re-upload those`
+    : `\u2705 Tidied ${done} photo${done !== 1 ? 's' : ''} (${(before/1048576).toFixed(1)}MB \u2192 ${(after/1048576).toFixed(1)}MB)`);
 }
 
 async function saveCreators()   { Storage.set('creators',   creators);   await DB.upsertMany('creators',   creators); }
