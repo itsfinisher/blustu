@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-be (TikTok profile pictures: new worker /tiktok/avatar endpoint pulls a creator photo via TikHub; per-creator button on the profile and a bulk run on Users & Access. Also carries the photo recovery tools and the UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-bf (inbox: Snipes only view filtered to people you sniped, searching deeper than one page; quick access grouped into You / Shared / Your creators. Also TikTok profile pictures, photo recovery tools and the UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -18748,8 +18748,12 @@ function _renderFeedbackDue() {
 
 // Patch notes — newest first. Bump PATCH_NOTES_VERSION when you add an entry;
 // staff see unseen notes once, then it's marked read for them.
-const PATCH_NOTES_VERSION = '2026-11-16c';
+const PATCH_NOTES_VERSION = '2026-11-16d';
 const PATCH_NOTES = [
+  { date: '16 Nov 2026', items: [
+    'Inbox: a \ud83c\udfaf Snipes only tab next to the folders shows just the emails from creators you have sniped, so replies stop getting lost in everything else. Click, read and reply exactly as normal, and the folder tabs take you back.',
+    'Inbox quick access is now grouped into You, Shared and Your creators.',
+  ]},
   { date: '16 Nov 2026', items: [
     'Profile pictures can now be pulled straight from TikTok. On a creator\u2019s profile hit \ud83c\udfb5 Photo from TikTok, or do the whole roster at once from Users & Access.',
     'Users & Access also has Recover photos, Export photos from this device and Import photo file for restoring any that went missing.',
@@ -22868,13 +22872,21 @@ async function _fetchFolderWithSentMerge(mailbox, folder, offset = 0, limit = 50
 }
 
 /** Build the folder-tabs HTML strip. clickFn returns the onclick string for each folder. */
-function _folderTabsHtml(currentFolder, clickFn) {
+function _folderTabsHtml(currentFolder, clickFn, opts) {
+  const snipeOn = !!(opts && opts.snipeTab);
+  const snipeActive = !!(opts && opts.snipeActive);
   return EMAIL_FOLDERS.map(([f, label, icon]) => {
-    const active = (f.toLowerCase() === (currentFolder || '').toLowerCase());
-    return `<button class="email-folder-tab${active ? ' active' : ''}" onclick="${clickFn(f)}">
+    // While the snipes view is on, no normal folder reads as selected.
+    const active = !snipeActive && (f.toLowerCase() === (currentFolder || '').toLowerCase());
+    return `<button class="email-folder-tab${active ? ' active' : ''}" onclick="${snipeActive ? '_setInboxSnipeOnly(false);' : ''}${clickFn(f)}">
       <span>${icon}</span> ${label}
     </button>`;
-  }).join('') + `
+  }).join('') + (snipeOn ? `
+    <span style="width:1px;height:18px;background:var(--gray-200);margin:0 4px"></span>
+    <button class="email-folder-tab${snipeActive ? ' active' : ''}" onclick="_setInboxSnipeOnly(${snipeActive ? 'false' : 'true'})"
+            title="Only emails from creators you have sniped">
+      <span>&#127919;</span> Snipes only
+    </button>` : '') + `
     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--gray-500);user-select:none">
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
         <input type="checkbox" ${_emailThreadMode ? 'checked' : ''} onchange="_setThreadMode(this.checked)" style="margin:0">
@@ -22882,6 +22894,43 @@ function _folderTabsHtml(currentFolder, clickFn) {
       </label>
     </div>`;
 }
+
+/* ── SNIPES VIEW ───────────────────────────────────────────────────────
+   A mailbox view filtered to just the people you sniped. The panel already
+   knows every snipe's email address, so a message counts as a snipe reply when
+   whoever it is from (or to, for your own sent mail) is on that list. */
+let _inboxSnipeOnly = false;
+
+/** email -> the snipe record, for everyone sniped. Shared mailboxes receive
+ *  replies to other staff's snipes too, so this is not limited to your own. */
+function _snipeEmailMap() {
+  const m = new Map();
+  (snipes || []).forEach(sn => {
+    const e = (sn.email || '').trim().toLowerCase();
+    if (e) m.set(e, sn);
+  });
+  return m;
+}
+
+/** Is this message part of a snipe conversation? Checks the sender and, for
+ *  mail you sent, the recipients. */
+function _snipeForMessage(msg, map) {
+  if (!msg) return null;
+  const from = (_parseFromAddress(msg.from || '') || '').toLowerCase();
+  if (from && map.has(from)) return map.get(from);
+  const to = String(msg.to || msg.recipients || '').toLowerCase();
+  if (to) {
+    for (const e of map.keys()) { if (to.includes(e)) return map.get(e); }
+  }
+  return null;
+}
+
+function _setInboxSnipeOnly(on) {
+  _inboxSnipeOnly = !!on;
+  const mb = _currentInbox && _currentInbox.mailbox;
+  if (mb) loadTeamInbox(mb, 'INBOX');
+}
+window._setInboxSnipeOnly = _setInboxSnipeOnly;
 
 function _setThreadMode(on) {
   _emailThreadMode = on;
@@ -23158,22 +23207,32 @@ function _renderInboxQuickAccess(accounts) {
     return `<button class="btn btn-ghost btn-sm" onclick="_quickOpenMailbox('${mailbox}')" style="font-size:12px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;padding-left:6px">${avatar}${escapeHtml(c.name)}</button>`;
   };
 
+  // Grouped into three bands so the three kinds of mailbox are tellable apart
+  // at a glance: yours, the shared ones, then the creators you manage.
+  const label = t => `<span style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--gray-400);align-self:center;margin:0 2px 0 6px">${t}</span>`;
+  const divider = `<span style="width:1px;height:22px;background:var(--gray-200);align-self:center;margin:0 4px"></span>`;
+
   // 1) Your own mailbox
   const myMailbox = (STAFF.find(x => x.email === currentUser?.email) || {}).snipe_from_mailbox || currentUser?.snipe_from_mailbox || '';
-  if (myMailbox) btns.push(chip('My inbox', myMailbox, '⭐', true));
+  const mineChip = myMailbox ? chip('My inbox', myMailbox, '⭐', true) : '';
 
   // 2) partnerships@ (always useful, shared)
-  btns.push(chip('Partnerships', 'partnerships', '🤝', false));
+  const sharedChip = chip('Partnerships', 'partnerships', '🤝', false);
 
   // 3) My ACTIVE managed creators — with their profile photos
   const mine = (typeof activeCreators === 'function' ? activeCreators() : creators)
     .filter(c => creatorPrimaryStaffEmail(c) === currentUser?.email);
-  mine.forEach(c => { btns.push(creatorChip(c)); });
+  const creatorChips = mine.map(creatorChip).filter(Boolean);
 
-  const rendered = btns.filter(Boolean);
-  if (!rendered.length) { wrap.style.display = 'none'; return; }
+  const parts = [];
+  if (mineChip)   parts.push(label('You') + mineChip);
+  if (sharedChip) parts.push((parts.length ? divider : '') + label('Shared') + sharedChip);
+  if (creatorChips.length) parts.push((parts.length ? divider : '') + label(`Your creators · ${creatorChips.length}`) + creatorChips.join(''));
+
+  if (!parts.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'flex';
-  wrap.innerHTML = '<span style="font-size:11px;color:var(--gray-400);align-self:center;margin-right:2px">Quick access:</span>' + rendered.join('');
+  wrap.style.alignItems = 'center';
+  wrap.innerHTML = parts.join('');
 }
 
 function _quickOpenMailbox(mailbox) {
@@ -23187,6 +23246,10 @@ async function loadTeamInbox(mailbox, folder) {
   const listEl = document.getElementById('inboxList');
   if (!listEl) return;
 
+  // Switching mailbox drops the snipes filter, so you never land on what looks
+  // like an empty inbox.
+  if (_currentInbox && _currentInbox.mailbox && _currentInbox.mailbox !== mailbox) _inboxSnipeOnly = false;
+
   const markBtn = document.getElementById('inboxMarkAllRead');
   if (markBtn) markBtn.style.display = '';
 
@@ -23195,7 +23258,8 @@ async function loadTeamInbox(mailbox, folder) {
 
   // Render folder tabs above the list
   const tabsEl = document.getElementById('teamInboxFolderTabs');
-  if (tabsEl) tabsEl.innerHTML = _folderTabsHtml(currentFolder, f => `loadTeamInbox('${mailbox}', '${f}')`);
+  if (tabsEl) tabsEl.innerHTML = _folderTabsHtml(currentFolder, f => `loadTeamInbox('${mailbox}', '${f}')`,
+    { snipeTab: true, snipeActive: _inboxSnipeOnly });
 
   listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">Loading…</div>';
   _currentInbox = {
@@ -23222,6 +23286,39 @@ async function loadTeamInbox(mailbox, folder) {
     _currentInbox.primaryTotal  = data.total;
     _currentInbox.primaryLoaded = data.primary.length;
     _currentInbox.primaryOffset = data.primary.length;
+
+    if (_inboxSnipeOnly) {
+      // Snipe replies are often further back than the first page, so reach
+      // deeper before filtering. Four pages is enough to cover a busy week
+      // without making the view slow to open.
+      const map = _snipeEmailMap();
+      let all = _currentInbox.messages.slice();
+      for (let page = 1; page < 4 && all.length < (data.total || 0); page++) {
+        listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">Looking through your mail for snipe replies… (${all.length})</div>`;
+        const more = await _fetchFolderWithSentMerge(mailbox, currentFolder, page * 50, 50).catch(() => null);
+        if (!more || !more.primary || !more.primary.length) break;
+        all = all.concat(more.primary);
+        _currentInbox.primaryOffset = all.length;
+        _currentInbox.primaryLoaded = all.length;
+      }
+      if (baseline) all.forEach(m => { if (new Date(m.date).getTime() <= baseline) m.unread = false; });
+      const hits = all.filter(m => _snipeForMessage(m, map));
+      _currentInbox.messages = hits;
+      _renderInboxList('inboxList', hits, mailbox, false, null, currentFolder);
+      const people = new Set(hits.map(m => (_parseFromAddress(m.from || '') || '').toLowerCase()).filter(Boolean));
+      const sub0 = document.getElementById('inbox-sub-title');
+      if (sub0) sub0.textContent = hits.length
+        ? `${hits.length} snipe email${hits.length !== 1 ? 's' : ''} from ${people.size} ${people.size === 1 ? 'person' : 'people'} you sniped — searched the last ${all.length} messages`
+        : `No snipe replies in the last ${all.length} messages in ${mailbox}@blustu.agency`;
+      if (!hits.length) {
+        listEl.innerHTML = `<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px">
+          <div style="font-size:22px;margin-bottom:6px">&#127919;</div>
+          No replies yet from anyone you have sniped.<br>
+          <span style="font-size:12px">Searched the last ${all.length} messages in this mailbox.</span></div>`;
+      }
+      return;
+    }
+
     _renderInboxList('inboxList', _currentInbox.messages, mailbox, false, null, currentFolder);
     const sub = document.getElementById('inbox-sub-title');
     if (sub) sub.textContent = (data.total || 0) + ' messages in ' + _prettyFolderName(currentFolder) + ' — ' + mailbox + '@blustu.agency';
