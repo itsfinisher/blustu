@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-bd (photo recovery: Recover photos, Export photos from this device, Import photo file — all on Users & Access. Import and recover only ever add, never overwrite an existing photo) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-be (TikTok profile pictures: new worker /tiktok/avatar endpoint pulls a creator photo via TikHub; per-creator button on the profile and a bulk run on Users & Access. Also carries the photo recovery tools and the UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1530,6 +1530,7 @@ html, body { overflow-x: hidden; }
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="pullTikTokPhoto(currentCreatorId)" title="Fetch this creator's profile picture from their TikTok">&#127925; Photo from TikTok</button>
           <span id="profile-roster-badge"></span>
           <span id="profile-status-badge"></span>
           <button class="btn btn-ghost btn-sm" id="profileEditBtn" onclick="openEditCreator()">✏️ Edit</button>
@@ -2334,6 +2335,7 @@ html, body { overflow-x: hidden; }
         <div><h1>Users &amp; Access</h1><p>Manage staff accounts and permissions</p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-ghost" onclick="recoverProfilePics()" title="Finds every creator photo still held anywhere and puts it back on their record">&#128444;&#65039; Recover photos</button>
+          <button class="btn btn-primary" onclick="bulkPullTikTokPhotos(false)" title="Pull profile pictures from TikTok for every creator who hasn't got one">&#127925; Pull photos from TikTok</button>
           <button class="btn btn-ghost" onclick="exportPhotoBackup()" title="Save every photo cached on this device to a file">&#11015;&#65039; Export photos from this device</button>
           <button class="btn btn-ghost" onclick="document.getElementById('photoImportFile').click()" title="Restore from a file another staff member exported">&#11014;&#65039; Import photo file</button>
           <input type="file" id="photoImportFile" accept="application/json" style="display:none" onchange="importPhotoBackup(event)">
@@ -10203,6 +10205,94 @@ function _hydrateProfilePicsFromCreators() {
   if (added) Storage.set('profilePics', profilePics);
   return added;
 }
+
+/** Pull one creator's profile picture straight from TikTok via TikHub, shrink
+ *  it, and save it the same way an uploaded photo is saved. Returns true if the
+ *  photo was stored. */
+async function pullTikTokPhoto(creatorId, opts) {
+  const quiet = !!(opts && opts.quiet);
+  const c = (creators || []).find(x => String(x.id) === String(creatorId));
+  if (!c) { if (!quiet) showToast('Creator not found'); return false; }
+
+  // Handle can come from the dedicated field or from a socials link.
+  let handle = (c.tiktok_handle || '').trim().replace(/^@/, '');
+  if (!handle) {
+    const guess = _handleFromLink(c.tiktok_url || c.tiktok || (c.socials && c.socials.tiktok) || '');
+    if (guess) handle = guess;
+  }
+  if (!handle) { if (!quiet) showToast(`${c.name} has no TikTok handle saved`); return false; }
+
+  if (!quiet) showToast(`Fetching @${handle}'s photo from TikTok…`);
+  try {
+    const res = await fetch(EMAIL_API + '/tiktok/avatar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Staff-Token': _emailAuthToken() },
+      body: JSON.stringify({ handle }),
+    });
+    const d = await res.json();
+    if (!res.ok || d.error || !d.data_url) throw new Error(d.error || ('HTTP ' + res.status));
+
+    // Same path as a manual upload: shrink, then Storage if the bucket is
+    // there, else inline on the creator's own row.
+    const small = await _downscaleImage(_dataUrlToBlob(d.data_url), 400, 0.82);
+    let finalSrc = small;
+    try {
+      const fileName = `creator_${c.id}.jpg`;
+      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/profile-pictures/${fileName}`, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`,
+                   'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
+        body: _dataUrlToBlob(small),
+      });
+      if (up.ok) finalSrc = `${SUPABASE_URL}/storage/v1/object/public/profile-pictures/${fileName}?v=${Date.now()}`;
+    } catch (e) { /* inline fallback is fine */ }
+
+    c.profile_image_url = finalSrc;
+    profilePics[c.id] = finalSrc;
+    const ok = await DB.upsertOne('creators', c);
+    Storage.set('creators', creators); Storage.set('profilePics', profilePics);
+    if (!quiet) {
+      try { renderProfilePic(c.id, finalSrc); _applyCrmFilters(); renderMediaKitList(); } catch (e) {}
+      showToast(ok ? `✅ Photo pulled from @${handle}` : `Got the photo but the server refused to save it`);
+    }
+    return !!ok;
+  } catch (e) {
+    console.warn('[tiktokPhoto]', c.name, e);
+    if (!quiet) showToast(`Could not get @${handle}'s photo: ${e.message || e}`);
+    return false;
+  }
+}
+window.pullTikTokPhoto = pullTikTokPhoto;
+
+/** Pull TikTok photos for every creator who hasn't got one. Runs one at a time
+ *  so TikHub isn't hammered, and reports as it goes. */
+async function bulkPullTikTokPhotos(force) {
+  const list = (creators || []).filter(c => {
+    if (!force && c.profile_image_url) return false;
+    const h = (c.tiktok_handle || '').trim() || _handleFromLink(c.tiktok_url || c.tiktok || '');
+    return !!h;
+  });
+  if (!list.length) {
+    showToast(force ? 'No creators with a TikTok handle saved'
+                    : 'Everyone with a TikTok handle already has a photo');
+    return;
+  }
+  const noHandle = (creators || []).filter(c => !c.profile_image_url
+    && !((c.tiktok_handle || '').trim() || _handleFromLink(c.tiktok_url || c.tiktok || ''))).length;
+
+  let done = 0, failed = 0;
+  for (let i = 0; i < list.length; i++) {
+    showToast(`Pulling photos from TikTok… ${i + 1} of ${list.length} (${list[i].name})`);
+    const ok = await pullTikTokPhoto(list[i].id, { quiet: true });
+    ok ? done++ : failed++;
+    await new Promise(r => setTimeout(r, 400));          // be kind to the API
+  }
+  try { _applyCrmFilters(); renderMediaKitList(); } catch (e) {}
+  const tail = noHandle ? ` ${noHandle} have no TikTok handle saved.` : '';
+  showToast(failed ? `Pulled ${done} photo${done !== 1 ? 's' : ''}, ${failed} failed — see console.${tail}`
+                   : `✅ Pulled ${done} photo${done !== 1 ? 's' : ''} from TikTok.${tail}`);
+}
+window.bulkPullTikTokPhotos = bulkPullTikTokPhotos;
 
 /** Dump every photo THIS browser still holds to a file. Each staff member has
  *  their own cached copy, so a machine that has not been refreshed recently may
@@ -18658,8 +18748,12 @@ function _renderFeedbackDue() {
 
 // Patch notes — newest first. Bump PATCH_NOTES_VERSION when you add an entry;
 // staff see unseen notes once, then it's marked read for them.
-const PATCH_NOTES_VERSION = '2026-11-16b';
+const PATCH_NOTES_VERSION = '2026-11-16c';
 const PATCH_NOTES = [
+  { date: '16 Nov 2026', items: [
+    'Profile pictures can now be pulled straight from TikTok. On a creator\u2019s profile hit \ud83c\udfb5 Photo from TikTok, or do the whole roster at once from Users & Access.',
+    'Users & Access also has Recover photos, Export photos from this device and Import photo file for restoring any that went missing.',
+  ]},
   { date: '16 Nov 2026', items: [
     'New look. The panel has been redesigned: a deep blue sidebar, softer cards and shadows, a calmer blue-tinted background, and smoother hovers, presses and transitions.',
     'Everything is where it was. Only the styling changed. No features moved or were removed.',
