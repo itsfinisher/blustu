@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-ax (network/ghost roster: Signed|Network|All CRM tabs, roster_type on creators, network included in pitches+media kits+deals, excluded from agency ops) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-ay (fix: profilePics save failing — downscale on upload, store inline photos per-creator not in the shared app_data row, auto-tidy oversized) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -4441,8 +4441,12 @@ const DB = {
       });
       const text = await r.text();
       if (!r.ok) {
-        console.error(`[DB] setAppData "${key}" failed (${r.status}):`, text);
-        showToast(`⚠️ Failed to save "${key}" to server — check console`);
+        const kb = Math.round(JSON.stringify(value).length / 1024);
+        console.error(`[DB] setAppData "${key}" failed (${r.status}, payload ${kb}KB):`, text);
+        const tooBig = r.status === 413 || kb > 3000;
+        showToast(tooBig
+          ? `⚠️ "${key}" is too big to save (${kb}KB) — see console`
+          : `⚠️ Failed to save "${key}" to server (${r.status}) — check console`);
         return null;
       }
       return text ? JSON.parse(text) : [];
@@ -4683,6 +4687,16 @@ async function syncAllFromDB() {
       DB.getAppData('feedbackSchedule'),
     ]);
     if (pp) { profilePics  = pp; Storage.set('profilePics',  profilePics); }
+    // If photos stored inline have grown past what the server will accept, the
+    // save silently fails on every change. Tidy them once, automatically, so the
+    // roster starts syncing again without anyone having to notice.
+    try {
+      const picSize = JSON.stringify(profilePics || {}).length;
+      if (picSize > 2 * 1024 * 1024) {
+        console.warn(`[profilePics] ${(picSize/1048576).toFixed(1)}MB stored — tidying automatically`);
+        setTimeout(() => { repairProfilePics(); }, 1500);
+      }
+    } catch (e) {}
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
     if (ao) { adminOverrides = ao; Storage.set('adminOverrides', ao); } // BUG2 FIX: store fetched value 'ao', not stale local var
     if (ps) { pitchSubjects = ps; Storage.set('pitchSubjects', pitchSubjects); }
@@ -4729,6 +4743,7 @@ async function refetch(table) {
   switch(table) {
     case 'creators':
       creators = sortCreators(normaliseCreators(rows)); Storage.set('creators', creators);
+      try { _hydrateProfilePicsFromCreators(); } catch (e) {}
       _applyCrmFilters(); renderOnboarding();
       if (currentCreatorId) {
         renderCreatorDeals(currentCreatorId);
@@ -4803,7 +4818,7 @@ let creatorFeedbackLog  = [];   // rows from creator_feedback
 let managerAssignments  = Storage.get('managerAssignments',  {});  // staffEmail -> [creatorId, ...]
 function saveInbox()    { Storage.set('inboxMessages', inboxMessages); }
 function saveAnalyticsData() { Storage.set('kitAnalytics', kitAnalytics); }
-function saveProfilePics()   { Storage.set('profilePics', profilePics); }
+// saveProfilePics is defined once, further down (it saves to the server too).
 
 let currentInboxId = null;
 let currentPortalCreatorId = null;
@@ -5997,6 +6012,49 @@ function _efRender() {
   const addBtn = document.getElementById('ec-add-featured');
   if (addBtn) addBtn.style.display = _efPosts.length >= 3 ? 'none' : '';
 }
+// ══ IMAGE HELPERS ══
+/** Shrink an image file to a sensible max width and return a JPEG data URL.
+ *  Profile photos straight off a phone are 2-5MB; as base64 in a shared
+ *  app_data row that quickly grows past what Supabase will accept, which is
+ *  what made "Failed to save profilePics to server" appear on every save. */
+function _downscaleImage(file, maxW, quality) {
+  maxW = maxW || 400; quality = quality || 0.82;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxW / (img.width || maxW));
+          const canvas = document.createElement('canvas');
+          canvas.width  = Math.max(1, Math.round((img.width  || maxW) * scale));
+          canvas.height = Math.max(1, Math.round((img.height || maxW) * scale));
+          const ctx = canvas.getContext('2d');
+          // White backing so transparent PNGs don't turn black as JPEG
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch (err) { resolve(e.target.result); }
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Turn a data URL back into a Blob so it can be uploaded to storage. */
+function _dataUrlToBlob(dataUrl) {
+  const [head, b64] = String(dataUrl).split(',');
+  const mime = (head.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64 || '');
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
 function _efAddPost() { if (_efPosts.length >= 3) return; _efPosts.push({ cover: '', brand: '', views: '', link: '' }); _efRender(); }
 function _efRemove(i) { _efPosts.splice(i, 1); _efRender(); }
 function _efUpdate(i, field, val) { if (_efPosts[i]) _efPosts[i][field] = val; }
@@ -6367,36 +6425,41 @@ async function handleProfilePicUpload(event) {
   showToast('Uploading photo…');
 
   try {
-    // Upload to Supabase Storage bucket "profile-pictures"
-    const ext = file.name.split('.').pop();
-    const fileName = `creator_${currentCreatorId}.${ext}`;
+    // ALWAYS shrink first. A phone photo is several MB; stored as base64 in the
+    // shared profilePics row that is what broke saving. ~400px is plenty for an
+    // avatar and lands around 20-40KB.
+    const small = await _downscaleImage(file, 400, 0.82);
+
+    // Upload the SHRUNK image to the "profile-pictures" bucket
+    const fileName = `creator_${currentCreatorId}.jpg`;
     const uploadUrl = `${SUPABASE_URL}/storage/v1/object/profile-pictures/${fileName}`;
 
-    const uploadRes = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': file.type,
-        'x-upsert': 'true'
-      },
-      body: file
-    });
+    let uploadRes = null;
+    try {
+      uploadRes = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'image/jpeg',
+          'x-upsert': 'true'
+        },
+        body: _dataUrlToBlob(small)
+      });
+    } catch (netErr) { console.warn('Storage upload threw:', netErr); }
 
-    if (!uploadRes.ok) {
-      const err = await uploadRes.text();
-      console.error('Profile pic upload failed:', err);
-      // Fallback: store as base64 in app_data
-      const reader = new FileReader();
-      reader.onload = async function(e) {
-        profilePics[currentCreatorId] = e.target.result;
-        await saveProfilePics();
-        renderProfilePic(currentCreatorId, e.target.result);
-        _applyCrmFilters();
-        renderMediaKitList();
-        showToast('Profile picture saved!');
-      };
-      reader.readAsDataURL(file);
+    if (!uploadRes || !uploadRes.ok) {
+      const err = uploadRes ? await uploadRes.text() : 'network error';
+      console.error('Profile pic storage upload failed, saving inline instead:', err);
+      // Fallback: store the SHRUNK image inline. Small enough to be safe.
+      profilePics[currentCreatorId] = small;
+      const c0 = creators.find(x => x.id === currentCreatorId);
+      if (c0) { c0.profile_image_url = small; await DB.upsertOne('creators', c0); Storage.set('creators', creators); }
+      const okSave = await saveProfilePics();
+      renderProfilePic(currentCreatorId, small);
+      _applyCrmFilters();
+      renderMediaKitList();
+      showToast(okSave ? 'Profile picture saved' : '⚠ Saved on this device only — see console');
       return;
     }
 
@@ -10011,7 +10074,98 @@ async function forceSyncAll() {
 // ── SAVE HELPERS: write to Supabase ──────────────────────────
 function saveInbox()         { DB.upsertMany('inbox_messages', inboxMessages); Storage.set('inboxMessages', inboxMessages); }
 function saveAnalyticsData() { DB.setAppData('kitAnalytics', kitAnalytics); Storage.set('kitAnalytics', kitAnalytics); }
-function saveProfilePics()   { DB.setAppData('profilePics',  profilePics);  Storage.set('profilePics',  profilePics); }
+/** Save profile pictures locally and to the server.
+ *  Returns true when the server accepted it. Photos stored inline as base64
+ *  used to grow this blob past what Supabase accepts, so anything oversized is
+ *  shrunk or dropped first rather than failing every save forever. */
+async function saveProfilePics() {
+  Storage.set('profilePics', profilePics);          // local always succeeds
+  const MAX_ENTRY = 300 * 1024;                     // 300KB per inline photo
+  const MAX_TOTAL = 4 * 1024 * 1024;                // ~4MB for the whole blob
+  // Shrink oversized inline images rather than losing them. Links stay as they
+  // are (they're tiny). Only a photo that cannot be re-encoded at all is dropped.
+  let shrunk = 0;
+  for (const k of Object.keys(profilePics)) {
+    const v = profilePics[k];
+    if (typeof v === 'string' && v.startsWith('data:') && v.length > MAX_ENTRY) {
+      try {
+        profilePics[k] = await _downscaleImage(_dataUrlToBlob(v), 400, 0.8);
+        shrunk++;
+      } catch (e) {
+        console.warn('[profilePics] could not shrink entry', k, e);
+        delete profilePics[k];
+      }
+    }
+  }
+  if (shrunk) {
+    Storage.set('profilePics', profilePics);
+    console.warn(`[profilePics] shrank ${shrunk} oversized photo(s) so the save could succeed`);
+  }
+  const size = JSON.stringify(profilePics).length;
+  if (size > MAX_TOTAL) {
+    console.error(`[profilePics] still ${(size/1048576).toFixed(1)}MB after cleanup — not sending to the server`);
+    showToast(`⚠ Photos too large to sync (${(size/1048576).toFixed(1)}MB). Re-upload the big ones.`);
+    return false;
+  }
+  // Only LINKS go in the shared row. Inline (base64) photos live on each
+  // creator's own row in profile_image_url, which scales; putting them all in
+  // one shared row is what blew past the size limit in the first place.
+  const forServer = {};
+  Object.keys(profilePics).forEach(k => {
+    const v = profilePics[k];
+    if (typeof v === 'string' && !v.startsWith('data:')) forServer[k] = v;
+  });
+  const r = await DB.setAppData('profilePics', forServer);
+  return r !== null;
+}
+
+/** Fill in any avatar we hold on the creator row but not in profilePics.
+ *  Keeps the in-memory map complete after a reload now that inline photos are
+ *  stored per creator rather than in the shared row. */
+function _hydrateProfilePicsFromCreators() {
+  let added = 0;
+  (creators || []).forEach(c => {
+    if (!profilePics[c.id] && c.profile_image_url) { profilePics[c.id] = c.profile_image_url; added++; }
+  });
+  if (added) Storage.set('profilePics', profilePics);
+  return added;
+}
+
+/** Tidy oversized photos: shrink any inline (base64) avatars and write the
+ *  smaller version back to the creator's own row, so the fix survives a reload.
+ *  Safe to run repeatedly. */
+async function repairProfilePics() {
+  const BIG = 300 * 1024;
+  const targets = [];
+  (creators || []).forEach(c => {
+    const v = profilePics[c.id] || c.profile_image_url;
+    if (typeof v === 'string' && v.startsWith('data:') && v.length > BIG) targets.push({ c, v });
+  });
+  if (!targets.length) {
+    const okNow = await saveProfilePics();
+    showToast(okNow ? '\u2705 Photos are already tidy and synced' : '\u26a0 Nothing oversized, but the save still failed \u2014 check console');
+    return;
+  }
+  showToast(`Tidying ${targets.length} large photo${targets.length !== 1 ? 's' : ''}\u2026`);
+  let before = 0, after = 0, failed = 0;
+  for (const t of targets) {
+    before += t.v.length;
+    try {
+      const small = await _downscaleImage(_dataUrlToBlob(t.v), 400, 0.8);
+      after += small.length;
+      profilePics[t.c.id] = small;
+      t.c.profile_image_url = small;
+      await DB.upsertOne('creators', t.c);   // persist per creator — this is what lasts
+    } catch (e) { console.warn('[profilePics] could not shrink', t.c.id, e); failed++; }
+  }
+  Storage.set('creators', creators);
+  const okSave = await saveProfilePics();
+  console.log(`[profilePics] ${(before/1048576).toFixed(2)}MB -> ${(after/1048576).toFixed(2)}MB across ${targets.length} photo(s)`);
+  try { _applyCrmFilters(); renderMediaKitList(); } catch (e) {}
+  showToast(okSave
+    ? `\u2705 Tidied ${targets.length - failed} photo${(targets.length - failed) !== 1 ? 's' : ''} (${(before/1048576).toFixed(1)}MB \u2192 ${(after/1048576).toFixed(1)}MB)`
+    : '\u26a0 Tidied, but the server save still failed \u2014 check console');
+}
 
 async function saveCreators()   { Storage.set('creators',   creators);   await DB.upsertMany('creators',   creators); }
 async function saveCampaigns()  { Storage.set('campaigns',  campaigns);  await DB.upsertMany('campaigns',  campaigns); }
@@ -18294,8 +18448,12 @@ function _renderFeedbackDue() {
 
 // Patch notes — newest first. Bump PATCH_NOTES_VERSION when you add an entry;
 // staff see unseen notes once, then it's marked read for them.
-const PATCH_NOTES_VERSION = '2026-11-05';
+const PATCH_NOTES_VERSION = '2026-11-16';
 const PATCH_NOTES = [
+  { date: '16 Nov 2026', items: [
+    'Fixed profile pictures failing to save. Photos are now shrunk before upload and stored per creator instead of all in one record.',
+    'Oversized photos already saved are tidied automatically the next time you log in.',
+  ]},
   { date: '5 Nov 2026', items: [
     'Creator CRM now has three tabs: \u270d\ufe0f Signed, \U0001F310 Network and All.',
     'Network is the ghost roster: creators not signed to us, but we still track their stats, build their media kits and pitch them to brands.',
