@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-bb (profile pictures root cause: the shared profilePics app_data row held every photo inline, failed to save, and was re-served on each load, clobbering the tidied local copy. Now: load merges instead of clobbering, creator photos live only on creators.profile_image_url, the shared row holds staff avatars only, and photos are migrated onto creator rows before anything is cleared. Needs profile-pictures-bucket.sql, then profile-pictures-reset.sql) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-bc (RECOVERY: Recover photos button on Users & Access pulls every creator photo back from creator rows, this device, the shared row and any backup. Auto-tidy disabled, the tidy no longer deletes photos it cannot shrink, and the shared row is backed up automatically before it is ever made smaller) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2332,7 +2332,10 @@ html, body { overflow-x: hidden; }
     <div class="page" id="page-users">
       <div class="page-header">
         <div><h1>Users &amp; Access</h1><p>Manage staff accounts and permissions</p></div>
-        <button class="btn btn-primary" id="btn-add-user" onclick="openModal('addUserModal')">+ Add User</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="recoverProfilePics()" title="Finds every creator photo still held anywhere and puts it back on their record">&#128444;&#65039; Recover photos</button>
+          <button class="btn btn-primary" id="btn-add-user" onclick="openModal('addUserModal')">+ Add User</button>
+        </div>
       </div>
       <div id="users-perm-denied" style="display:none" class="perm-denied">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -4746,8 +4749,10 @@ async function syncAllFromDB() {
     try {
       const picSize = JSON.stringify(profilePics || {}).length;
       if (picSize > 2 * 1024 * 1024) {
-        console.warn(`[profilePics] ${(picSize/1048576).toFixed(1)}MB stored — tidying automatically`);
-        setTimeout(() => { repairProfilePics(); }, 1500);
+        // Additive only: copy anything we hold onto each creator's own row.
+        setTimeout(() => { _pushProfilePicsToCreatorRows().catch(e => console.warn(e)); }, 2000);
+        console.warn(`[profilePics] ${(picSize/1048576).toFixed(1)}MB stored. NOT tidying automatically — `
+          + `the tidy can drop a photo it cannot re-encode. Run it yourself from Users & Access when you want to.`);
       }
     } catch (e) {}
     if (ia) { kitAnalytics = ia; Storage.set('kitAnalytics', kitAnalytics); }
@@ -10140,8 +10145,8 @@ async function saveProfilePics(quiet) {
         profilePics[k] = await _downscaleImage(_dataUrlToBlob(v), 400, 0.8);
         shrunk++;
       } catch (e) {
-        console.warn('[profilePics] could not shrink entry', k, e);
-        delete profilePics[k];
+        // Keep it. An oversized photo is still a photo; losing it is worse.
+        console.warn('[profilePics] could not shrink entry', k, '- keeping it as is', e);
       }
     }
   }
@@ -10165,6 +10170,18 @@ async function saveProfilePics(quiet) {
     const v = profilePics[k];
     if (typeof v === 'string' && !v.startsWith('data:')) forServer[k] = v;
   });
+  // Before this row is ever made smaller, park whatever is on the server now.
+  // Overwriting it used to be how photos got lost.
+  try {
+    if (!window._ppBackedUp) {
+      const current = await DB.getAppData('profilePics');
+      if (current && Object.keys(current).length > Object.keys(forServer).length) {
+        await DB.setAppData('profilePics_backup_auto', current, true);
+        console.warn('[profilePics] parked a copy of the shared row in profilePics_backup_auto before shrinking it');
+      }
+      window._ppBackedUp = true;
+    }
+  } catch (e) { console.warn('[profilePics] could not park a backup, skipping the shrink', e); return false; }
   const r = await DB.setAppData('profilePics', forServer, quiet);
   if (r === null) console.error('[profilePics] shared row save failed. Payload was',
     JSON.stringify(forServer).length, 'bytes across', Object.keys(forServer).length, 'staff entries.',
@@ -10183,6 +10200,60 @@ function _hydrateProfilePicsFromCreators() {
   if (added) Storage.set('profilePics', profilePics);
   return added;
 }
+
+/** Pull every creator photo back from wherever a copy still exists and write it
+ *  to that creator's own row. Only ever adds; never deletes. Safe to re-run. */
+async function recoverProfilePics(opts) {
+  const dryRun = !!(opts && opts.dryRun);
+  const found = {}, source = {};
+  const take = (k, v, src) => {
+    if (typeof v !== 'string' || !v) return;
+    if (found[k]) return;                       // first source wins, ordered below
+    found[k] = v; source[k] = src;
+  };
+
+  showToast('Looking for photos in every copy we hold…');
+
+  // Most trustworthy first.
+  (creators || []).forEach(c => take(c.id, c.profile_image_url, 'creator row'));
+  try { const loc = Storage.get('profilePics', {}) || {};
+        Object.keys(loc).forEach(k => take(k, loc[k], 'this device')); } catch (e) {}
+  try { const live = await DB.getAppData('profilePics') || {};
+        Object.keys(live).forEach(k => take(k, live[k], 'shared row')); } catch (e) {}
+  for (const bk of ['profilePics_backup_auto', 'profilePics_backup_20261116', 'profilePics_backup']) {
+    try { const bak = await DB.getAppData(bk) || {};
+          Object.keys(bak).forEach(k => take(k, bak[k], 'backup row')); } catch (e) {}
+  }
+
+  const report = [];
+  let restored = 0, already = 0, failed = 0, orphan = 0;
+  for (const c of (creators || [])) {
+    const v = found[c.id];
+    if (!v) { report.push(`${c.name}: NO PHOTO FOUND anywhere`); continue; }
+    if (v === c.profile_image_url) { already++; continue; }
+    if (dryRun) { report.push(`${c.name}: would restore from ${source[c.id]}`); restored++; continue; }
+    c.profile_image_url = v;
+    profilePics[c.id] = v;
+    const ok = await DB.upsertOne('creators', c);
+    if (ok) { restored++; report.push(`${c.name}: restored from ${source[c.id]}`); }
+    else    { failed++;   report.push(`${c.name}: FOUND in ${source[c.id]} but the server refused the save`); }
+  }
+  // Staff avatars and any key with no matching creator.
+  Object.keys(found).forEach(k => {
+    if (!profilePics[k]) { profilePics[k] = found[k]; if (!(creators||[]).some(c => String(c.id) === String(k))) orphan++; }
+  });
+
+  if (!dryRun) { Storage.set('creators', creators); Storage.set('profilePics', profilePics); }
+  console.log('[recoverProfilePics]\n' + report.join('\n'));
+  console.log(`[recoverProfilePics] restored ${restored}, already correct ${already}, failed ${failed}, other keys kept ${orphan}`);
+  try { _applyCrmFilters(); renderMediaKitList(); } catch (e) {}
+  showToast(dryRun
+    ? `Dry run: ${restored} photo(s) could be restored, ${already} already fine — see console`
+    : (failed ? `Restored ${restored}, but ${failed} would not save — see console`
+              : `✅ Restored ${restored} photo(s). ${already} were already fine.`));
+  return { restored, already, failed, report };
+}
+window.recoverProfilePics = recoverProfilePics;
 
 /** Make sure every creator photo we hold is on that creator's own row, so the
  *  shared legacy row can be cleared without losing anything. */
