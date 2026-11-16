@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- blustu panel build 2026-07-15-az (UI redesign: deep blue sidebar + sign-in, blue-tinted neutrals, radius + shadow scale, targeted transitions, focus rings, reduced-motion support; defines the previously missing gray-300/500/700 tokens. Media kit + feedback pack output untouched. Restore point: index-BACKUP-pre-redesign-2026-07-15-ay.html) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
+<!-- blustu panel build 2026-07-15-ba (profile pictures: success now judged on the creator row save, not the legacy shared profilePics row; real server error shown in the toast; cache-busted storage URLs. Needs profile-pictures-bucket.sql for the Storage route) --><!-- prev: 2026-07-15-az (UI redesign) --><!-- prev: 2026-07-15-ay (profilePics save fix) --><!-- prev: 2026-07-15-ar (feedback pack filename: Creator Name - BluStu Feedback Pack date) --><!-- prev: 2026-07-15-aq (feedback pack PDF: remove browser header/footer (date, title, about:blank, page numbers) via zero page margins + repeating spacers) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -4473,7 +4473,7 @@ const DB = {
   // stores the new value. After logout, syncAllFromDB fetches the stale/missing
   // Supabase row and overwrites localStorage — stats vanish.
   // Fix: use the correct Prefer header, identical to upsertOne / upsertMany.
-  async setAppData(key, value) {
+  async setAppData(key, value, quiet) {
     const url = `${SUPABASE_URL}/rest/v1/app_data?on_conflict=key`;
     try {
       const r = await fetch(url, {
@@ -4491,7 +4491,7 @@ const DB = {
         const kb = Math.round(JSON.stringify(value).length / 1024);
         console.error(`[DB] setAppData "${key}" failed (${r.status}, payload ${kb}KB):`, text);
         const tooBig = r.status === 413 || kb > 3000;
-        showToast(tooBig
+        if (!quiet) showToast(tooBig
           ? `⚠️ "${key}" is too big to save (${kb}KB) — see console`
           : `⚠️ Failed to save "${key}" to server (${r.status}) — check console`);
         return null;
@@ -6466,75 +6466,70 @@ async function handleProfilePicUpload(event) {
   if (!file || !currentCreatorId) return;
   event.target.value = '';
 
-  // Show uploading state
   const avatarEl = document.getElementById('profile-avatar-circle');
   if (avatarEl) { avatarEl.style.opacity = '0.5'; }
   showToast('Uploading photo…');
 
+  const creator = creators.find(x => x.id === currentCreatorId);
+  if (!creator) { showToast('Creator not found'); if (avatarEl) avatarEl.style.opacity = '1'; return; }
+
   try {
-    // ALWAYS shrink first. A phone photo is several MB; stored as base64 in the
-    // shared profilePics row that is what broke saving. ~400px is plenty for an
+    // Always shrink first. A phone photo is several MB; ~400px is plenty for an
     // avatar and lands around 20-40KB.
     const small = await _downscaleImage(file, 400, 0.82);
 
-    // Upload the SHRUNK image to the "profile-pictures" bucket
+    // Preferred route: the image goes in Storage and the creator row holds a
+    // short URL. Falls back to the shrunk image inline on the creator row.
+    let finalSrc = small;
+    let viaStorage = false;
     const fileName = `creator_${currentCreatorId}.jpg`;
-    const uploadUrl = `${SUPABASE_URL}/storage/v1/object/profile-pictures/${fileName}`;
 
-    let uploadRes = null;
     try {
-      uploadRes = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'image/jpeg',
-          'x-upsert': 'true'
-        },
-        body: _dataUrlToBlob(small)
-      });
-    } catch (netErr) { console.warn('Storage upload threw:', netErr); }
-
-    if (!uploadRes || !uploadRes.ok) {
-      const err = uploadRes ? await uploadRes.text() : 'network error';
-      console.error('Profile pic storage upload failed, saving inline instead:', err);
-      // Fallback: store the SHRUNK image inline. Small enough to be safe.
-      profilePics[currentCreatorId] = small;
-      const c0 = creators.find(x => x.id === currentCreatorId);
-      if (c0) { c0.profile_image_url = small; await DB.upsertOne('creators', c0); Storage.set('creators', creators); }
-      const okSave = await saveProfilePics();
-      renderProfilePic(currentCreatorId, small);
-      _applyCrmFilters();
-      renderMediaKitList();
-      showToast(okSave ? 'Profile picture saved' : '⚠ Saved on this device only — see console');
-      return;
+      const uploadRes = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/profile-pictures/${fileName}`,
+        { method: 'POST',
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`,
+                     'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
+          body: _dataUrlToBlob(small) });
+      if (uploadRes.ok) {
+        finalSrc = `${SUPABASE_URL}/storage/v1/object/public/profile-pictures/${fileName}?v=${Date.now()}`;
+        viaStorage = true;
+      } else {
+        console.warn('[profilePic] storage upload failed (' + uploadRes.status + '), storing inline instead:',
+                     await uploadRes.text());
+      }
+    } catch (netErr) {
+      console.warn('[profilePic] storage upload threw, storing inline instead:', netErr);
     }
 
-    // Get public URL
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/profile-pictures/${fileName}`;
+    // THIS is the save that matters: the photo lives on the creator's own row.
+    creator.profile_image_url = finalSrc;
+    const saved = await DB.upsertOne('creators', creator);
+    Storage.set('creators', creators);
 
-    // Save URL to creators table
-    const c = creators.find(x => x.id === currentCreatorId);
-    if (c) {
-      c.profile_image_url = publicUrl;
-      await DB.upsertOne('creators', c);
-      Storage.set('creators', creators);
-    }
-    // Also store in profilePics for backwards compat
-    profilePics[currentCreatorId] = publicUrl;
-    await saveProfilePics();
+    // The shared profilePics row is legacy and is rebuilt from creator rows on
+    // load, so it is written best-effort and never decides the outcome.
+    profilePics[currentCreatorId] = finalSrc;
+    saveProfilePics(true).catch(e => console.warn('[profilePic] legacy map sync skipped:', e));
 
-    renderProfilePic(currentCreatorId, publicUrl);
+    renderProfilePic(currentCreatorId, finalSrc);
     _applyCrmFilters();
     renderMediaKitList();
-    showToast('Profile picture updated!');
+
+    if (saved) {
+      showToast(viaStorage ? 'Profile picture updated' : 'Profile picture saved');
+    } else {
+      const why = DB._lastError ? ' (' + DB._lastError.slice(0, 60) + ')' : '';
+      showToast('⚠ Photo saved on this device only — server rejected it' + why);
+    }
   } catch(e) {
-    console.error('Profile pic error:', e);
-    showToast('Failed to upload photo');
+    console.error('[profilePic] error:', e);
+    showToast('Failed to upload photo: ' + (e && e.message ? e.message : e));
   } finally {
     if (avatarEl) { avatarEl.style.opacity = '1'; }
   }
 }
+
 
 function renderProfilePic(id, src) {
   const avatarEl = document.getElementById('profile-avatar-circle');
@@ -10125,7 +10120,7 @@ function saveAnalyticsData() { DB.setAppData('kitAnalytics', kitAnalytics); Stor
  *  Returns true when the server accepted it. Photos stored inline as base64
  *  used to grow this blob past what Supabase accepts, so anything oversized is
  *  shrunk or dropped first rather than failing every save forever. */
-async function saveProfilePics() {
+async function saveProfilePics(quiet) {
   Storage.set('profilePics', profilePics);          // local always succeeds
   const MAX_ENTRY = 300 * 1024;                     // 300KB per inline photo
   const MAX_TOTAL = 4 * 1024 * 1024;                // ~4MB for the whole blob
@@ -10151,7 +10146,7 @@ async function saveProfilePics() {
   const size = JSON.stringify(profilePics).length;
   if (size > MAX_TOTAL) {
     console.error(`[profilePics] still ${(size/1048576).toFixed(1)}MB after cleanup — not sending to the server`);
-    showToast(`⚠ Photos too large to sync (${(size/1048576).toFixed(1)}MB). Re-upload the big ones.`);
+    if (!quiet) showToast(`⚠ Photos too large to sync (${(size/1048576).toFixed(1)}MB). Re-upload the big ones.`);
     return false;
   }
   // Only LINKS go in the shared row. Inline (base64) photos live on each
@@ -10162,7 +10157,7 @@ async function saveProfilePics() {
     const v = profilePics[k];
     if (typeof v === 'string' && !v.startsWith('data:')) forServer[k] = v;
   });
-  const r = await DB.setAppData('profilePics', forServer);
+  const r = await DB.setAppData('profilePics', forServer, quiet);
   return r !== null;
 }
 
